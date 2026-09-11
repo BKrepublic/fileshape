@@ -74,6 +74,9 @@ function publicPaint(paint: ImagePaintEvidence): ImageInventoryPaint {
 
 export async function inspectPdfImages(inputPath: string): Promise<PdfImageInventory> {
   const bytes = new Uint8Array(await readFile(inputPath));
+  // PDF.js may transfer/detach the provided buffer. Capture identity and size first.
+  const byteLength = bytes.byteLength;
+  const pdfId = `sha256:${hash(bytes).slice(0, 16)}`;
   const task = getDocument({ data: bytes });
   try {
     const pdf = await task.promise;
@@ -123,8 +126,8 @@ export async function inspectPdfImages(inputPath: string): Promise<PdfImageInven
 
     const paintOperations = pageReports.reduce((sum, page) => sum + page.paints.length, 0);
     return {
-      pdfId: `sha256:${hash(bytes).slice(0, 16)}`,
-      byteLength: bytes.byteLength,
+      pdfId,
+      byteLength,
       pages: pdf.numPages,
       scannedPages: pageReports.length,
       paintOperations,
