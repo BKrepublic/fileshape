@@ -35,16 +35,17 @@ function cloneRefs(ranges: SourceTextRef[]): SourceTextRef[] {
   return ranges.map((range) => ({ ...range }));
 }
 
-function describeUnresolved(document: FileShapeDocument): string {
-  const unresolved = document.pages.flatMap((page) =>
-    page.unresolvedRuby.map((span) => ({ page: page.sourcePage, reason: span.reason })),
-  );
-  const details = unresolved
+function firstUnresolvedError(document: FileShapeDocument): Error | undefined {
+  const page = document.pages.find((candidate) => candidate.unresolvedRuby.length > 0);
+  if (!page) return undefined;
+  const details = page.unresolvedRuby
     .slice(0, 5)
-    .map((entry) => `page ${entry.page}: ${entry.reason}`)
-    .join("; ");
-  const suffix = unresolved.length > 5 ? `; +${unresolved.length - 5} more` : "";
-  return `${unresolved.length} candidate(s): ${details}${suffix}`;
+    .map((span) => span.reason)
+    .join(", ");
+  const suffix = page.unresolvedRuby.length > 5 ? `, +${page.unresolvedRuby.length - 5} more` : "";
+  return new Error(
+    `EPUB serialization requires unresolved ruby policy before rendering page ${page.sourcePage} (${page.unresolvedRuby.length} candidate(s): ${details}${suffix})`,
+  );
 }
 
 export function applyEpubContentPolicy(
@@ -54,9 +55,9 @@ export function applyEpubContentPolicy(
   assertDocumentModel(document);
   const policy = options.unresolvedRuby ?? "error";
 
-  const unresolvedCount = document.pages.reduce((count, page) => count + page.unresolvedRuby.length, 0);
-  if (policy === "error" && unresolvedCount > 0) {
-    throw new Error(`EPUB serialization requires unresolved ruby policy before rendering (${describeUnresolved(document)})`);
+  if (policy === "error") {
+    const error = firstUnresolvedError(document);
+    if (error) throw error;
   }
 
   const pages = document.pages.map((page): EpubContentPolicyPage => {
