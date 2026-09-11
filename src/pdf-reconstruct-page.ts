@@ -1,20 +1,46 @@
 import process from "node:process";
+import { renderPageFlowText } from "./flow-render.js";
 import { inspectPdf } from "./pdf-inspector.js";
 import { reconstructPageFlow } from "./text-flow.js";
 
-function parseArgs(args: string[]): { inputPath: string | undefined; pageNumber: number } {
+type SpacingMode = "logical" | "preserve" | "cap";
+
+function parseArgs(args: string[]): {
+  inputPath: string | undefined;
+  pageNumber: number;
+  spacingMode: SpacingMode;
+  maxLineBreaks: number;
+} {
   const inputPath = args[0];
   let pageNumber = 1;
+  let spacingMode: SpacingMode = "logical";
+  let maxLineBreaks = 2;
 
   for (let index = 1; index < args.length; index += 1) {
     if (args[index] === "--page") {
       const parsed = Number(args[index + 1]);
       if (Number.isInteger(parsed) && parsed > 0) pageNumber = parsed;
       index += 1;
+      continue;
+    }
+
+    if (args[index] === "--spacing") {
+      const candidate = args[index + 1];
+      if (candidate === "logical" || candidate === "preserve" || candidate === "cap") {
+        spacingMode = candidate;
+      }
+      index += 1;
+      continue;
+    }
+
+    if (args[index] === "--max-line-breaks") {
+      const parsed = Number(args[index + 1]);
+      if (Number.isInteger(parsed) && parsed > 0) maxLineBreaks = parsed;
+      index += 1;
     }
   }
 
-  return { inputPath, pageNumber };
+  return { inputPath, pageNumber, spacingMode, maxLineBreaks };
 }
 
 function reconstructionLooksStructurallyConsistent(
@@ -39,11 +65,30 @@ function reconstructionLooksStructurallyConsistent(
   );
 }
 
+function renderSelectedText(
+  flow: ReturnType<typeof reconstructPageFlow>,
+  spacingMode: SpacingMode,
+  maxLineBreaks: number,
+): string {
+  if (spacingMode === "logical") return flow.text;
+  if (spacingMode === "preserve") {
+    return renderPageFlowText(flow, { mode: "preserve" });
+  }
+  return renderPageFlowText(flow, {
+    mode: "cap",
+    maxConsecutiveLineBreaks: maxLineBreaks,
+  });
+}
+
 async function main() {
-  const { inputPath, pageNumber } = parseArgs(process.argv.slice(2));
+  const { inputPath, pageNumber, spacingMode, maxLineBreaks } = parseArgs(
+    process.argv.slice(2),
+  );
 
   if (!inputPath) {
-    console.error("Usage: npm run reconstruct:page -- <path-to-pdf> --page <number>");
+    console.error(
+      "Usage: npm run reconstruct:page -- <path-to-pdf> --page <number> [--spacing logical|preserve|cap] [--max-line-breaks <n>]",
+    );
     process.exitCode = 1;
     return;
   }
@@ -62,6 +107,7 @@ async function main() {
     }
 
     const flow = reconstructPageFlow(page);
+    const renderedText = renderSelectedText(flow, spacingMode, maxLineBreaks);
 
     console.log("\n=== FileShape page reconstruction ===");
     console.log("NOTE: this command checks structural consistency, not textual fidelity.");
@@ -73,10 +119,17 @@ async function main() {
     console.log(`Annotations excluded: ${flow.annotationItemCount}`);
     console.log(`Margin noise excluded: ${flow.marginNoiseItemCount}`);
     console.log(`Logical groups: ${flow.groupCount}`);
+    console.log(`Spacing boundaries: ${flow.boundaries.length}`);
+    if (flow.boundaries.length > 0) {
+      console.log(
+        `Estimated source breaks: ${flow.boundaries.map((boundary) => boundary.estimatedLineBreaks).join(",")}`,
+      );
+    }
+    console.log(`Spacing mode: ${spacingMode}${spacingMode === "cap" ? ` (max ${maxLineBreaks})` : ""}`);
     console.log(`Metrics: ${JSON.stringify(flow.metrics)}`);
     console.log("");
     console.log("--- reconstructed text ---");
-    console.log(flow.text);
+    console.log(renderedText);
     console.log("--- end reconstructed text ---");
     console.log("");
 
