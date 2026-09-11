@@ -62,7 +62,13 @@ function renderBlock(block: DocumentTextBlock): string {
 }
 
 function renderPreservedNote(note: PreservedUnresolvedAnnotation, index: number): string {
-  return `    <aside class="fileshape-unresolved-annotation" data-fileshape-note="${index + 1}" data-fileshape-reason="${escapeXmlAttribute(note.reason)}"><p xml:space="preserve">${escapeXmlText(note.text)}</p></aside>`;
+  return `      <aside class="fileshape-unresolved-annotation" data-fileshape-note="${index + 1}" data-fileshape-reason="${escapeXmlAttribute(note.reason)}"><p xml:space="preserve">${escapeXmlText(note.text)}</p></aside>`;
+}
+
+function renderPreservedNotes(notes: PreservedUnresolvedAnnotation[]): string {
+  if (notes.length === 0) return "";
+  const items = notes.map(renderPreservedNote).join("\n");
+  return `    <section class="fileshape-unresolved-notes" aria-label="Unresolved annotations">\n      <h2>Notes</h2>\n${items}\n    </section>`;
 }
 
 function orientationAttributes(page: DocumentPage): string {
@@ -92,8 +98,8 @@ function serializePageXhtml(
     ? ""
     : `\n    <link rel="stylesheet" type="text/css" href="${escapeXmlAttribute(requireNonEmpty(options.stylesheetHref, "stylesheetHref"))}" />`;
   const blocks = page.blocks.map(renderBlock);
-  const preservedNotes = notes.map(renderPreservedNote);
-  const bodyItems = [...blocks, ...preservedNotes];
+  const preservedNotes = renderPreservedNotes(notes);
+  const bodyItems = preservedNotes.length === 0 ? blocks : [...blocks, preservedNotes];
   const body = bodyItems.length === 0 ? "" : `\n${bodyItems.join("\n")}\n  `;
 
   return `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE html>\n<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="${escapeXmlAttribute(language)}" lang="${escapeXmlAttribute(language)}">\n  <head>\n    <meta charset="utf-8" />\n    <title>${escapeXmlText(title)}</title>${stylesheet}\n  </head>\n  <body ${orientationAttributes(page)}>${body}</body>\n</html>\n`;

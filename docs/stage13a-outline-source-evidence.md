@@ -65,14 +65,20 @@ These controls are evidence for ambiguity analysis, not tie-breakers.
 - a real PDF fixture with 0/90/180/270 page rotations and duplicate destinations/titles;
 - aggregate accounting of evidence classes and relationship flags.
 
-## Corpus checkpoint before Task 1B
+## Private corpus result
 
-Run the tool over the unchanged 9-PDF private corpus and save the report under a new local-only path. Required review outputs are:
+The unchanged 9-PDF private corpus was scanned at code baseline `e237f63b78be5fa964c8bddcce417a8b341f1edb`. All 250 outline entries were accounted for:
 
-1. exactly 250 outline entries accounted for;
-2. counts by evidence class, destination kind and reason;
-3. counts of same-page, duplicate-destination, duplicate-title, parent-same-page and non-monotonic controls;
-4. manual inspection of representative records from every non-zero class/reason without publishing source text;
-5. a written conclusion separating conditions that prove a source position from conditions that prove only a page link.
+```text
+OUTLINE_ENTRIES=250
+CLASS_COUNTS={"unique-position":0,"ambiguous-position":0,"page-only":250,"unmappable":0}
+DESTINATION_KIND_COUNTS={"XYZ":172,"Fit":78}
+REASON_COUNTS={"no-source-intersection":172,"page-destination":78}
+RELATIONSHIP_COUNTS={"entriesSharingPage":24,"entriesSharingResolvedDestination":0,"entriesSharingTitleHash":0,"parentSamePage":12,"nonMonotonic":0}
+```
 
-Do not start Task 1B merely because `unique-position` is non-zero. The corpus result must first establish whether any geometry contract is strong enough to justify body heading boundaries without title matching or source-specific heuristics.
+All 78 `Fit` destinations are page-level by definition. The 172 `XYZ` entries resolve to a page/display point, but none intersects a physical source unit under the conservative geometry contract. There are therefore **zero source-backed body anchors** in this corpus from outline destinations.
+
+This result does not justify nearest-text selection, title/body string matching, or using outline depth as an inferred heading level. Task 1B/1C remains on hold because the required source-boundary evidence is absent. Existing Stage 12a page-level navigation remains the accepted fallback.
+
+Task 2 resource/display work may proceed against the current body output as explicitly allowed by the remaining-work runbook. Task 1 should be revisited only if a new PDF-native evidence source establishes body boundaries without guessed text matching.

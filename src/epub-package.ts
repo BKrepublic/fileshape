@@ -1,6 +1,12 @@
 import type { FileShapeDocument } from "./document-model.js";
 import { serializeEpubNavigation, type EpubNavigationSummary } from "./epub-navigation.js";
 import {
+  defaultEpubStyles,
+  EPUB_STYLES_HREF_FROM_NAV,
+  EPUB_STYLES_HREF_FROM_TEXT,
+  EPUB_STYLES_PATH,
+} from "./epub-styles.js";
+import {
   serializeEpubXhtml,
   type EpubXhtmlOptions,
 } from "./epub-xhtml.js";
@@ -9,7 +15,10 @@ const EPUB_MIMETYPE = "application/epub+zip";
 const CONTAINER_PATH = "META-INF/container.xml";
 const PACKAGE_PATH = "OEBPS/package.opf";
 const NAV_PATH = "OEBPS/nav.xhtml";
+const STYLES_PATH = `OEBPS/${EPUB_STYLES_PATH}`;
 const UTF8_FLAG = 0x0800;
+
+export type EpubPageProgressionDirection = "ltr" | "rtl";
 
 export type EpubPackageOptions = Omit<EpubXhtmlOptions, "stylesheetHref"> & {
   title: string;
@@ -17,6 +26,8 @@ export type EpubPackageOptions = Omit<EpubXhtmlOptions, "stylesheetHref"> & {
   creator?: string;
   /** EPUB 3 dcterms:modified timestamp. Defaults to the current UTC second. */
   modified?: string;
+  /** Explicit publication progression only. Omitted means reading-system default; never inferred from page majority. */
+  pageProgressionDirection?: EpubPageProgressionDirection;
 };
 
 export type EpubPackageFile = {
@@ -70,6 +81,7 @@ function packageOpf(options: {
   identifier: string;
   creator?: string;
   modified: string;
+  pageProgressionDirection?: EpubPageProgressionDirection;
   pages: Array<{ sourcePage: number; href: string; mediaType: string }>;
 }): string {
   const creator = options.creator === undefined
@@ -81,8 +93,11 @@ function packageOpf(options: {
   const spine = options.pages
     .map((_, index) => `    <itemref idref="page-${index + 1}"/>`)
     .join("\n");
+  const progression = options.pageProgressionDirection === undefined
+    ? ""
+    : ` page-progression-direction="${options.pageProgressionDirection}"`;
 
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="pub-id" xml:lang="${xmlAttr(options.language)}">\n  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">\n    <dc:identifier id="pub-id">${xmlText(options.identifier)}</dc:identifier>\n    <dc:title>${xmlText(options.title)}</dc:title>\n    <dc:language>${xmlText(options.language)}</dc:language>${creator}\n    <meta property="dcterms:modified">${xmlText(options.modified)}</meta>\n  </metadata>\n  <manifest>\n    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>\n${pageManifest}\n  </manifest>\n  <spine>\n${spine}\n  </spine>\n</package>\n`;
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="pub-id" xml:lang="${xmlAttr(options.language)}">\n  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">\n    <dc:identifier id="pub-id">${xmlText(options.identifier)}</dc:identifier>\n    <dc:title>${xmlText(options.title)}</dc:title>\n    <dc:language>${xmlText(options.language)}</dc:language>${creator}\n    <meta property="dcterms:modified">${xmlText(options.modified)}</meta>\n  </metadata>\n  <manifest>\n    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>\n    <item id="fileshape-style" href="${EPUB_STYLES_PATH}" media-type="text/css"/>\n${pageManifest}\n  </manifest>\n  <spine${progression}>\n${spine}\n  </spine>\n</package>\n`;
 }
 
 function u16(value: number): Uint8Array {
@@ -212,12 +227,15 @@ export function serializeEpubPackage(
   const xhtml = serializeEpubXhtml(document, {
     language,
     titlePrefix: options.titlePrefix ?? title,
+    stylesheetHref: EPUB_STYLES_HREF_FROM_TEXT,
     ...(options.unresolvedRubyPolicy === undefined
       ? {}
       : { unresolvedRubyPolicy: options.unresolvedRubyPolicy }),
   });
 
-  const navigation = serializeEpubNavigation(document, title, language, xhtml.pages);
+  const navigation = serializeEpubNavigation(document, title, language, xhtml.pages, {
+    stylesheetHref: EPUB_STYLES_HREF_FROM_NAV,
+  });
   const files: EpubPackageFile[] = [
     textFile("mimetype", EPUB_MIMETYPE, EPUB_MIMETYPE),
     textFile(CONTAINER_PATH, "application/xml", containerXml()),
@@ -227,8 +245,12 @@ export function serializeEpubPackage(
       identifier,
       ...(options.creator === undefined ? {} : { creator: options.creator }),
       modified,
+      ...(options.pageProgressionDirection === undefined
+        ? {}
+        : { pageProgressionDirection: options.pageProgressionDirection }),
       pages: xhtml.pages,
     })),
+    textFile(STYLES_PATH, "text/css", defaultEpubStyles()),
     textFile(NAV_PATH, "application/xhtml+xml", navigation.xhtml),
     ...xhtml.pages.map((page) => textFile(`OEBPS/${page.href}`, page.mediaType, page.xhtml)),
   ];
