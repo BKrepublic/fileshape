@@ -12,6 +12,9 @@ export type InspectTextItem = {
   transform: number[];
   x: number;
   y: number;
+  displayTransform: number[];
+  displayX: number;
+  displayY: number;
   fontSize: number;
   hasEOL: boolean;
 };
@@ -50,6 +53,20 @@ function estimateFontSize(transform: number[]): number {
   const xScale = Math.hypot(a, b);
   const yScale = Math.hypot(c, d);
   return Math.max(xScale, yScale);
+}
+
+function multiplyTransforms(left: number[], right: number[]): number[] {
+  const [a1 = 1, b1 = 0, c1 = 0, d1 = 1, e1 = 0, f1 = 0] = left;
+  const [a2 = 1, b2 = 0, c2 = 0, d2 = 1, e2 = 0, f2 = 0] = right;
+
+  return [
+    a1 * a2 + c1 * b2,
+    b1 * a2 + d1 * b2,
+    a1 * c2 + c1 * d2,
+    b1 * c2 + d1 * d2,
+    a1 * e2 + c1 * f2 + e1,
+    b1 * e2 + d1 * f2 + f1,
+  ];
 }
 
 function countImagePaintOps(fnArray: number[]): number {
@@ -99,16 +116,22 @@ export async function inspectPdf(inputPath: string): Promise<InspectResult> {
       for (const item of textContent.items) {
         if (!("str" in item)) continue;
 
+        const transform = [...item.transform];
+        const displayTransform = multiplyTransforms([...viewport.transform], transform);
+
         textItems.push({
           text: item.str,
           dir: item.dir,
           fontName: item.fontName,
           width: item.width,
           height: item.height,
-          transform: [...item.transform],
-          x: item.transform[4] ?? 0,
-          y: item.transform[5] ?? 0,
-          fontSize: estimateFontSize([...item.transform]),
+          transform,
+          x: transform[4] ?? 0,
+          y: transform[5] ?? 0,
+          displayTransform,
+          displayX: displayTransform[4] ?? 0,
+          displayY: displayTransform[5] ?? 0,
+          fontSize: estimateFontSize(transform),
           hasEOL: item.hasEOL,
         });
       }
