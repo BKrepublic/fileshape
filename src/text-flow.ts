@@ -2,10 +2,17 @@ import type { InspectPage, InspectTextItem } from "./pdf-inspector.js";
 
 export type WritingOrientation = "vertical" | "horizontal" | "unknown";
 
-type FlowGroup = {
+export type FlowGroup = {
   position: number;
   itemCount: number;
   text: string;
+};
+
+export type FlowBoundary = {
+  gap: number;
+  normalPitch: number;
+  gapRatio: number;
+  estimatedLineBreaks: number;
 };
 
 export type PageFlowResult = {
@@ -25,7 +32,11 @@ export type PageFlowResult = {
     sequenceHorizontalRatio: number;
   };
   groups: FlowGroup[];
+  boundaries: FlowBoundary[];
+  /** Logical text: physical line/column wrapping removed, paragraph boundaries normalized to one LF. */
   text: string;
+  /** Fidelity view: inferred empty physical columns/lines are retained as consecutive LFs. */
+  sourceSpacingText: string;
 };
 
 function round(value: number, digits = 3): number {
@@ -250,42 +261,138 @@ function clusterByPosition(
   return groups;
 }
 
-function buildVerticalGroups(items: InspectTextItem[], bodyFontSize: number): FlowGroup[] {
-  const tolerance = Math.max(1.5, bodyFontSize * 0.42);
-  const groups = clusterByPosition(items, "x", tolerance).sort(
-    (left, right) => right.position - left.position,
-  );
+type GroupBuildResult = {
+  groups: FlowGroup[];
+  boundaries: FlowBoundary[];
+};
 
-  return groups.map((group) => {
-    const orderedItems = [...group.items].sort((left, right) => {
-      const yDiff = left.displayY - right.displayY;
-      if (Math.abs(yDiff) > 0.5) return yDiff;
-      return right.fontSize - left.fontSize;
-    });
+type PhysicalColumn = {
+  position: number;
+  itemCount: number;
+  text: string;
+};
 
-    return {
-      position: round(group.position, 2),
-      itemCount: orderedItems.length,
-      text: orderedItems.map((item) => item.text).join(""),
-    };
-  });
+function estimateNormalPitch(columns: PhysicalColumn[], bodyFontSize: number): number {
+  const gaps: number[] = [];
+  for (let index = 1; index < columns.length; index += 1) {
+    const previous = columns[index - 1];
+    const current = columns[index];
+    if (!previous || !current) continue;
+    const gap = previous.position - current.position;
+    if (gap > Math.max(1, bodyFontSize * 0.6)) gaps.push(gap);
+  }
+
+  if (gaps.length >= 2) return lowerQuartile(gaps);
+  if (bodyFontSize > 0) return bodyFontSize * 1.65;
+  return gaps[0] ?? 0;
 }
 
-function buildHorizontalGroups(items: InspectTextItem[], bodyFontSize: number): FlowGroup[] {
-  const tolerance = Math.max(1.5, bodyFontSize * 0.42);
-  const groups = clusterByPosition(items, "y", tolerance).sort(
-    (left, right) => left.position - right.position,
-  );
-
-  return groups.map((group) => {
-    const orderedItems = [...group.items].sort((left, right) => left.displayX - right.displayX);
-
+function mergeVerticalColumns(
+  columns: PhysicalColumn[],
+  bodyFontSize: number,
+): GroupBuildResult {
+  if (columns.length === 0) return { groups: [], boundaries: [] };
+  if (columns.length === 1) {
+    const column = columns[0];
+    if (!column) return { groups: [], boundaries: [] };
     return {
-      position: round(group.position, 2),
-      itemCount: orderedItems.length,
-      text: orderedItems.map((item) => item.text).join(""),
+      groups: [{ position: round(column.position, 2), itemCount: column.itemCount, text: column.text }],
+      boundaries: [],
     };
-  });
+  }
+
+  const normalPitch = estimateNormalPitch(columns, bodyFontSize);
+  const paragraphGapThreshold =
+    normalPitch > 0
+      ? Math.max(normalPitch * 1.55, normalPitch + bodyFontSize * 1.25)
+      : Number.POSITIVE_INFINITY;
+
+  const groups: FlowGroup[] = [];
+  const boundaries: FlowBoundary[] = [];
+  let blockPosition = columns[0]?.position ?? 0;
+  let blockItemCount = 0;
+  let blockText = "";
+
+  for (let index = 0; index < columns.length; index += 1) {
+    const column = columns[index];
+    if (!column) continue;
+
+    if (index > 0) {
+      const previousColumn = columns[index - 1];
+      const gap = previousColumn ? previousColumn.position - column.position : 0;
+      if (gap >= paragraphGapThreshold && blockText.length > 0) {
+        groups.push({
+          position: round(blockPosition, 2),
+          itemCount: blockItemCount,
+          text: blockText,
+        });
+
+        const gapRatio = normalPitch > 0 ? gap / normalPitch : 1;
+        boundaries.push({
+          gap: round(gap, 2),
+          normalPitch: round(normalPitch, 2),
+          gapRatio: round(gapRatio, 3),
+          estimatedLineBreaks: Math.min(20, Math.max(1, Math.round(gapRatio))),
+        });
+
+        blockPosition = column.position;
+        blockItemCount = 0;
+        blockText = "";
+      }
+    }
+
+    blockItemCount += column.itemCount;
+    blockText += column.text;
+  }
+
+  if (blockText.length > 0) {
+    groups.push({
+      position: round(blockPosition, 2),
+      itemCount: blockItemCount,
+      text: blockText,
+    });
+  }
+
+  return { groups, boundaries };
+}
+
+function buildVerticalGroups(items: InspectTextItem[], bodyFontSize: number): GroupBuildResult {
+  const tolerance = Math.max(1.5, bodyFontSize * 0.42);
+  const physicalColumns = clusterByPosition(items, "x", tolerance)
+    .sort((left, right) => right.position - left.position)
+    .map((group) => {
+      const orderedItems = [...group.items].sort((left, right) => {
+        const yDiff = left.displayY - right.displayY;
+        if (Math.abs(yDiff) > 0.5) return yDiff;
+        return right.fontSize - left.fontSize;
+      });
+
+      return {
+        position: group.position,
+        itemCount: orderedItems.length,
+        text: orderedItems.map((item) => item.text).join(""),
+      };
+    })
+    .filter((column) => column.text.trim().length > 0);
+
+  return mergeVerticalColumns(physicalColumns, bodyFontSize);
+}
+
+function buildHorizontalGroups(items: InspectTextItem[], bodyFontSize: number): GroupBuildResult {
+  const tolerance = Math.max(1.5, bodyFontSize * 0.42);
+  const groups = clusterByPosition(items, "y", tolerance)
+    .sort((left, right) => left.position - right.position)
+    .map((group) => {
+      const orderedItems = [...group.items].sort((left, right) => left.displayX - right.displayX);
+
+      return {
+        position: round(group.position, 2),
+        itemCount: orderedItems.length,
+        text: orderedItems.map((item) => item.text).join(""),
+      };
+    });
+
+  return { groups, boundaries: [] };
 }
 
 type SequenceColumn = {
@@ -298,8 +405,8 @@ type SequenceColumn = {
 function buildVerticalGlyphSequenceGroups(
   items: InspectTextItem[],
   bodyFontSize: number,
-): FlowGroup[] {
-  if (items.length === 0) return [];
+): GroupBuildResult {
+  if (items.length === 0) return { groups: [], boundaries: [] };
 
   const shiftThreshold = Math.max(8, bodyFontSize * 1.25);
   const columns: SequenceColumn[] = [];
@@ -341,7 +448,7 @@ function buildVerticalGlyphSequenceGroups(
     previous = item;
   }
 
-  const orderedColumns = columns
+  const physicalColumns = columns
     .map((column) => ({
       position: median(column.positions),
       itemCount: column.items.length,
@@ -350,66 +457,26 @@ function buildVerticalGlyphSequenceGroups(
     .filter((column) => column.text.length > 0)
     .sort((left, right) => right.position - left.position);
 
-  if (orderedColumns.length <= 1) {
-    return orderedColumns.map((column) => ({
-      position: round(column.position, 2),
-      itemCount: column.itemCount,
-      text: column.text,
-    }));
+  return mergeVerticalColumns(physicalColumns, bodyFontSize);
+}
+
+function renderLogicalText(groups: FlowGroup[]): string {
+  return groups.map((group) => group.text).join("\n");
+}
+
+function renderSourceSpacingText(groups: FlowGroup[], boundaries: FlowBoundary[]): string {
+  if (groups.length === 0) return "";
+  let text = groups[0]?.text ?? "";
+
+  for (let index = 1; index < groups.length; index += 1) {
+    const group = groups[index];
+    if (!group) continue;
+    const boundary = boundaries[index - 1];
+    const lineBreaks = boundary?.estimatedLineBreaks ?? 1;
+    text += `${"\n".repeat(Math.max(1, lineBreaks))}${group.text}`;
   }
 
-  const gaps: number[] = [];
-  for (let index = 1; index < orderedColumns.length; index += 1) {
-    const previousColumn = orderedColumns[index - 1];
-    const currentColumn = orderedColumns[index];
-    if (!previousColumn || !currentColumn) continue;
-    const gap = previousColumn.position - currentColumn.position;
-    if (gap > bodyFontSize * 1.2) gaps.push(gap);
-  }
-
-  const normalPitch = lowerQuartile(gaps);
-  const paragraphGapThreshold =
-    normalPitch > 0
-      ? Math.max(normalPitch * 1.55, normalPitch + bodyFontSize * 1.25)
-      : Number.POSITIVE_INFINITY;
-
-  const groups: FlowGroup[] = [];
-  let blockPosition = orderedColumns[0]?.position ?? 0;
-  let blockItemCount = 0;
-  let blockText = "";
-
-  for (let index = 0; index < orderedColumns.length; index += 1) {
-    const column = orderedColumns[index];
-    if (!column) continue;
-
-    if (index > 0) {
-      const previousColumn = orderedColumns[index - 1];
-      const gap = previousColumn ? previousColumn.position - column.position : 0;
-      if (gap >= paragraphGapThreshold && blockText.length > 0) {
-        groups.push({
-          position: round(blockPosition, 2),
-          itemCount: blockItemCount,
-          text: blockText,
-        });
-        blockPosition = column.position;
-        blockItemCount = 0;
-        blockText = "";
-      }
-    }
-
-    blockItemCount += column.itemCount;
-    blockText += column.text;
-  }
-
-  if (blockText.length > 0) {
-    groups.push({
-      position: round(blockPosition, 2),
-      itemCount: blockItemCount,
-      text: blockText,
-    });
-  }
-
-  return groups;
+  return text;
 }
 
 export function reconstructPageFlow(page: InspectPage): PageFlowResult {
@@ -429,17 +496,17 @@ export function reconstructPageFlow(page: InspectPage): PageFlowResult {
 
   const { orientation, metrics } = detectOrientation(primaryItems);
 
-  let groups: FlowGroup[] = [];
+  let built: GroupBuildResult = { groups: [], boundaries: [] };
   if (
     orientation === "vertical" &&
     metrics.singleCharItemRatio >= 0.7 &&
     metrics.sequenceVerticalRatio >= 0.6
   ) {
-    groups = buildVerticalGlyphSequenceGroups(primaryItems, bodyFontSize);
+    built = buildVerticalGlyphSequenceGroups(primaryItems, bodyFontSize);
   } else if (orientation === "vertical") {
-    groups = buildVerticalGroups(primaryItems, bodyFontSize);
+    built = buildVerticalGroups(primaryItems, bodyFontSize);
   } else if (orientation === "horizontal") {
-    groups = buildHorizontalGroups(primaryItems, bodyFontSize);
+    built = buildHorizontalGroups(primaryItems, bodyFontSize);
   }
 
   return {
@@ -448,9 +515,11 @@ export function reconstructPageFlow(page: InspectPage): PageFlowResult {
     primaryItemCount: primaryItems.length,
     annotationItemCount: annotationItems.length,
     marginNoiseItemCount: marginNoiseItems.length,
-    groupCount: groups.length,
+    groupCount: built.groups.length,
     metrics,
-    groups,
-    text: groups.map((group) => group.text).join("\n"),
+    groups: built.groups,
+    boundaries: built.boundaries,
+    text: renderLogicalText(built.groups),
+    sourceSpacingText: renderSourceSpacingText(built.groups, built.boundaries),
   };
 }
