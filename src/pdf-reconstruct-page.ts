@@ -17,7 +17,9 @@ function parseArgs(args: string[]): { inputPath: string | undefined; pageNumber:
   return { inputPath, pageNumber };
 }
 
-function reconstructionLooksConsistent(flow: ReturnType<typeof reconstructPageFlow>): boolean {
+function reconstructionLooksStructurallyConsistent(
+  flow: ReturnType<typeof reconstructPageFlow>,
+): boolean {
   if (flow.orientation === "unknown" || flow.text.trim().length === 0 || flow.groupCount === 0) {
     return false;
   }
@@ -54,7 +56,7 @@ async function main() {
       console.error("\n=== FileShape page reconstruction ===");
       console.error(`File: ${result.file}`);
       console.error(`Page: ${pageNumber}`);
-      console.error("RESULT: FAIL (page does not exist)");
+      console.error("STRUCTURE RESULT: FAIL (page does not exist)");
       process.exitCode = 1;
       return;
     }
@@ -62,6 +64,7 @@ async function main() {
     const flow = reconstructPageFlow(page);
 
     console.log("\n=== FileShape page reconstruction ===");
+    console.log("NOTE: this command checks structural consistency, not textual fidelity.");
     console.log(`File: ${result.file}`);
     console.log(`Page: ${page.page}`);
     console.log(`Orientation: ${flow.orientation}`);
@@ -69,7 +72,7 @@ async function main() {
     console.log(`Primary items: ${flow.primaryItemCount}`);
     console.log(`Annotations excluded: ${flow.annotationItemCount}`);
     console.log(`Margin noise excluded: ${flow.marginNoiseItemCount}`);
-    console.log(`Groups: ${flow.groupCount}`);
+    console.log(`Logical groups: ${flow.groupCount}`);
     console.log(`Metrics: ${JSON.stringify(flow.metrics)}`);
     console.log("");
     console.log("--- reconstructed text ---");
@@ -77,12 +80,12 @@ async function main() {
     console.log("--- end reconstructed text ---");
     console.log("");
 
-    const passed = reconstructionLooksConsistent(flow);
-    console.log(`RESULT: ${passed ? "PASS" : "FAIL"}`);
+    const passed = reconstructionLooksStructurallyConsistent(flow);
+    console.log(`STRUCTURE RESULT: ${passed ? "PASS" : "FAIL"}`);
     if (!passed) process.exitCode = 1;
   } catch (error) {
     console.error("\n=== FileShape page reconstruction ===");
-    console.error("RESULT: FAIL");
+    console.error("STRUCTURE RESULT: FAIL");
     console.error(error instanceof Error ? error.stack ?? error.message : error);
     process.exitCode = 1;
   }
