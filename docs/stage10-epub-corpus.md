@@ -28,18 +28,25 @@ The corpus contract remains exactly 9 PDFs and 5,141 pages. A missing conversion
 
 The user-facing converter uses `preserve-as-page-note` by default. The verifier reports the total number of unresolved annotations preserved across the corpus. It never converts those candidates into guessed ruby and never discards their source text.
 
-## Result
+## Verified result
 
-Success ends with a compact machine-readable block:
+The full corpus was run successfully on code baseline:
+
+```text
+fe60d30d190926693bd1488138934fc3423dd00a
+```
+
+Result:
 
 ```text
 FILESHAPE EPUB FULL CORPUS RESULT: PASS
 PDFs: 9/9
 EPUBs: 9/9
 Pages: 5141/5141
-Unresolved annotations preserved: <count>
-Total EPUB bytes: <count>
+Unresolved annotations preserved: 6387
+Total EPUB bytes: 16623404
 All corpus PDFs completed end-to-end PDF -> EPUB conversion.
+VERIFY_EPUB_EXIT=0
 ```
 
 This verifier is the end-to-end complement to `verify:ruby`, `verify:semantic`, and `verify:stage2`; those remain useful for locating regressions at their earlier stage boundaries.
