@@ -13,6 +13,7 @@
     "compare:flow": "tsx src/pdf-flow-compare.ts",
     "verify:semantic": "tsx src/verify-semantic-samples.ts",
     "verify:stage2": "tsx src/verify-stage2-corpus-v2.ts",
+    "diagnose:orientation": "tsx src/diagnose-unresolved-orientation.ts",
     "typecheck": "tsc --noEmit",
     "test": "tsx src/test-runner.ts"
   },
