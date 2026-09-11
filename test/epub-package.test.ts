@@ -131,6 +131,7 @@ test("builds the required EPUB file set in deterministic order", () => {
     "mimetype",
     "META-INF/container.xml",
     "OEBPS/package.opf",
+    "OEBPS/styles/fileshape.css",
     "OEBPS/nav.xhtml",
     "OEBPS/text/page-0001.xhtml",
     "OEBPS/text/page-0002.xhtml",
@@ -162,9 +163,34 @@ test("OPF manifest and spine preserve document page order", () => {
   assert.match(opf, /<dc:creator>FileShape Test<\/dc:creator>/);
   assert.match(opf, /<meta property="dcterms:modified">2026-09-11T12:34:56Z<\/meta>/);
   assert.match(opf, /id="nav" href="nav.xhtml"[^>]*properties="nav"/);
+  assert.match(opf, /id="fileshape-style" href="styles\/fileshape\.css" media-type="text\/css"/);
   assert.match(opf, /id="page-1" href="text\/page-0001\.xhtml"/);
   assert.match(opf, /id="page-2" href="text\/page-0002\.xhtml"/);
   assert.ok(opf.indexOf('idref="page-1"') < opf.indexOf('idref="page-2"'));
+});
+
+test("packaged stylesheet exists and every packaged XHTML references it", () => {
+  const result = serializeEpubPackage(documentFixture(), fixedOptions);
+  const css = fileText(result, "OEBPS/styles/fileshape.css");
+  const nav = fileText(result, "OEBPS/nav.xhtml");
+  const first = fileText(result, "OEBPS/text/page-0001.xhtml");
+  const second = fileText(result, "OEBPS/text/page-0002.xhtml");
+  assert.match(css, /writing-mode: vertical-rl/);
+  assert.match(css, /ruby-position: over/);
+  assert.match(nav, /href="styles\/fileshape\.css"/);
+  assert.match(first, /href="\.\.\/styles\/fileshape\.css"/);
+  assert.match(second, /href="\.\.\/styles\/fileshape\.css"/);
+});
+
+test("page progression direction is explicit-only and never inferred from page orientation", () => {
+  const automatic = fileText(serializeEpubPackage(documentFixture(), fixedOptions), "OEBPS/package.opf");
+  assert.doesNotMatch(automatic, /page-progression-direction=/);
+
+  const rtl = fileText(serializeEpubPackage(documentFixture(), {
+    ...fixedOptions,
+    pageProgressionDirection: "rtl",
+  }), "OEBPS/package.opf");
+  assert.match(rtl, /<spine page-progression-direction="rtl">/);
 });
 
 test("navigation links every generated page in source order", () => {
