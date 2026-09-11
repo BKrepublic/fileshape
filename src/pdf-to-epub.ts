@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import type { UnresolvedRubyPolicy } from "./content-policy.js";
 import { serializeEpubPackage, type EpubPackageOptions } from "./epub-package.js";
 import { buildDocumentFromInspection } from "./pdf-document-pipeline.js";
 import { inspectPdf } from "./pdf-inspector.js";
@@ -32,6 +33,11 @@ function sourceId(bytes: Uint8Array): string {
   return `urn:sha256:${createHash("sha256").update(bytes).digest("hex")}`;
 }
 
+function unresolvedRubyPolicy(value: string): UnresolvedRubyPolicy {
+  if (value === "error" || value === "preserve-as-page-note") return value;
+  throw new Error("--unresolved-ruby must be error or preserve-as-page-note");
+}
+
 export async function convertPdfToEpub(
   inputPath: string,
   outputPath = defaultOutputPath(inputPath),
@@ -51,6 +57,9 @@ export async function convertPdfToEpub(
     ...(options.language === undefined ? {} : { language: options.language }),
     ...(options.modified === undefined ? {} : { modified: options.modified }),
     ...(options.titlePrefix === undefined ? {} : { titlePrefix: options.titlePrefix }),
+    ...(options.unresolvedRubyPolicy === undefined
+      ? {}
+      : { unresolvedRubyPolicy: options.unresolvedRubyPolicy }),
   });
 
   await writeFile(absoluteOutput, epub.bytes);
@@ -94,6 +103,7 @@ function parseCliArguments(argv: string[]): CliArguments {
       case "identifier": options.identifier = value; break;
       case "modified": options.modified = value; break;
       case "title-prefix": options.titlePrefix = value; break;
+      case "unresolved-ruby": options.unresolvedRubyPolicy = unresolvedRubyPolicy(value); break;
       default: throw new Error(`unknown option --${name}`);
     }
   }
@@ -101,7 +111,7 @@ function parseCliArguments(argv: string[]): CliArguments {
   const inputPath = positionals[0];
   if (!inputPath || positionals.length > 2) {
     throw new Error(
-      "usage: npm run convert:epub -- input.pdf [output.epub] [--title TITLE] [--creator NAME] [--language ja]",
+      "usage: npm run convert:epub -- input.pdf [output.epub] [--title TITLE] [--creator NAME] [--language ja] [--unresolved-ruby error|preserve-as-page-note]",
     );
   }
   const outputPath = positionals[1];

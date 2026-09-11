@@ -217,6 +217,9 @@ export function serializeEpubPackage(
   const xhtml = serializeEpubXhtml(document, {
     language,
     titlePrefix: options.titlePrefix ?? title,
+    ...(options.unresolvedRubyPolicy === undefined
+      ? {}
+      : { unresolvedRubyPolicy: options.unresolvedRubyPolicy }),
   });
 
   const files: EpubPackageFile[] = [
