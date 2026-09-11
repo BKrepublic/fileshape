@@ -11,6 +11,7 @@
     "reconstruct:page": "tsx src/pdf-reconstruct-page.ts",
     "check:flow": "tsx src/pdf-flow-check.ts",
     "compare:flow": "tsx src/pdf-flow-compare.ts",
+    "verify:semantic": "tsx src/verify-semantic-samples.ts",
     "typecheck": "tsc --noEmit",
     "test": "tsx src/test-runner.ts"
   },
