@@ -21,6 +21,8 @@ export type PageFlowResult = {
     horizontalRunRatio: number;
     verticalBaselineRatio: number;
     horizontalBaselineRatio: number;
+    sequenceVerticalRatio: number;
+    sequenceHorizontalRatio: number;
   };
   groups: FlowGroup[];
   text: string;
@@ -68,6 +70,49 @@ function isMarginNoise(item: InspectTextItem, page: InspectPage, bodyFontSize: n
   return (nearTop || nearBottom) && smallerThanBody;
 }
 
+function glyphSequenceRatios(items: InspectTextItem[]): {
+  vertical: number;
+  horizontal: number;
+} {
+  const glyphs = items.filter((item) => charCount(item.text) === 1);
+  if (glyphs.length < 2) return { vertical: 0, horizontal: 0 };
+
+  let usable = 0;
+  let vertical = 0;
+  let horizontal = 0;
+
+  for (let index = 1; index < glyphs.length; index += 1) {
+    const previous = glyphs[index - 1];
+    const current = glyphs[index];
+    if (!previous || !current) continue;
+
+    const maxFontSize = Math.max(previous.fontSize, current.fontSize, 1);
+    const minFontSize = Math.min(previous.fontSize, current.fontSize);
+    if (minFontSize / maxFontSize < 0.75) continue;
+
+    const dx = Math.abs(current.displayX - previous.displayX);
+    const dy = Math.abs(current.displayY - previous.displayY);
+    const distance = Math.hypot(dx, dy);
+
+    // Ignore duplicate/overprinted glyphs and large jumps between columns/regions.
+    if (distance < 0.5 || distance > maxFontSize * 2.75) continue;
+
+    if (dy > dx * 1.5) {
+      vertical += 1;
+      usable += 1;
+    } else if (dx > dy * 1.5) {
+      horizontal += 1;
+      usable += 1;
+    }
+  }
+
+  if (usable === 0) return { vertical: 0, horizontal: 0 };
+  return {
+    vertical: vertical / usable,
+    horizontal: horizontal / usable,
+  };
+}
+
 function detectOrientation(items: InspectTextItem[]): {
   orientation: WritingOrientation;
   metrics: PageFlowResult["metrics"];
@@ -81,6 +126,8 @@ function detectOrientation(items: InspectTextItem[]): {
         horizontalRunRatio: 0,
         verticalBaselineRatio: 0,
         horizontalBaselineRatio: 0,
+        sequenceVerticalRatio: 0,
+        sequenceHorizontalRatio: 0,
       },
     };
   }
@@ -104,12 +151,21 @@ function detectOrientation(items: InspectTextItem[]): {
   const horizontalRunRatio = multiCharItems.length === 0 ? 0 : horizontalRuns / multiCharItems.length;
   const verticalBaselineRatio = verticalBaselines / items.length;
   const horizontalBaselineRatio = horizontalBaselines / items.length;
+  const sequence = glyphSequenceRatios(items);
 
   let orientation: WritingOrientation = "unknown";
 
   if (verticalRunRatio >= 0.6 && verticalRunRatio > horizontalRunRatio) {
     orientation = "vertical";
   } else if (horizontalRunRatio >= 0.6 && horizontalRunRatio > verticalRunRatio) {
+    orientation = "horizontal";
+  } else if (singleCharItemRatio >= 0.7 && sequence.vertical >= 0.6 && sequence.vertical > sequence.horizontal) {
+    orientation = "vertical";
+  } else if (
+    singleCharItemRatio >= 0.7 &&
+    sequence.horizontal >= 0.6 &&
+    sequence.horizontal > sequence.vertical
+  ) {
     orientation = "horizontal";
   } else if (singleCharItemRatio >= 0.7 && verticalBaselineRatio >= 0.6) {
     orientation = "vertical";
@@ -129,6 +185,8 @@ function detectOrientation(items: InspectTextItem[]): {
       horizontalRunRatio: round(horizontalRunRatio, 4),
       verticalBaselineRatio: round(verticalBaselineRatio, 4),
       horizontalBaselineRatio: round(horizontalBaselineRatio, 4),
+      sequenceVerticalRatio: round(sequence.vertical, 4),
+      sequenceHorizontalRatio: round(sequence.horizontal, 4),
     },
   };
 }
