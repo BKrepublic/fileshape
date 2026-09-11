@@ -10,7 +10,7 @@ const PACKAGE_PATH = "OEBPS/package.opf";
 const NAV_PATH = "OEBPS/nav.xhtml";
 const UTF8_FLAG = 0x0800;
 
-export type EpubPackageOptions = EpubXhtmlOptions & {
+export type EpubPackageOptions = Omit<EpubXhtmlOptions, "stylesheetHref"> & {
   title: string;
   identifier?: string;
   creator?: string;
@@ -217,7 +217,6 @@ export function serializeEpubPackage(
   const xhtml = serializeEpubXhtml(document, {
     language,
     titlePrefix: options.titlePrefix ?? title,
-    ...(options.stylesheetHref === undefined ? {} : { stylesheetHref: options.stylesheetHref }),
   });
 
   const files: EpubPackageFile[] = [
