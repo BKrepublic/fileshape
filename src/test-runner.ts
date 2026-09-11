@@ -1,13 +1,15 @@
 import { spawnSync } from "node:child_process";
+import { readdirSync } from "node:fs";
+import path from "node:path";
 import process from "node:process";
 
 const WIDTH = 68;
 const RULE = "=".repeat(WIDTH);
 
-function run(command: string, args: string[], options: { shell?: boolean } = {}): number {
+function run(command: string, args: string[]): number {
   const result = spawnSync(command, args, {
     stdio: "inherit",
-    shell: options.shell ?? false,
+    shell: false,
     env: process.env,
   });
 
@@ -39,7 +41,18 @@ if (typecheckStatus !== 0) {
   process.exit(typecheckStatus);
 }
 
-const testStatus = run("npx", ["tsx", "--test", "test/*.test.ts"], { shell: true });
+const testFiles = readdirSync("test", { withFileTypes: true })
+  .filter((entry) => entry.isFile() && entry.name.endsWith(".test.ts"))
+  .map((entry) => path.join("test", entry.name))
+  .sort();
+
+if (testFiles.length === 0) {
+  console.error("No test files found under test/*.test.ts");
+  printResult(false, "test discovery");
+  process.exit(1);
+}
+
+const testStatus = run("npx", ["tsx", "--test", ...testFiles]);
 if (testStatus !== 0) {
   printResult(false, "unit tests");
   process.exit(testStatus);
