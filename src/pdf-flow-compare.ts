@@ -19,7 +19,8 @@ async function main() {
   try {
     const [left, right] = await Promise.all([inspectPdf(leftPath), inspectPdf(rightPath)]);
 
-    console.log("\n=== FileShape flow comparison ===");
+    console.log("\n=== FileShape flow equality comparison ===");
+    console.log("NOTE: equality between two outputs does not prove either output is textually correct.");
     console.log(`Left:  ${left.file}`);
     console.log(`Right: ${right.file}`);
     console.log(`Pages: ${left.pageCount} vs ${right.pageCount}`);
@@ -65,8 +66,8 @@ async function main() {
       }
     }
 
-    console.log(`PASS  Page count match: ${pageCountMatch ? "yes" : "no"}`);
-    console.log(`PASS  Compared pages: ${maxPages}`);
+    console.log(`${pageCountMatch ? "PASS" : "FAIL"}  Page count match: ${pageCountMatch ? "yes" : "no"}`);
+    console.log(`INFO  Compared pages: ${maxPages}`);
     console.log(`${mismatches.length === 0 ? "PASS" : "FAIL"}  Flow mismatches: ${mismatches.length}`);
 
     if (mismatches.length > 0) {
@@ -85,11 +86,11 @@ async function main() {
 
     const passed = pageCountMatch && mismatches.length === 0;
     console.log("");
-    console.log(`RESULT: ${passed ? "PASS" : "FAIL"}`);
+    console.log(`EQUALITY RESULT: ${passed ? "PASS" : "FAIL"}`);
     if (!passed) process.exitCode = 1;
   } catch (error) {
-    console.error("\n=== FileShape flow comparison ===");
-    console.error("RESULT: FAIL");
+    console.error("\n=== FileShape flow equality comparison ===");
+    console.error("EQUALITY RESULT: FAIL");
     console.error(error instanceof Error ? error.stack ?? error.message : error);
     process.exitCode = 1;
   }
