@@ -1,8 +1,8 @@
 import process from "node:process";
-import { renderPageFlowText } from "./flow-render.js";
 import { inspectPdf } from "./pdf-inspector.js";
 import { reconstructPhysicalLayout } from "./physical-layout.js";
 import { buildSemanticBlocks } from "./semantic-blocks.js";
+import { renderSemanticText } from "./semantic-render.js";
 import { reconstructPageFlow } from "./text-flow.js";
 
 type SpacingMode = "logical" | "preserve" | "cap";
@@ -61,8 +61,9 @@ function parseArgs(args: string[]): {
 
 function reconstructionLooksStructurallyConsistent(
   flow: ReturnType<typeof reconstructPageFlow>,
+  semanticText: string,
 ): boolean {
-  if (flow.orientation === "unknown" || flow.text.trim().length === 0 || flow.groupCount === 0) {
+  if (flow.orientation === "unknown" || semanticText.trim().length === 0) {
     return false;
   }
 
@@ -82,15 +83,16 @@ function reconstructionLooksStructurallyConsistent(
 }
 
 function renderSelectedText(
-  flow: ReturnType<typeof reconstructPageFlow>,
+  semantic: ReturnType<typeof buildSemanticBlocks>,
+  physical: ReturnType<typeof reconstructPhysicalLayout>,
   spacingMode: SpacingMode,
   maxLineBreaks: number,
 ): string {
-  if (spacingMode === "logical") return flow.text;
+  if (spacingMode === "logical") return semantic.text;
   if (spacingMode === "preserve") {
-    return renderPageFlowText(flow, { mode: "preserve" });
+    return renderSemanticText(semantic, physical, { mode: "preserve" });
   }
-  return renderPageFlowText(flow, {
+  return renderSemanticText(semantic, physical, {
     mode: "cap",
     maxConsecutiveLineBreaks: maxLineBreaks,
   });
@@ -136,9 +138,9 @@ async function main() {
     }
 
     const flow = reconstructPageFlow(page);
-    const renderedText = renderSelectedText(flow, spacingMode, maxLineBreaks);
     const physical = reconstructPhysicalLayout(page, flow.orientation, flow.bodyFontSize);
     const semantic = buildSemanticBlocks(physical, flow.bodyFontSize);
+    const renderedText = renderSelectedText(semantic, physical, spacingMode, maxLineBreaks);
 
     console.log("\n=== FileShape page reconstruction ===");
     console.log("NOTE: this command checks structural consistency, not textual fidelity.");
@@ -151,13 +153,6 @@ async function main() {
     console.log(`Margin noise excluded: ${flow.marginNoiseItemCount}`);
     console.log(`Physical units preserved: ${physical.units.length}`);
     console.log(`Semantic blocks: ${semantic.blocks.length}`);
-    console.log(`Logical groups: ${flow.groupCount}`);
-    console.log(`Spacing boundaries: ${flow.boundaries.length}`);
-    if (flow.boundaries.length > 0) {
-      console.log(
-        `Estimated source breaks: ${flow.boundaries.map((boundary) => boundary.estimatedLineBreaks).join(",")}`,
-      );
-    }
     console.log(`Spacing mode: ${spacingMode}${spacingMode === "cap" ? ` (max ${maxLineBreaks})` : ""}`);
     console.log(`Metrics: ${JSON.stringify(flow.metrics)}`);
 
@@ -188,10 +183,6 @@ async function main() {
         console.log(`[${block.index}] units=${block.unitIndexes.join(",")} ${block.text}`);
       }
       console.log("--- end semantic blocks ---");
-      console.log("");
-      console.log("--- semantic text ---");
-      console.log(semantic.text);
-      console.log("--- end semantic text ---");
     }
 
     console.log("");
@@ -200,7 +191,7 @@ async function main() {
     console.log("--- end reconstructed text ---");
     console.log("");
 
-    const passed = reconstructionLooksStructurallyConsistent(flow);
+    const passed = reconstructionLooksStructurallyConsistent(flow, semantic.text);
     console.log(`STRUCTURE RESULT: ${passed ? "PASS" : "FAIL"}`);
     if (!passed) {
       printPasteError(
