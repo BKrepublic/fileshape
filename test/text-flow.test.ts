@@ -104,6 +104,27 @@ test("keeps shifted vertical punctuation and long marks in source sequence", () 
   assert.equal(result.text, "ムードです。");
 });
 
+test("preserves mixed vertical symbols regardless of glyph transform orientation", () => {
+  const horizontal = [14, 0, 0, 14, 0, 0];
+  const vertical = [0, 14, -14, 0, 0, 0];
+  const result = reconstructPageFlow(
+    page([
+      item({ text: "縦", displayX: 700, displayY: 100, displayTransform: vertical }),
+      item({ text: "書", displayX: 700, displayY: 114, displayTransform: vertical }),
+      item({ text: "き", displayX: 700, displayY: 128, displayTransform: vertical }),
+      item({ text: "ー", displayX: 708, displayY: 142, displayTransform: horizontal }),
+      item({ text: "記", displayX: 700, displayY: 156, displayTransform: vertical }),
+      item({ text: "号", displayX: 700, displayY: 170, displayTransform: vertical }),
+      item({ text: "．", displayX: 707, displayY: 184, displayTransform: horizontal }),
+      item({ text: "…", displayX: 696, displayY: 198, displayTransform: vertical }),
+      item({ text: "終", displayX: 700, displayY: 212, displayTransform: vertical }),
+    ]),
+  );
+
+  assert.equal(result.orientation, "vertical");
+  assert.equal(result.text, "縦書きー記号．…終");
+});
+
 test("reconstructs glyph-by-glyph horizontal rows from display-coordinate sequence", () => {
   const result = reconstructPageFlow(
     page([
