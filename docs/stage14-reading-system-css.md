@@ -11,9 +11,20 @@ This checkpoint advances Task 2B from `docs/remaining-work/02-reading-systems.md
 - unresolved annotations grouped under a visible `Notes` section without changing their preserved source strings;
 - explicit `pageProgressionDirection: "ltr" | "rtl"` package option and matching CLI flag;
 - no automatic page-progression inference from the majority of page orientations;
-- tests for manifest/resource/link consistency and absence of absolute/fixed-size layout rules.
+- tests for manifest/resource/link consistency and absence of absolute/fixed-size layout rules;
+- a deterministic reading-system fixture EPUB generator covering horizontal/vertical mixed pages, exact and long ruby, supplementary and combining Unicode, Latin/numbers/punctuation, preserved whitespace, an unresolved annotation, hierarchical navigation and an empty page.
 
 The existing per-page inline `writing-mode` remains as a conservative fallback. PDF rotation is still not serialized as a visual transform.
+
+## Reader fixture
+
+Generate the fixture without using private PDFs:
+
+```text
+npm run fixture:reader -- reading-system-fixture.epub
+```
+
+The fixture uses explicit RTL page progression only to exercise that metadata path. Production conversion does not infer progression from page orientation; callers must opt into `--page-progression-direction ltr|rtl` when they have publication-level evidence.
 
 ## Not yet accepted
 
