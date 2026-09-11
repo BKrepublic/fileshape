@@ -4,13 +4,13 @@ Stage 8 adds an explicit policy boundary for unresolved ruby candidates. Parser 
 
 ## Policies
 
-The default remains strict:
+The library serializer default remains strict:
 
 ```text
 unresolvedRubyPolicy = "error"
 ```
 
-Any unresolved candidate aborts EPUB serialization, preserving the existing fail-closed behavior.
+Any unresolved candidate aborts direct EPUB serialization unless the caller explicitly selects another policy.
 
 For production conversion where dropping source text is worse than preserving uncertain annotation separately:
 
@@ -24,16 +24,22 @@ The original `FileShapeDocument` remains unchanged. Reason, source ranges, alter
 
 ## CLI
 
+The user-facing PDF-to-EPUB CLI defaults to `preserve-as-page-note` so ordinary conversion does not abort merely because a geometrically uncertain annotation exists. It reports the number of preserved unresolved annotations after conversion.
+
 ```text
-npm run convert:epub -- input.pdf output.epub --unresolved-ruby preserve-as-page-note
+npm run convert:epub -- input.pdf output.epub
+```
+
+Strict behavior is still available explicitly:
+
+```text
+npm run convert:epub -- input.pdf output.epub --unresolved-ruby error
 ```
 
 Accepted values:
 
 - `error`
 - `preserve-as-page-note`
-
-The default is `error`.
 
 ## Safety properties
 
@@ -48,3 +54,5 @@ The default is `error`.
 ## Tests
 
 `test/content-policy.test.ts` covers strict failure, non-mutating source-backed preservation, XHTML note rendering, XML escaping, package propagation, and missing-source failure.
+
+`test/pdf-to-epub-policy.test.ts` covers the CLI-facing default with a real PDF containing unrelated small text, verifies that text is preserved outside `<ruby>`, and verifies explicit strict mode still aborts.

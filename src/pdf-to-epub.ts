@@ -17,6 +17,7 @@ export type PdfToEpubResult = {
   outputPath: string;
   documentId: string;
   pageCount: number;
+  unresolvedAnnotationCount: number;
   byteLength: number;
 };
 
@@ -49,6 +50,11 @@ export async function convertPdfToEpub(
   const documentId = sourceId(sourceBytes);
   const inspection = await inspectPdf(absoluteInput, { includeGlyphs: true });
   const { document } = buildDocumentFromInspection(inspection, documentId);
+  const unresolvedAnnotationCount = document.pages.reduce(
+    (count, page) => count + page.unresolvedRuby.length,
+    0,
+  );
+  const effectiveUnresolvedPolicy = options.unresolvedRubyPolicy ?? "preserve-as-page-note";
 
   const epub = serializeEpubPackage(document, {
     title: options.title ?? defaultTitle(absoluteInput),
@@ -57,9 +63,7 @@ export async function convertPdfToEpub(
     ...(options.language === undefined ? {} : { language: options.language }),
     ...(options.modified === undefined ? {} : { modified: options.modified }),
     ...(options.titlePrefix === undefined ? {} : { titlePrefix: options.titlePrefix }),
-    ...(options.unresolvedRubyPolicy === undefined
-      ? {}
-      : { unresolvedRubyPolicy: options.unresolvedRubyPolicy }),
+    unresolvedRubyPolicy: effectiveUnresolvedPolicy,
   });
 
   await writeFile(absoluteOutput, epub.bytes);
@@ -68,6 +72,7 @@ export async function convertPdfToEpub(
     outputPath: absoluteOutput,
     documentId,
     pageCount: document.pages.length,
+    unresolvedAnnotationCount,
     byteLength: epub.bytes.byteLength,
   };
 }
@@ -123,6 +128,7 @@ async function main(): Promise<void> {
   const result = await convertPdfToEpub(parsed.inputPath, parsed.outputPath, parsed.options);
   console.log(`EPUB=${result.outputPath}`);
   console.log(`PAGES=${result.pageCount}`);
+  console.log(`UNRESOLVED_ANNOTATIONS=${result.unresolvedAnnotationCount}`);
   console.log(`BYTES=${result.byteLength}`);
   console.log(`DOCUMENT_ID=${result.documentId}`);
 }
