@@ -15,6 +15,8 @@ export type MarkedContentOccurrence = {
   propertyShape?: "none" | "primitive" | "array" | "object";
 };
 
+type PropertyShape = NonNullable<MarkedContentOccurrence["propertyShape"]>;
+
 export type PdfMarkedContentInventory = {
   pdfId: string;
   pages: number;
@@ -52,7 +54,7 @@ function mergeCounts(target: Record<string, number>, source: Record<string, numb
   for (const [key, count] of Object.entries(source)) increment(target, key, count);
 }
 
-function propertyShape(value: unknown): MarkedContentOccurrence["propertyShape"] {
+function propertyShape(value: unknown): PropertyShape {
   if (value === undefined || value === null) return "none";
   if (Array.isArray(value) || ArrayBuffer.isView(value as ArrayBufferView)) return "array";
   if (typeof value === "object") return "object";
