@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { InspectPage, InspectTextItem } from "../src/pdf-inspector.js";
 import { reconstructPageFlow } from "../src/text-flow.js";
+import { reconstructPhysicalLayout } from "../src/physical-layout.js";
+import { buildSemanticBlocks } from "../src/semantic-blocks.js";
 
 function item(overrides: Partial<InspectTextItem> & Pick<InspectTextItem, "text">): InspectTextItem {
   return {
@@ -35,6 +37,60 @@ function page(items: InspectTextItem[]): InspectPage {
     textItems: items,
   };
 }
+
+function sparseRuns(horizontal = false): InspectTextItem[] {
+  return [
+    item({ text: "本文続き", displayX: 200, displayY: 100,
+      width: horizontal ? 84 : 14, height: horizontal ? 14 : 84 }),
+    item({ text: "…．", displayX: horizontal ? 284 : 195,
+      displayY: horizontal ? 105 : 184, width: 11, height: 14,
+      displayTransform: [0, 14, 14, 0, 0, 0] }),
+  ];
+}
+
+for (const horizontal of [false, true]) {
+  const orientation = horizontal ? "horizontal" : "vertical";
+  test(`resolves a compact endpoint attachment from ${orientation} run geometry`, () => {
+    const input = page(sparseRuns(horizontal));
+    const flow = reconstructPageFlow(input);
+    assert.equal(flow.orientation, orientation);
+    assert.equal(flow.metrics.verticalBaselineRatio, 0.5);
+    assert.equal(flow.metrics.horizontalBaselineRatio, 0.5);
+    const physical = reconstructPhysicalLayout(input, flow.orientation, flow.bodyFontSize);
+    assert.equal(physical.units.length, 1);
+    assert.equal(buildSemanticBlocks(physical, flow.bodyFontSize).text, "本文続き…．");
+  });
+
+  test(`rejects a detached compact run beside ${orientation} text`, () => {
+    for (const axis of ["displayX", "displayY"] as const) {
+      const items = sparseRuns(horizontal);
+      items[1]![axis] += 100;
+      assert.equal(reconstructPageFlow(page(items)).orientation, "unknown");
+    }
+  });
+
+  test(`rejects competing elongated runs beside ${orientation} text`, () => {
+    const items = sparseRuns(horizontal);
+    items[1]![horizontal ? "height" : "width"] = 84;
+    assert.equal(reconstructPageFlow(page(items)).orientation, "unknown");
+  });
+}
+
+test("compact runs alone do not provide a long-run anchor", () => {
+  const items = sparseRuns();
+  items[0]!.height = 14;
+  assert.equal(reconstructPageFlow(page(items)).orientation, "unknown");
+});
+
+test("attachment inference is independent of text, page number and glyph appearance", () => {
+  const items = sparseRuns();
+  items[0]!.text = "arbitrary";
+  items[1]!.text = "xy";
+  [items[0]!.displayTransform, items[1]!.displayTransform] =
+    [items[1]!.displayTransform, items[0]!.displayTransform];
+  const input = { ...page(items), page: 57 };
+  assert.equal(reconstructPageFlow(input).orientation, "vertical");
+});
 
 test("reconstructs vertical multi-character runs from right to left", () => {
   const result = reconstructPageFlow(

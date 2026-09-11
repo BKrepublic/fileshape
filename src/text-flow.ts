@@ -138,6 +138,42 @@ function glyphSequenceRatios(items: InspectTextItem[]): {
   };
 }
 
+/** A compact run has no reliable aspect-ratio vote. It may still continue a
+ * long run when its origin is adjacent to that run's inline endpoint. Require
+ * all remaining items to attach; isolated text and competing axes stay unknown.
+ * Neither Unicode content nor glyph transform direction participates here. */
+function attachedRunOrientation(items: InspectTextItem[]): WritingOrientation {
+  const candidates = (["vertical", "horizontal"] as const).filter((orientation) => {
+    const inline = (item: InspectTextItem) => orientation === "vertical" ? item.displayY : item.displayX;
+    const cross = (item: InspectTextItem) => orientation === "vertical" ? item.displayX : item.displayY;
+    const extent = (item: InspectTextItem) => Math.abs(orientation === "vertical" ? item.height : item.width);
+    const breadth = (item: InspectTextItem) => Math.abs(orientation === "vertical" ? item.width : item.height);
+    const anchors = items.filter((item) => charCount(item.text) >= 2 &&
+      extent(item) >= item.fontSize * 3 && extent(item) > breadth(item) * 1.5);
+    if (anchors.length === 0) return false;
+    const anchorSet = new Set(anchors);
+    const pending = items.filter((item) => !anchorSet.has(item));
+    if (pending.length === 0) return false;
+    // A second elongated run is evidence of mixed layout, not an attachment.
+    if (pending.some((item) => item.fontSize <= 0 ||
+      Math.max(Math.abs(item.width), Math.abs(item.height)) > item.fontSize * 1.5)) return false;
+    const attached = [...anchors];
+    while (pending.length > 0) {
+      const index = pending.findIndex((item) => attached.some((parent) => {
+        const size = Math.max(parent.fontSize, item.fontSize);
+        const ratio = Math.min(parent.fontSize, item.fontSize) / size;
+        const gap = inline(item) - (inline(parent) + extent(parent));
+        return ratio >= 0.75 && Math.abs(cross(item) - cross(parent)) <= size * 0.5 &&
+          Math.abs(gap) <= size * 0.75 && inline(item) > inline(parent);
+      }));
+      if (index < 0) return false;
+      attached.push(...pending.splice(index, 1));
+    }
+    return true;
+  });
+  return candidates.length === 1 ? candidates[0]! : "unknown";
+}
+
 function detectOrientation(items: InspectTextItem[]): {
   orientation: WritingOrientation;
   metrics: PageFlowResult["metrics"];
@@ -205,6 +241,8 @@ function detectOrientation(items: InspectTextItem[]): {
   } else if (horizontalBaselineRatio > verticalBaselineRatio * 1.5) {
     orientation = "horizontal";
   }
+
+  if (orientation === "unknown") orientation = attachedRunOrientation(items);
 
   return {
     orientation,
