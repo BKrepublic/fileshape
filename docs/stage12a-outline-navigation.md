@@ -33,7 +33,7 @@ Final measured results are recorded in [continuation status](continuation-status
 
 ## Artifact lifecycle
 
-`local-reports/epubcheck-stage12a/` contains private, ignored per-EPUB JSON reports and a summary. Staged verification logs are under `local-reports/stage12a-*.log`. They belong to this stage's local review, may contain private sample names, and are never committed. Remove them after their measured results have been checked and recorded in the published stage review. Generated temporary EPUBs are removed by the verifier even on failure. The pinned EPUBCheck installation remains reusable development tooling.
+The full run generated private, ignored per-EPUB JSON reports and a summary under `local-reports/epubcheck-stage12a/`, with staged logs under `local-reports/stage12a-*.log`. All nine reports were read back, their measurements were recorded in the published review, and these Stage 12a artifacts were then removed. Future review artifacts may contain private sample names: never commit them, and remove them after their measured results have been checked and published. Generated temporary EPUBs are removed by the verifier even on failure. The pinned EPUBCheck installation remains reusable development tooling.
 
 ## Next increment
 

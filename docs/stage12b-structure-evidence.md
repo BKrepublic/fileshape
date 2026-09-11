@@ -45,7 +45,9 @@ No blocking findings in the diagnostic scope. The inspector is a separate entry 
 
 `npm test` passed typecheck and 126 tests, with zero skipped tests. New real-PDF controls verify a custom RoleMap resolving to H1, nested structure and content references, both true and false MarkInfo flags, the absence of body tags despite an outline, and a missing-file failure. The positive control proves that the all-zero corpus observation is not simply a counter that always returns zero.
 
-The four standards integration tests and full production/staged corpus runs belong to the immediately preceding, unchanged Stage 12a conversion code. They were not rerun locally solely for this diagnostic addition. Hosted CI will run the public test and standards suites for the publication commit.
+The four standards integration tests and full production/staged corpus runs belong to the immediately preceding, unchanged Stage 12a conversion code. They were not rerun locally solely for this diagnostic addition.
+
+Published as `52cf5db80bd0a4d060b2087f92575e251b044543` with noreply author and committer email. Exact local/remote SHA equality was verified. [GitHub Actions run 34617045723](https://github.com/BKrepublic/fileshape/actions/runs/34617045723) passed for this exact commit, including the public test and standards suites. This hosted result does not replace the local private-corpus inventory or imply a new full EPUB corpus run.
 
 ## Next mapping contract
 
@@ -55,7 +57,7 @@ Only after that evidence and its ambiguity cases are reviewed should the model g
 
 ## Local artifacts
 
-The first inventory report and corrected final report under `local-reports/` are ignored and contain private basenames. They belong to this review and are removed after the aggregate results are validated and published here. The inspector and synthetic fixtures remain reproducible project tooling; no PDF samples or report contents are committed.
+The first inventory report and corrected final report under `local-reports/` were ignored and contained private basenames. Both were removed after the final aggregate results were validated and published here. The inspector and synthetic fixtures remain reproducible project tooling; no PDF samples or raw report contents were committed.
 
 ## Reference
 

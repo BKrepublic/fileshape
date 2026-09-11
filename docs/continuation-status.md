@@ -87,7 +87,9 @@ The new read-only `npm run inspect:structure -- PDF_OR_DIRECTORY [--output NEW_F
 
 The final implementation passed typecheck and **126 automated tests**, with no skipped tests. A complete scan returned nine PDFs and **5,141/5,141 pages**, with zero exposed structure-tree pages or heading nodes; `MarkInfo` was absent in all nine. This is an observation of the pinned PDF.js API over this corpus, not a claim that the documents have no visual headings. See [Stage 12b evidence and review](stage12b-structure-evidence.md).
 
-The inventory adds no production conversion changes, so the Stage 12a EPUB/standards/staged results above remain the applicable production baseline; those expensive verifiers were not rerun for this diagnostic-only increment. Heading/section mapping is not yet implemented. The next step is destination-to-source-range evidence analysis with rotation/vertical/duplicate-target controls; outline labels alone cannot establish body heading roles or chapter boundaries.
+The inventory was published as `52cf5db80bd0a4d060b2087f92575e251b044543` with noreply author/committer email, and local/remote SHA equality was verified. [GitHub Actions run 34617045723](https://github.com/BKrepublic/fileshape/actions/runs/34617045723) passed for this exact commit, including the public standards tests.
+
+The inventory adds no production conversion changes, so the Stage 12a EPUB/standards/staged results above remain the applicable production baseline; those expensive verifiers were not rerun locally for this diagnostic-only increment. The Stage 12a/12b private review reports and logs were removed after readback validation and publication of their aggregates. Heading/section mapping is not yet implemented. The next step is destination-to-source-range evidence analysis with rotation/vertical/duplicate-target controls; outline labels alone cannot establish body heading roles or chapter boundaries.
 
 ## Current pipeline
 
