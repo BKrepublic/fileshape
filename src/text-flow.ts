@@ -37,6 +37,21 @@ function charCount(text: string): number {
   return [...text.trim()].length;
 }
 
+function median(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((left, right) => left - right);
+  const middle = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 1) return sorted[middle] ?? 0;
+  return ((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2;
+}
+
+function lowerQuartile(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((left, right) => left - right);
+  const index = Math.floor((sorted.length - 1) * 0.25);
+  return sorted[index] ?? 0;
+}
+
 function dominantFontSize(items: InspectTextItem[]): number {
   const buckets = new Map<number, number>();
 
@@ -94,7 +109,6 @@ function glyphSequenceRatios(items: InspectTextItem[]): {
     const dy = Math.abs(current.displayY - previous.displayY);
     const distance = Math.hypot(dx, dy);
 
-    // Ignore duplicate/overprinted glyphs and large jumps between columns/regions.
     if (distance < 0.5 || distance > maxFontSize * 2.75) continue;
 
     if (dy > dx * 1.5) {
@@ -159,7 +173,11 @@ function detectOrientation(items: InspectTextItem[]): {
     orientation = "vertical";
   } else if (horizontalRunRatio >= 0.6 && horizontalRunRatio > verticalRunRatio) {
     orientation = "horizontal";
-  } else if (singleCharItemRatio >= 0.7 && sequence.vertical >= 0.6 && sequence.vertical > sequence.horizontal) {
+  } else if (
+    singleCharItemRatio >= 0.7 &&
+    sequence.vertical >= 0.6 &&
+    sequence.vertical > sequence.horizontal
+  ) {
     orientation = "vertical";
   } else if (
     singleCharItemRatio >= 0.7 &&
@@ -226,8 +244,7 @@ function clusterByPosition(
 
     bestGroup.positions.push(value);
     bestGroup.items.push(item);
-    bestGroup.position =
-      bestGroup.positions.reduce((sum, position) => sum + position, 0) / bestGroup.positions.length;
+    bestGroup.position = median(bestGroup.positions);
   }
 
   return groups;
@@ -271,6 +288,130 @@ function buildHorizontalGroups(items: InspectTextItem[], bodyFontSize: number): 
   });
 }
 
+type SequenceColumn = {
+  anchorX: number;
+  positions: number[];
+  startY: number;
+  items: InspectTextItem[];
+};
+
+function buildVerticalGlyphSequenceGroups(
+  items: InspectTextItem[],
+  bodyFontSize: number,
+): FlowGroup[] {
+  if (items.length === 0) return [];
+
+  const shiftThreshold = Math.max(8, bodyFontSize * 1.25);
+  const columns: SequenceColumn[] = [];
+  let current: SequenceColumn | undefined;
+  let previous: InspectTextItem | undefined;
+
+  for (const item of items) {
+    if (!current) {
+      current = {
+        anchorX: item.displayX,
+        positions: [item.displayX],
+        startY: item.displayY,
+        items: [item],
+      };
+      columns.push(current);
+      previous = item;
+      continue;
+    }
+
+    const xShift = Math.abs(item.displayX - current.anchorX);
+    const yRestart = previous
+      ? item.displayY < previous.displayY - bodyFontSize * 0.5 ||
+        item.displayY <= current.startY + bodyFontSize * 1.5
+      : false;
+
+    if (xShift > shiftThreshold && yRestart) {
+      current = {
+        anchorX: item.displayX,
+        positions: [item.displayX],
+        startY: item.displayY,
+        items: [item],
+      };
+      columns.push(current);
+    } else {
+      current.positions.push(item.displayX);
+      current.items.push(item);
+    }
+
+    previous = item;
+  }
+
+  const orderedColumns = columns
+    .map((column) => ({
+      position: median(column.positions),
+      itemCount: column.items.length,
+      text: column.items.map((item) => item.text.trim()).join(""),
+    }))
+    .filter((column) => column.text.length > 0)
+    .sort((left, right) => right.position - left.position);
+
+  if (orderedColumns.length <= 1) {
+    return orderedColumns.map((column) => ({
+      position: round(column.position, 2),
+      itemCount: column.itemCount,
+      text: column.text,
+    }));
+  }
+
+  const gaps: number[] = [];
+  for (let index = 1; index < orderedColumns.length; index += 1) {
+    const previousColumn = orderedColumns[index - 1];
+    const currentColumn = orderedColumns[index];
+    if (!previousColumn || !currentColumn) continue;
+    const gap = previousColumn.position - currentColumn.position;
+    if (gap > bodyFontSize * 1.2) gaps.push(gap);
+  }
+
+  const normalPitch = lowerQuartile(gaps);
+  const paragraphGapThreshold =
+    normalPitch > 0
+      ? Math.max(normalPitch * 1.55, normalPitch + bodyFontSize * 1.25)
+      : Number.POSITIVE_INFINITY;
+
+  const groups: FlowGroup[] = [];
+  let blockPosition = orderedColumns[0]?.position ?? 0;
+  let blockItemCount = 0;
+  let blockText = "";
+
+  for (let index = 0; index < orderedColumns.length; index += 1) {
+    const column = orderedColumns[index];
+    if (!column) continue;
+
+    if (index > 0) {
+      const previousColumn = orderedColumns[index - 1];
+      const gap = previousColumn ? previousColumn.position - column.position : 0;
+      if (gap >= paragraphGapThreshold && blockText.length > 0) {
+        groups.push({
+          position: round(blockPosition, 2),
+          itemCount: blockItemCount,
+          text: blockText,
+        });
+        blockPosition = column.position;
+        blockItemCount = 0;
+        blockText = "";
+      }
+    }
+
+    blockItemCount += column.itemCount;
+    blockText += column.text;
+  }
+
+  if (blockText.length > 0) {
+    groups.push({
+      position: round(blockPosition, 2),
+      itemCount: blockItemCount,
+      text: blockText,
+    });
+  }
+
+  return groups;
+}
+
 export function reconstructPageFlow(page: InspectPage): PageFlowResult {
   const nonEmptyItems = page.textItems.filter((item) => item.text.trim().length > 0);
   const bodyFontSize = dominantFontSize(nonEmptyItems);
@@ -289,7 +430,13 @@ export function reconstructPageFlow(page: InspectPage): PageFlowResult {
   const { orientation, metrics } = detectOrientation(primaryItems);
 
   let groups: FlowGroup[] = [];
-  if (orientation === "vertical") {
+  if (
+    orientation === "vertical" &&
+    metrics.singleCharItemRatio >= 0.7 &&
+    metrics.sequenceVerticalRatio >= 0.6
+  ) {
+    groups = buildVerticalGlyphSequenceGroups(primaryItems, bodyFontSize);
+  } else if (orientation === "vertical") {
     groups = buildVerticalGroups(primaryItems, bodyFontSize);
   } else if (orientation === "horizontal") {
     groups = buildHorizontalGroups(primaryItems, bodyFontSize);
