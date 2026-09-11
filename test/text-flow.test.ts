@@ -50,19 +50,37 @@ test("reconstructs vertical multi-character runs from right to left", () => {
   assert.equal(result.text, "右列\n左列");
 });
 
-test("reconstructs rotated glyph-by-glyph vertical columns", () => {
-  const verticalGlyphTransform = [0, 14, 14, 0, 0, 0];
+test("reconstructs glyph-by-glyph vertical columns from display-coordinate sequence", () => {
+  // Deliberately keep the glyph transform horizontal. Some PDFs encode glyphs
+  // horizontally and rely on page rotation for visible vertical writing.
+  const horizontalGlyphTransform = [14, 0, 0, 14, 0, 0];
   const result = reconstructPageFlow(
     page([
-      item({ text: "裁", displayX: 700, displayY: 100, displayTransform: verticalGlyphTransform }),
-      item({ text: "縫", displayX: 700, displayY: 114, displayTransform: verticalGlyphTransform }),
-      item({ text: "本", displayX: 650, displayY: 100, displayTransform: verticalGlyphTransform }),
-      item({ text: "文", displayX: 650, displayY: 114, displayTransform: verticalGlyphTransform }),
+      item({ text: "裁", displayX: 700, displayY: 100, displayTransform: horizontalGlyphTransform }),
+      item({ text: "縫", displayX: 700, displayY: 114, displayTransform: horizontalGlyphTransform }),
+      item({ text: "本", displayX: 650, displayY: 100, displayTransform: horizontalGlyphTransform }),
+      item({ text: "文", displayX: 650, displayY: 114, displayTransform: horizontalGlyphTransform }),
     ]),
   );
 
   assert.equal(result.orientation, "vertical");
+  assert.equal(result.metrics.sequenceVerticalRatio, 1);
   assert.equal(result.text, "裁縫\n本文");
+});
+
+test("reconstructs glyph-by-glyph horizontal rows from display-coordinate sequence", () => {
+  const result = reconstructPageFlow(
+    page([
+      item({ text: "横", displayX: 100, displayY: 100 }),
+      item({ text: "書", displayX: 114, displayY: 100 }),
+      item({ text: "本", displayX: 100, displayY: 140 }),
+      item({ text: "文", displayX: 114, displayY: 140 }),
+    ]),
+  );
+
+  assert.equal(result.orientation, "horizontal");
+  assert.equal(result.metrics.sequenceHorizontalRatio, 1);
+  assert.equal(result.text, "横書\n本文");
 });
 
 test("drops short smaller page-number-like margin noise", () => {
