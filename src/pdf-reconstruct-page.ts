@@ -17,6 +17,26 @@ function parseArgs(args: string[]): { inputPath: string | undefined; pageNumber:
   return { inputPath, pageNumber };
 }
 
+function reconstructionLooksConsistent(flow: ReturnType<typeof reconstructPageFlow>): boolean {
+  if (flow.orientation === "unknown" || flow.text.trim().length === 0 || flow.groupCount === 0) {
+    return false;
+  }
+
+  if (flow.metrics.singleCharItemRatio < 0.7) return true;
+
+  if (flow.orientation === "vertical") {
+    return (
+      flow.metrics.sequenceVerticalRatio >= 0.6 &&
+      flow.metrics.sequenceVerticalRatio > flow.metrics.sequenceHorizontalRatio
+    );
+  }
+
+  return (
+    flow.metrics.sequenceHorizontalRatio >= 0.6 &&
+    flow.metrics.sequenceHorizontalRatio > flow.metrics.sequenceVerticalRatio
+  );
+}
+
 async function main() {
   const { inputPath, pageNumber } = parseArgs(process.argv.slice(2));
 
@@ -57,7 +77,7 @@ async function main() {
     console.log("--- end reconstructed text ---");
     console.log("");
 
-    const passed = flow.orientation !== "unknown" && flow.text.trim().length > 0;
+    const passed = reconstructionLooksConsistent(flow);
     console.log(`RESULT: ${passed ? "PASS" : "FAIL"}`);
     if (!passed) process.exitCode = 1;
   } catch (error) {
