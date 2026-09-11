@@ -9,6 +9,8 @@
     "inspect:all": "tsx src/pdf-inspect-all.ts",
     "probe:layout": "tsx src/pdf-layout-probe.ts",
     "reconstruct:page": "tsx src/pdf-reconstruct-page.ts",
+    "check:flow": "tsx src/pdf-flow-check.ts",
+    "compare:flow": "tsx src/pdf-flow-compare.ts",
     "typecheck": "tsc --noEmit",
     "test": "npm run typecheck && tsx --test test/*.test.ts"
   },
