@@ -80,4 +80,4 @@ Total EPUB bytes: 16623404
 EPUBCheck 5.3.0: 9/9 passed (0 errors, 0 warnings)
 ```
 
-No production serializer/parser fixes were needed. The page, annotation and total byte counts equal the Stage 10 baseline. This run's JSON evidence is in the ignored `local-reports/epubcheck-stage11/` directory. GitHub-hosted CI has not yet executed these local changes.
+No production serializer/parser fixes were needed. The page, annotation and total byte counts equal the Stage 10 baseline. This run's JSON evidence is in the ignored `local-reports/epubcheck-stage11/` directory. Stage 11 was published as `cbe7518764eda5613e849a0fd4375d62c204bd84`, and [GitHub-hosted CI passed](https://github.com/BKrepublic/fileshape/actions/runs/34614178141). See the [stage review](stage11-review.md).

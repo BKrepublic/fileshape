@@ -48,7 +48,9 @@ VERIFY_EPUB_EXIT=0
 
 No standards violations were found in the valid fixtures or full corpus, so no production-output fixes were needed. Page count, unresolved-annotation count and total byte count match the historical baseline; this is not a byte-for-byte comparison to retained historical EPUB files. PDF.js emitted `TT: undefined function: 3` diagnostics during extraction of four corpus PDFs; these are distinct from the zero EPUBCheck warnings.
 
-The full JSON reports and summary are local-only under `local-reports/epubcheck-stage11/`. Generated temporary EPUBs were removed. Missing Java/JAR, incorrect options, and attempts to reuse a report directory fail before corpus conversion. GitHub Actions configuration is updated, but hosted execution has not been run for these local changes. The staged ruby/semantic/Stage 2 figures below remain historical; the parser/model were not changed or separately rerun in this continuation.
+The full JSON reports and summary are local-only under `local-reports/epubcheck-stage11/`. Generated temporary EPUBs were removed. Missing Java/JAR, incorrect options, and attempts to reuse a report directory fail before corpus conversion. Stage 11 was published as `cbe7518764eda5613e849a0fd4375d62c204bd84` using the configured noreply email; exact remote SHA equality was verified. [GitHub Actions](https://github.com/BKrepublic/fileshape/actions/runs/34614178141) passed for that commit. The staged ruby/semantic/Stage 2 figures below remain historical; the parser/model were not changed or separately rerun in Stage 11.
+
+The [Stage 11 review](stage11-review.md) found no blocking issues. The next bounded increment is Stage 12a: explicit PDF outlines to typed navigation and hierarchical EPUB nav. A read-only inventory found 250 outline entries in six PDFs; three have none.
 
 See [Stage 11](stage11-epubcheck.md) for setup, report lifecycle, acceptance rules, and standards references.
 
