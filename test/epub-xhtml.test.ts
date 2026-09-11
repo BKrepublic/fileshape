@@ -82,6 +82,12 @@ test("serializes exact ruby as EPUB3 XHTML and XML-escapes source text", () => {
   assert.doesNotMatch(xhtml, /A&<ruby>/);
 });
 
+test("ruby off emits source-backed base text without exact annotation markup", () => {
+  const xhtml = serializeEpubXhtml(documentFixture(), { rubyMode: "off" }).pages[0]!.xhtml;
+  assert.match(xhtml, /A&amp;漢 &lt;B&gt; /);
+  assert.doesNotMatch(xhtml, /<ruby>|<rt>|かん/);
+});
+
 test("transports resolved writing orientation without using PDF rotation as presentation", () => {
   const document = documentFixture();
   document.pages[0]!.rotation = 90;
@@ -129,6 +135,23 @@ test("unresolved ruby fails closed instead of silently dropping uncertain annota
 
   assert.throws(
     () => serializeEpubXhtml(document),
+    /requires unresolved ruby policy before rendering page 1/,
+  );
+});
+
+test("ruby off does not silently discard unresolved annotation candidates", () => {
+  const document = documentFixture();
+  document.pages[0]!.unresolvedRuby.push({
+    status: "unresolved",
+    reason: "no-base",
+    annotationSourceRanges: [{ page: 1, itemIndex: 2, charStart: 0, charEnd: 2 }],
+    baseSourceRanges: [],
+    annotationGlyphRefs: [],
+    baseGlyphRefs: [],
+    alternatives: [],
+  });
+  assert.throws(
+    () => serializeEpubXhtml(document, { rubyMode: "off" }),
     /requires unresolved ruby policy before rendering page 1/,
   );
 });
