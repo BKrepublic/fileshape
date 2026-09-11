@@ -15,6 +15,7 @@
     "compare:flow": "tsx src/pdf-flow-compare.ts",
     "verify:semantic": "tsx src/verify-semantic-samples.ts",
     "verify:stage2": "tsx src/verify-stage2-corpus-v2.ts",
+    "verify:epub": "tsx src/verify-epub-corpus.ts",
     "diagnose:orientation": "tsx src/diagnose-unresolved-orientation.ts",
     "convert:epub": "tsx src/pdf-to-epub.ts",
     "typecheck": "tsc --noEmit",
