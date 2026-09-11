@@ -1,6 +1,7 @@
 import process from "node:process";
 import { renderPageFlowText } from "./flow-render.js";
 import { inspectPdf } from "./pdf-inspector.js";
+import { reconstructPhysicalLayout } from "./physical-layout.js";
 import { reconstructPageFlow } from "./text-flow.js";
 
 type SpacingMode = "logical" | "preserve" | "cap";
@@ -10,11 +11,13 @@ function parseArgs(args: string[]): {
   pageNumber: number;
   spacingMode: SpacingMode;
   maxLineBreaks: number;
+  showPhysical: boolean;
 } {
   const inputPath = args[0];
   let pageNumber = 1;
   let spacingMode: SpacingMode = "logical";
   let maxLineBreaks = 2;
+  let showPhysical = false;
 
   for (let index = 1; index < args.length; index += 1) {
     if (args[index] === "--page") {
@@ -37,10 +40,15 @@ function parseArgs(args: string[]): {
       const parsed = Number(args[index + 1]);
       if (Number.isInteger(parsed) && parsed > 0) maxLineBreaks = parsed;
       index += 1;
+      continue;
+    }
+
+    if (args[index] === "--show-physical") {
+      showPhysical = true;
     }
   }
 
-  return { inputPath, pageNumber, spacingMode, maxLineBreaks };
+  return { inputPath, pageNumber, spacingMode, maxLineBreaks, showPhysical };
 }
 
 function reconstructionLooksStructurallyConsistent(
@@ -81,13 +89,13 @@ function renderSelectedText(
 }
 
 async function main() {
-  const { inputPath, pageNumber, spacingMode, maxLineBreaks } = parseArgs(
+  const { inputPath, pageNumber, spacingMode, maxLineBreaks, showPhysical } = parseArgs(
     process.argv.slice(2),
   );
 
   if (!inputPath) {
     console.error(
-      "Usage: npm run reconstruct:page -- <path-to-pdf> --page <number> [--spacing logical|preserve|cap] [--max-line-breaks <n>]",
+      "Usage: npm run reconstruct:page -- <path-to-pdf> --page <number> [--spacing logical|preserve|cap] [--max-line-breaks <n>] [--show-physical]",
     );
     process.exitCode = 1;
     return;
@@ -108,6 +116,7 @@ async function main() {
 
     const flow = reconstructPageFlow(page);
     const renderedText = renderSelectedText(flow, spacingMode, maxLineBreaks);
+    const physical = reconstructPhysicalLayout(page, flow.orientation, flow.bodyFontSize);
 
     console.log("\n=== FileShape page reconstruction ===");
     console.log("NOTE: this command checks structural consistency, not textual fidelity.");
@@ -118,6 +127,7 @@ async function main() {
     console.log(`Primary items: ${flow.primaryItemCount}`);
     console.log(`Annotations excluded: ${flow.annotationItemCount}`);
     console.log(`Margin noise excluded: ${flow.marginNoiseItemCount}`);
+    console.log(`Physical units preserved: ${physical.units.length}`);
     console.log(`Logical groups: ${flow.groupCount}`);
     console.log(`Spacing boundaries: ${flow.boundaries.length}`);
     if (flow.boundaries.length > 0) {
@@ -127,6 +137,19 @@ async function main() {
     }
     console.log(`Spacing mode: ${spacingMode}${spacingMode === "cap" ? ` (max ${maxLineBreaks})` : ""}`);
     console.log(`Metrics: ${JSON.stringify(flow.metrics)}`);
+
+    if (showPhysical) {
+      console.log("");
+      console.log("--- physical units ---");
+      for (const unit of physical.units) {
+        const nextGap = physical.gaps.find((gap) => gap.fromUnit === unit.index);
+        console.log(
+          `[${unit.index}] pos=${unit.position} gapAfter=${nextGap?.distance ?? "-"} ${unit.text}`,
+        );
+      }
+      console.log("--- end physical units ---");
+    }
+
     console.log("");
     console.log("--- reconstructed text ---");
     console.log(renderedText);
