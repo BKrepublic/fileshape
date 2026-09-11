@@ -8,8 +8,9 @@
     "inspect:pdf": "tsx src/pdf-inspect.ts",
     "inspect:all": "tsx src/pdf-inspect-all.ts",
     "probe:layout": "tsx src/pdf-layout-probe.ts",
+    "reconstruct:page": "tsx src/pdf-reconstruct-page.ts",
     "typecheck": "tsc --noEmit",
-    "test": "npm run typecheck"
+    "test": "npm run typecheck && tsx --test test/*.test.ts"
   },
   "dependencies": {
     "pdfjs-dist": "^6.3.289"
