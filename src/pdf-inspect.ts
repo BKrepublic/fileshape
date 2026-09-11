@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
-import { getDocument, OPS, type TextItem, type TextMarkedContent } from "pdfjs-dist/legacy/build/pdf.mjs";
+import { getDocument, OPS } from "pdfjs-dist/legacy/build/pdf.mjs";
 
 type InspectTextItem = {
   text: string;
@@ -27,10 +27,6 @@ type InspectPage = {
   imagePaintOps: number;
   textItems: InspectTextItem[];
 };
-
-function isTextItem(item: TextItem | TextMarkedContent): item is TextItem {
-  return "str" in item;
-}
 
 function estimateFontSize(transform: number[]): number {
   const [a = 0, b = 0, c = 0, d = 0] = transform;
@@ -75,9 +71,12 @@ async function inspectPdf(inputPath: string) {
     });
     const operatorList = await page.getOperatorList();
 
-    const textItems: InspectTextItem[] = textContent.items
-      .filter(isTextItem)
-      .map((item) => ({
+    const textItems: InspectTextItem[] = [];
+
+    for (const item of textContent.items) {
+      if (!("str" in item)) continue;
+
+      textItems.push({
         text: item.str,
         dir: item.dir,
         fontName: item.fontName,
@@ -86,9 +85,10 @@ async function inspectPdf(inputPath: string) {
         transform: [...item.transform],
         x: item.transform[4] ?? 0,
         y: item.transform[5] ?? 0,
-        fontSize: estimateFontSize(item.transform),
+        fontSize: estimateFontSize([...item.transform]),
         hasEOL: item.hasEOL,
-      }));
+      });
+    }
 
     pages.push({
       page: pageNumber,
