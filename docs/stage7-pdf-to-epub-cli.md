@@ -60,6 +60,8 @@ When output is omitted, `input.pdf` becomes `input.epub` in the same directory. 
 
 `test/pdf-to-epub.test.ts` includes a real minimal PDF and checks the complete file path through PDF.js, provenance-aware document construction, EPUB packaging, and filesystem output. It also checks document-context orientation recovery and fail-closed unresolved orientation.
 
+Hosted CI always runs typecheck and the full unit/E2E suite. The large PDF regression corpora under `local-samples/` are intentionally not committed, so `verify:ruby`, `verify:semantic`, and `verify:stage2` run in CI only when that directory is available. They remain required for local corpus validation before parser-stage changes are finalized.
+
 ## Next boundary
 
 The CLI now proves that FileShape can produce an EPUB file from a PDF without bypassing the typed model. Remaining product-level work includes content policy for unresolved candidates, chapter/heading structure, CSS/resources, cover/images, EPUBCheck validation, and browser/Android adapters.
