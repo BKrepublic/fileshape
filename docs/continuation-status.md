@@ -148,6 +148,10 @@ Known verified historical figures before the final EPUB pass:
 
 ## Next work
 
+The user requested concrete instructions for each remaining task. The [remaining-work runbook (Japanese)](remaining-work/README.md) is the execution entry point, with one instruction document per area, common validation/publication steps, final CLI acceptance, a review template, and a separate browser/Android follow-up. This documentation does not change the implementation status above.
+
+Start with [Task 1: headings and sections](remaining-work/01-headings-and-sections.md), step 1A (destination-to-source evidence). Review and push each bounded checkpoint, and mark a feature complete only after its implementation and acceptance conditions are met. Update the runbook's status table together with this handoff as work progresses.
+
 The core PDF-to-EPUB path is now proven over the complete local corpus. Continue from product-quality EPUB output rather than adding new parser heuristics without evidence.
 
 High-value next areas are:

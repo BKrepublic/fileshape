@@ -21,6 +21,8 @@ See [continuation status](docs/continuation-status.md) for current evidence, his
 
 The subsequent Stage 12b diagnostic increment passes 126 automated tests. Its complete 5,141-page scan found no heading tags exposed by PDF.js in this corpus; body heading/section mapping remains open. See [the evidence assessment](docs/stage12b-structure-evidence.md).
 
+The [remaining-work runbook (Japanese)](docs/remaining-work/README.md) gives ordered implementation instructions for headings/sections, reading-system compatibility, images/cover, ruby refinement, final CLI acceptance, and the subsequent browser/Android adapters. Each task includes evidence gathering, code entry points, validation, completion conditions, review and publication steps. These are planned tasks, not completed features.
+
 ## Pipeline
 
 ```text
