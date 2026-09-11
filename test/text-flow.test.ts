@@ -56,17 +56,19 @@ test("joins ordinary glyph-by-glyph vertical column wraps without inventing line
     page([
       item({ text: "裁", displayX: 700, displayY: 100, displayTransform: horizontalGlyphTransform }),
       item({ text: "縫", displayX: 700, displayY: 114, displayTransform: horizontalGlyphTransform }),
-      item({ text: "本", displayX: 650, displayY: 100, displayTransform: horizontalGlyphTransform }),
-      item({ text: "文", displayX: 650, displayY: 114, displayTransform: horizontalGlyphTransform }),
+      item({ text: "本", displayX: 676, displayY: 100, displayTransform: horizontalGlyphTransform }),
+      item({ text: "文", displayX: 676, displayY: 114, displayTransform: horizontalGlyphTransform }),
     ]),
   );
 
   assert.equal(result.orientation, "vertical");
   assert.equal(result.metrics.sequenceVerticalRatio, 1);
   assert.equal(result.text, "裁縫本文");
+  assert.equal(result.sourceSpacingText, "裁縫本文");
+  assert.deepEqual(result.boundaries, []);
 });
 
-test("uses large inter-column gaps as logical paragraph boundaries", () => {
+test("stores large inter-column gaps as spacing evidence", () => {
   const horizontalGlyphTransform = [14, 0, 0, 14, 0, 0];
   const result = reconstructPageFlow(
     page([
@@ -85,6 +87,15 @@ test("uses large inter-column gaps as logical paragraph boundaries", () => {
 
   assert.equal(result.orientation, "vertical");
   assert.equal(result.text, "題名\n本文続き\n次段落。");
+  assert.equal(result.sourceSpacingText, "題名\n\n本文続き\n\n次段落。");
+  assert.deepEqual(
+    result.boundaries.map((boundary) => boundary.estimatedLineBreaks),
+    [2, 2],
+  );
+  assert.deepEqual(
+    result.boundaries.map((boundary) => boundary.gapRatio),
+    [2, 2],
+  );
 });
 
 test("keeps shifted vertical punctuation and long marks in source sequence", () => {
