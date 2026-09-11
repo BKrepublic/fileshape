@@ -10,6 +10,7 @@
     "inspect:pdf": "tsx src/pdf-inspect.ts",
     "inspect:all": "tsx src/pdf-inspect-all.ts",
     "inspect:structure": "tsx src/pdf-structure-inventory.ts",
+    "inspect:outline-evidence": "tsx src/outline-source-evidence.ts",
     "probe:layout": "tsx src/pdf-layout-probe.ts",
     "reconstruct:page": "tsx src/pdf-reconstruct-page.ts",
     "check:flow": "tsx src/pdf-flow-check.ts",
