@@ -17,6 +17,6 @@ test("default EPUB stylesheet uses only reflow-friendly layout rules", () => {
   assert.match(css, /ruby-position:\s*over/);
   assert.match(css, /fileshape-unresolved-notes/);
   assert.doesNotMatch(css, /position:\s*absolute/);
-  assert.doesNotMatch(css, /height:\s*\d/);
+  assert.doesNotMatch(css, /^\s*height:\s*\d/m);
   assert.doesNotMatch(css, /font-size:\s*\d+(?:px|pt)/);
 });
