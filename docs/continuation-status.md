@@ -1,6 +1,6 @@
 # FileShape continuation status
 
-Updated after Stage 12a outline navigation and full-corpus standards verification on 2026-09-11.
+Updated after Stage 12a publication and the Stage 12b explicit-structure evidence assessment on 2026-09-11.
 
 ## Historical Stage 10 baseline
 
@@ -54,7 +54,7 @@ The [Stage 11 review](stage11-review.md) found no blocking issues. Its follow-up
 
 See [Stage 11](stage11-epubcheck.md) for setup, report lifecycle, acceptance rules, and standards references.
 
-## Stage 12a completed locally: explicit PDF outline navigation
+## Stage 12a completed: explicit PDF outline navigation
 
 Explicit PDF outlines now reach the typed model with original titles, destinations, hierarchy and source index paths. Resolved destinations link to the existing page XHTML. EPUB navigation retains usable hierarchy and includes a page-list; absent or wholly unusable outlines retain the page TOC. Unresolved entries remain explicit, and their labels are retained without guessed or external links. Body heading roles, section boundaries and precise text anchors are not inferred.
 
@@ -79,7 +79,15 @@ npm run verify:epub -- --epubcheck --report-dir local-reports/epubcheck-stage12a
 
 All nine JSON reports were read back and checked against the successful summary. Page and unresolved-annotation totals match Stage 11. EPUB size increased by 16,344 bytes with the new navigation. A synthetic package comparison proves that adding navigation leaves all other package members byte-identical; the private full-corpus run is not a byte-for-byte comparison against retained Stage 11 EPUBs. Existing PDF.js `TT: undefined function: 3` extraction diagnostics remain separate from EPUBCheck warnings.
 
-The [Stage 12a review](stage12a-review.md) found no blocking code findings. Local verification is complete; publication and hosted CI evidence will be recorded after push. See [Stage 12a](stage12a-outline-navigation.md) for the source contract, unresolved-entry policy, scope and report lifecycle.
+The [Stage 12a review](stage12a-review.md) found no blocking findings. The implementation was published as `ede8124356a08ba5054eb3fa2d836f499120dddc` with noreply author/committer email; exact remote SHA equality was verified. [GitHub Actions run 34616492986](https://github.com/BKrepublic/fileshape/actions/runs/34616492986) passed for this exact commit. See [Stage 12a](stage12a-outline-navigation.md) for the source contract, unresolved-entry policy, scope and report lifecycle.
+
+## Stage 12b evidence assessment completed; body mapping remains open
+
+The new read-only `npm run inspect:structure -- PDF_OR_DIRECTORY [--output NEW_FILE]` command inventories every page's PDF.js structure tree. Real tagged-PDF positive controls verify mapped heading roles and ensure the scan still runs when `MarkInfo.Marked` is false; an outline-only PDF is a negative control. The command reports counts and flags, without reading or emitting body text or outline titles.
+
+The final implementation passed typecheck and **126 automated tests**, with no skipped tests. A complete scan returned nine PDFs and **5,141/5,141 pages**, with zero exposed structure-tree pages or heading nodes; `MarkInfo` was absent in all nine. This is an observation of the pinned PDF.js API over this corpus, not a claim that the documents have no visual headings. See [Stage 12b evidence and review](stage12b-structure-evidence.md).
+
+The inventory adds no production conversion changes, so the Stage 12a EPUB/standards/staged results above remain the applicable production baseline; those expensive verifiers were not rerun for this diagnostic-only increment. Heading/section mapping is not yet implemented. The next step is destination-to-source-range evidence analysis with rotation/vertical/duplicate-target controls; outline labels alone cannot establish body heading roles or chapter boundaries.
 
 ## Current pipeline
 
@@ -142,7 +150,7 @@ The core PDF-to-EPUB path is now proven over the complete local corpus. Continue
 
 High-value next areas are:
 
-1. Stage 12b: assess explicit body-heading/section evidence and destination-to-text correspondence, then define a source-backed mapping contract; Stage 12a already supplies outline navigation;
+1. Stage 12b continuation: analyze destination-to-source-range correspondence and define a source-backed heading/section mapping contract; the completed explicit-tag inventory found no available heading tags in this corpus;
 2. CSS/resources and reading-system compatibility, especially vertical Japanese text and ruby;
 3. cover/image extraction and packaging;
 4. content-policy refinement for the 6,387 unresolved annotations, using geometry/provenance evidence rather than source-specific rules;

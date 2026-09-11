@@ -25,7 +25,9 @@ The page and annotation counts match Stage 11. The 16,344-byte increase is consi
 
 ## Publication
 
-Local acceptance is complete. The implementation commit, exact remote SHA check and matching hosted CI result will be recorded after publication. The full private corpus was verified locally; hosted CI covers the public fixtures.
+The implementation was published as `ede8124356a08ba5054eb3fa2d836f499120dddc`. Author and committer use `136544580+BKrepublic@users.noreply.github.com`. Publication used the existing, authorized Bitwarden SSH Agent; a subsequent remote read confirmed the exact local SHA at GitHub `refs/heads/main`.
+
+[GitHub Actions run 34616492986](https://github.com/BKrepublic/fileshape/actions/runs/34616492986) completed successfully for this exact commit. The full private corpus was verified locally; hosted CI covers the public fixtures.
 
 ## Remaining boundaries
 

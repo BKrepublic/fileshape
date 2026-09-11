@@ -19,6 +19,8 @@ Stage 12a adds hierarchical navigation from explicit PDF outlines, retaining pag
 
 See [continuation status](docs/continuation-status.md) for current evidence, historical baselines, invariants and next work; [Stage 12a](docs/stage12a-outline-navigation.md) for navigation behavior; and [Stage 11](docs/stage11-epubcheck.md) for validator setup.
 
+The subsequent Stage 12b diagnostic increment passes 126 automated tests. Its complete 5,141-page scan found no heading tags exposed by PDF.js in this corpus; body heading/section mapping remains open. See [the evidence assessment](docs/stage12b-structure-evidence.md).
+
 ## Pipeline
 
 ```text
@@ -62,6 +64,15 @@ npm run verify:ruby
 npm run verify:semantic
 npm run verify:stage2
 ```
+
+Inspect explicit PDF structure/heading tags without changing conversion output:
+
+```sh
+npm run inspect:structure -- input.pdf
+npm run inspect:structure -- local-samples --output local-reports/structure-NEW.json
+```
+
+The output parent directory must already exist; an existing output file is never overwritten. A successful inventory reports completed reads, including zero available tags, rather than certifying heading inference.
 
 Run the final local 9-PDF / 5,141-page PDF-to-EPUB corpus verification:
 
