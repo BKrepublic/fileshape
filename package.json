@@ -12,7 +12,7 @@
     "check:flow": "tsx src/pdf-flow-check.ts",
     "compare:flow": "tsx src/pdf-flow-compare.ts",
     "typecheck": "tsc --noEmit",
-    "test": "npm run typecheck && tsx --test test/*.test.ts"
+    "test": "tsx src/test-runner.ts"
   },
   "dependencies": {
     "pdfjs-dist": "^6.3.289"
