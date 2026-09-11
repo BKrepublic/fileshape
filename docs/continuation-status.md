@@ -1,6 +1,6 @@
 # FileShape continuation status
 
-Updated after the full end-to-end EPUB corpus verification on 2026-09-11.
+Updated after Stage 11 EPUBCheck integration and full-corpus standards verification on 2026-09-11.
 
 ## Verified baseline
 
@@ -24,6 +24,33 @@ VERIFY_EPUB_EXIT=0
 ```
 
 The 9 PDFs in `local-samples/` are intentionally not committed to GitHub. Hosted CI therefore runs typecheck/unit/E2E fixture tests; the full local corpus is verified with `npm run verify:epub`.
+
+## Stage 11 completed: EPUBCheck integration
+
+Continued from GitHub `main` at `f2ebdbb531916586ca8edf8818a64bd8d3352d2c`. The Stage 11 changes add validation tooling, tests, CI configuration, and documentation; production extraction, model, content policy, XHTML, and packaging code are unchanged.
+
+The official EPUBCheck **5.3.0** distribution is pinned by version and ZIP SHA-256. Setup is explicit (`npm run setup:epubcheck`); conversion never downloads or requires Java. The new `npm run verify:epubcheck` command runs real-validator fixture tests in CI, including an intentionally invalid EPUB that must fail.
+
+Locally verified for this continuation:
+
+```text
+npm test: PASS (typecheck + 115 tests; no skipped tests)
+npm run verify:epubcheck: PASS (3 real-validator integration tests; no skipped tests)
+npm run verify:epub -- --epubcheck --report-dir local-reports/epubcheck-stage11: PASS
+PDFs: 9/9
+EPUBs: 9/9
+Pages: 5141/5141
+Unresolved annotations preserved: 6387
+Total EPUB bytes: 16623404
+EPUBCheck 5.3.0: 9/9 passed (0 fatal errors, 0 errors, 0 warnings)
+VERIFY_EPUB_EXIT=0
+```
+
+No standards violations were found in the valid fixtures or full corpus, so no production-output fixes were needed. Page count, unresolved-annotation count and total byte count match the historical baseline; this is not a byte-for-byte comparison to retained historical EPUB files. PDF.js emitted `TT: undefined function: 3` diagnostics during extraction of four corpus PDFs; these are distinct from the zero EPUBCheck warnings.
+
+The full JSON reports and summary are local-only under `local-reports/epubcheck-stage11/`. Generated temporary EPUBs were removed. Missing Java/JAR, incorrect options, and attempts to reuse a report directory fail before corpus conversion. GitHub Actions configuration is updated, but hosted execution has not been run for these local changes. The staged ruby/semantic/Stage 2 figures below remain historical; the parser/model were not changed or separately rerun in this continuation.
+
+See [Stage 11](stage11-epubcheck.md) for setup, report lifecycle, acceptance rules, and standards references.
 
 ## Current pipeline
 
@@ -69,8 +96,10 @@ Before merging parser/model changes, also run the relevant staged verifiers. For
 npm run verify:ruby
 npm run verify:semantic
 npm run verify:stage2
-npm run verify:epub
+npm run verify:epub -- --epubcheck
 ```
+
+Install the pinned validator with `npm run setup:epubcheck` first (Java 17 and `unzip` required). Use `npm run verify:epubcheck` for the public synthetic-fixture standards checks. Plain `npm run verify:epub` remains available for conversion/archive checks without Java.
 
 Known verified historical figures before the final EPUB pass:
 
@@ -84,11 +113,10 @@ The core PDF-to-EPUB path is now proven over the complete local corpus. Continue
 
 High-value next areas are:
 
-1. EPUBCheck integration and fixing any standards violations it exposes;
-2. chapter/heading/section structure in the typed model and nav instead of page-only navigation;
-3. CSS/resources and reading-system compatibility, especially vertical Japanese text and ruby;
-4. cover/image extraction and packaging;
-5. content-policy refinement for the 6,387 unresolved annotations, using geometry/provenance evidence rather than source-specific rules;
-6. browser/Android adapter only after the conversion core remains deterministic and testable.
+1. chapter/heading/section structure in the typed model and nav instead of page-only navigation;
+2. CSS/resources and reading-system compatibility, especially vertical Japanese text and ruby;
+3. cover/image extraction and packaging;
+4. content-policy refinement for the 6,387 unresolved annotations, using geometry/provenance evidence rather than source-specific rules;
+5. browser/Android adapter only after the conversion core remains deterministic and testable.
 
 For any parser change, compare against this verified baseline and rerun the local corpus. Do not treat the high unresolved-annotation count as permission to guess ruby relationships.

@@ -28,6 +28,18 @@ jobs:
       - name: Unit tests and typecheck
         run: npm test
 
+      - name: Setup Java for EPUBCheck
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install pinned EPUBCheck
+        run: npm run setup:epubcheck
+
+      - name: EPUB standards integration tests
+        run: npm run verify:epubcheck
+
       - name: Local corpus regressions when samples are available
         shell: bash
         run: |
@@ -35,6 +47,7 @@ jobs:
             npm run verify:ruby
             npm run verify:semantic
             npm run verify:stage2
+            npm run verify:epub -- --epubcheck
           else
             echo "local-samples is not present on this runner; corpus regressions are local-only."
           fi

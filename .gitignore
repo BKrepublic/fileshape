@@ -4,3 +4,5 @@ dist/
 .DS_Store
 
 local-samples/
+.cache/epubcheck/
+local-reports/

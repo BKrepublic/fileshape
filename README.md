@@ -22,6 +22,8 @@ fe60d30d190926693bd1488138934fc3423dd00a
 
 See `docs/continuation-status.md` for the current handoff state, invariants and next work.
 
+Stage 11 also verified all nine generated EPUBs with official EPUBCheck 5.3.0: zero errors and warnings, with the same page, annotation and total byte counts. Typecheck, 115 automated tests, and three real-validator integration tests pass locally. See [Stage 11](docs/stage11-epubcheck.md) for the evidence and validation setup.
+
 ## Pipeline
 
 ```text
@@ -73,6 +75,21 @@ npm run verify:epub
 ```
 
 `verify:epub` requires the uncommitted `local-samples/` corpus and therefore cannot run on the public GitHub Actions runner.
+
+Install the pinned official EPUBCheck validator (requires Java 17 and `unzip`), then run the standards fixture tests:
+
+```sh
+npm run setup:epubcheck
+npm run verify:epubcheck
+```
+
+Validate all nine locally converted EPUBs with EPUBCheck, failing on errors or warnings:
+
+```sh
+npm run verify:epub -- --epubcheck
+```
+
+See [Stage 11](docs/stage11-epubcheck.md) for JSON reports, offline installations, CI coverage, and failure conditions.
 
 ## Design rules
 
