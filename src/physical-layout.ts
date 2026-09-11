@@ -6,6 +6,14 @@ export type PhysicalTextUnit = {
   position: number;
   itemCount: number;
   text: string;
+  /** Start position along the reading axis (Y for vertical, X for horizontal). */
+  inlineStart: number;
+  /** End position along the reading axis. */
+  inlineEnd: number;
+  inlineSpan: number;
+  inlineStartRatio: number;
+  inlineEndRatio: number;
+  inlineCoverageRatio: number;
 };
 
 export type PhysicalGap = {
@@ -16,6 +24,7 @@ export type PhysicalGap = {
 
 export type PhysicalPageLayout = {
   orientation: WritingOrientation;
+  inlineSize: number;
   units: PhysicalTextUnit[];
   gaps: PhysicalGap[];
 };
@@ -94,7 +103,73 @@ function clusterByAxis(
   return units;
 }
 
-function buildVerticalGlyphUnits(items: InspectTextItem[], bodyFontSize: number): PhysicalTextUnit[] {
+function inlineBounds(
+  items: InspectTextItem[],
+  orientation: WritingOrientation,
+  inlineSize: number,
+): Pick<
+  PhysicalTextUnit,
+  | "inlineStart"
+  | "inlineEnd"
+  | "inlineSpan"
+  | "inlineStartRatio"
+  | "inlineEndRatio"
+  | "inlineCoverageRatio"
+> {
+  const starts: number[] = [];
+  const ends: number[] = [];
+
+  for (const item of items) {
+    if (orientation === "vertical") {
+      const start = item.displayY;
+      const extent = Math.max(Math.abs(item.height), item.fontSize * 0.8, 1);
+      starts.push(start);
+      ends.push(start + extent);
+    } else {
+      const start = item.displayX;
+      const extent = Math.max(Math.abs(item.width), item.fontSize * 0.8, 1);
+      starts.push(start);
+      ends.push(start + extent);
+    }
+  }
+
+  const inlineStart = starts.length > 0 ? Math.min(...starts) : 0;
+  const inlineEnd = ends.length > 0 ? Math.max(...ends) : inlineStart;
+  const inlineSpan = Math.max(0, inlineEnd - inlineStart);
+  const denominator = Math.max(1, inlineSize);
+
+  return {
+    inlineStart: round(inlineStart),
+    inlineEnd: round(inlineEnd),
+    inlineSpan: round(inlineSpan),
+    inlineStartRatio: round(inlineStart / denominator, 4),
+    inlineEndRatio: round(inlineEnd / denominator, 4),
+    inlineCoverageRatio: round(inlineSpan / denominator, 4),
+  };
+}
+
+function makeUnit(
+  index: number,
+  position: number,
+  items: InspectTextItem[],
+  text: string,
+  orientation: WritingOrientation,
+  inlineSize: number,
+): PhysicalTextUnit {
+  return {
+    index,
+    position: round(position),
+    itemCount: items.length,
+    text,
+    ...inlineBounds(items, orientation, inlineSize),
+  };
+}
+
+function buildVerticalGlyphUnits(
+  items: InspectTextItem[],
+  bodyFontSize: number,
+  inlineSize: number,
+): PhysicalTextUnit[] {
   if (items.length === 0) return [];
 
   const shiftThreshold = Math.max(8, bodyFontSize * 1.25);
@@ -146,59 +221,58 @@ function buildVerticalGlyphUnits(items: InspectTextItem[], bodyFontSize: number)
   return columns
     .map((column) => ({
       position: median(column.positions),
-      itemCount: column.items.length,
+      items: column.items,
       text: column.items.map((item) => item.text.trim()).join(""),
     }))
     .filter((column) => column.text.length > 0)
     .sort((a, b) => b.position - a.position)
-    .map((column, index) => ({
-      index,
-      position: round(column.position),
-      itemCount: column.itemCount,
-      text: column.text,
-    }));
+    .map((column, index) =>
+      makeUnit(index, column.position, column.items, column.text, "vertical", inlineSize),
+    );
 }
 
-function buildVerticalRunUnits(items: InspectTextItem[], bodyFontSize: number): PhysicalTextUnit[] {
+function buildVerticalRunUnits(
+  items: InspectTextItem[],
+  bodyFontSize: number,
+  inlineSize: number,
+): PhysicalTextUnit[] {
   const tolerance = Math.max(1.5, bodyFontSize * 0.42);
   return clusterByAxis(items, "x", tolerance)
     .map((unit) => {
       const orderedItems = [...unit.items].sort((a, b) => a.displayY - b.displayY);
       return {
         position: median(unit.positions),
-        itemCount: orderedItems.length,
+        items: orderedItems,
         text: orderedItems.map((item) => item.text).join(""),
       };
     })
     .filter((unit) => unit.text.trim().length > 0)
     .sort((a, b) => b.position - a.position)
-    .map((unit, index) => ({
-      index,
-      position: round(unit.position),
-      itemCount: unit.itemCount,
-      text: unit.text,
-    }));
+    .map((unit, index) =>
+      makeUnit(index, unit.position, unit.items, unit.text, "vertical", inlineSize),
+    );
 }
 
-function buildHorizontalUnits(items: InspectTextItem[], bodyFontSize: number): PhysicalTextUnit[] {
+function buildHorizontalUnits(
+  items: InspectTextItem[],
+  bodyFontSize: number,
+  inlineSize: number,
+): PhysicalTextUnit[] {
   const tolerance = Math.max(1.5, bodyFontSize * 0.42);
   return clusterByAxis(items, "y", tolerance)
     .map((unit) => {
       const orderedItems = [...unit.items].sort((a, b) => a.displayX - b.displayX);
       return {
         position: median(unit.positions),
-        itemCount: orderedItems.length,
+        items: orderedItems,
         text: orderedItems.map((item) => item.text).join(""),
       };
     })
     .filter((unit) => unit.text.trim().length > 0)
     .sort((a, b) => a.position - b.position)
-    .map((unit, index) => ({
-      index,
-      position: round(unit.position),
-      itemCount: unit.itemCount,
-      text: unit.text,
-    }));
+    .map((unit, index) =>
+      makeUnit(index, unit.position, unit.items, unit.text, "horizontal", inlineSize),
+    );
 }
 
 function buildGaps(units: PhysicalTextUnit[], orientation: WritingOrientation): PhysicalGap[] {
@@ -228,19 +302,21 @@ export function reconstructPhysicalLayout(
   const items = primaryItems(page, bodyFontSize);
   const singleCharRatio =
     items.length === 0 ? 0 : items.filter((item) => charCount(item.text) === 1).length / items.length;
+  const inlineSize = orientation === "horizontal" ? page.width : page.height;
 
   let units: PhysicalTextUnit[] = [];
   if (orientation === "vertical") {
     units =
       singleCharRatio >= 0.7
-        ? buildVerticalGlyphUnits(items, bodyFontSize)
-        : buildVerticalRunUnits(items, bodyFontSize);
+        ? buildVerticalGlyphUnits(items, bodyFontSize, inlineSize)
+        : buildVerticalRunUnits(items, bodyFontSize, inlineSize);
   } else if (orientation === "horizontal") {
-    units = buildHorizontalUnits(items, bodyFontSize);
+    units = buildHorizontalUnits(items, bodyFontSize, inlineSize);
   }
 
   return {
     orientation,
+    inlineSize: round(inlineSize),
     units,
     gaps: buildGaps(units, orientation),
   };
