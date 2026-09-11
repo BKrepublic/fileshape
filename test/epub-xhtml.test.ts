@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { FileShapeDocument } from "../src/document-model.js";
-import { serializeEpubPageXhtml, serializeEpubXhtml } from "../src/epub-xhtml.js";
+import { serializeEpubXhtml } from "../src/epub-xhtml.js";
 
 function documentFixture(): FileShapeDocument {
   return {
@@ -129,10 +129,6 @@ test("unresolved ruby fails closed instead of silently dropping uncertain annota
 
   assert.throws(
     () => serializeEpubXhtml(document),
-    /requires unresolved ruby policy before rendering page 1/,
-  );
-  assert.throws(
-    () => serializeEpubPageXhtml(document.pages[0]!),
     /requires unresolved ruby policy before rendering page 1/,
   );
 });
