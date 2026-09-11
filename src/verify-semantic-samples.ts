@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import process from "node:process";
 import { inspectPdf } from "./pdf-inspector.js";
@@ -43,6 +44,28 @@ type Check = {
   detail?: string;
 };
 
+function runUnitSuite(): Check {
+  const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
+  const result = spawnSync(npmCommand, ["test"], {
+    encoding: "utf8",
+    shell: false,
+    env: process.env,
+  });
+
+  const output = `${result.stdout ?? ""}${result.stderr ?? ""}`.trim();
+  const passed = !result.error && result.status === 0;
+
+  return {
+    label: "typecheck + unit tests",
+    passed,
+    detail: passed
+      ? undefined
+      : result.error
+        ? result.error.stack ?? result.error.message
+        : output || `npm test exited with status ${result.status ?? "unknown"}`,
+  };
+}
+
 async function semanticText(path: string, pageNumber: number): Promise<string> {
   const inspection = await inspectPdf(path);
   const page = inspection.pages.find((candidate) => candidate.page === pageNumber);
@@ -75,14 +98,14 @@ function printFinal(checks: Check[]): never | void {
   console.log("");
   console.log(RULE);
   if (failed.length === 0) {
-    console.log("FILESHAPE SEMANTIC SAMPLE RESULT: PASS");
+    console.log("FILESHAPE SEMANTIC VERIFICATION: PASS");
     console.log(`Checks passed: ${checks.length}/${checks.length}`);
-    console.log("この結果だけ確認すればOKです。ログの貼り付けは不要です。");
+    console.log("この最終結果だけ確認すればOKです。貼り付けは不要です。");
     console.log(RULE);
     return;
   }
 
-  console.log("!!! FILESHAPE SEMANTIC SAMPLE RESULT: FAIL !!!");
+  console.log("!!! FILESHAPE SEMANTIC VERIFICATION: FAIL !!!");
   console.log(`Checks passed: ${checks.length - failed.length}/${checks.length}`);
   for (const check of failed) {
     console.log("");
@@ -96,16 +119,23 @@ function printFinal(checks: Check[]): never | void {
 }
 
 async function main(): Promise<void> {
+  const checks: Check[] = [runUnitSuite()];
+
+  if (!checks[0]?.passed) {
+    printFinal(checks);
+    return;
+  }
+
   const n5221 = "local-samples/N5221GF.pdf";
   const nvl = "local-samples/nvl5566.pdf";
   const nvlGothic = "local-samples/nvl5566-gothic.pdf";
-  const checks: Check[] = [];
 
   for (const path of [n5221, nvl, nvlGothic]) {
+    const present = existsSync(path);
     checks.push({
       label: `sample exists: ${path}`,
-      passed: existsSync(path),
-      detail: existsSync(path) ? undefined : `Missing file: ${path}`,
+      passed: present,
+      detail: present ? undefined : `Missing file: ${path}`,
     });
   }
 
