@@ -28,6 +28,10 @@ type InspectPage = {
   textItems: InspectTextItem[];
 };
 
+const pdfJsRootUrl = new URL("../node_modules/pdfjs-dist/", import.meta.url);
+const cMapUrl = new URL("cmaps/", pdfJsRootUrl).href;
+const standardFontDataUrl = new URL("standard_fonts/", pdfJsRootUrl).href;
+
 function estimateFontSize(transform: number[]): number {
   const [a = 0, b = 0, c = 0, d = 0] = transform;
   const xScale = Math.hypot(a, b);
@@ -53,16 +57,22 @@ function countImagePaintOps(fnArray: number[]): number {
 
 async function inspectPdf(inputPath: string) {
   const data = new Uint8Array(await readFile(inputPath));
+  const byteLength = data.byteLength;
+
   const loadingTask = getDocument({
     data,
+    cMapUrl,
+    cMapPacked: true,
+    standardFontDataUrl,
     useSystemFonts: true,
     disableFontFace: true,
   });
   const pdf = await loadingTask.promise;
+  const pageCount = pdf.numPages;
 
   const pages: InspectPage[] = [];
 
-  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+  for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
     const page = await pdf.getPage(pageNumber);
     const viewport = page.getViewport({ scale: 1 });
     const textContent = await page.getTextContent({
@@ -103,10 +113,12 @@ async function inspectPdf(inputPath: string) {
     });
   }
 
+  await pdf.destroy();
+
   return {
     file: path.basename(inputPath),
-    byteLength: data.byteLength,
-    pageCount: pdf.numPages,
+    byteLength,
+    pageCount,
     pages,
   };
 }
