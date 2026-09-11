@@ -7,6 +7,10 @@ export type EpubNavigationSummary = {
   unresolvedOutlineEntries: number;
 };
 
+export type EpubNavigationOptions = {
+  stylesheetHref?: string;
+};
+
 function text(value: string): string {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
@@ -24,6 +28,7 @@ export function serializeEpubNavigation(
   title: string,
   language: string,
   pages: Array<{ sourcePage: number; href: string }>,
+  options: EpubNavigationOptions = {},
 ): { xhtml: string; summary: EpubNavigationSummary } {
   const pageHrefs = new Map(pages.map((page) => [page.sourcePage, page.href]));
   function render(items: DocumentNavigationItem[]): { html: string; unlinked: DocumentNavigationItem[] } {
@@ -56,8 +61,11 @@ export function serializeEpubNavigation(
   const retained = outline.unlinked.length > 0
     ? `\n    <section class="fileshape-unlinked-outline">\n      <h2>Other outline entries</h2>\n      <ul>${outline.unlinked.map((item) => `<li>${label(item)}</li>`).join("")}</ul>\n    </section>` : "";
   const counts = navigationCounts(document.navigation ?? []);
+  const stylesheet = options.stylesheetHref === undefined
+    ? ""
+    : `\n    <link rel="stylesheet" type="text/css" href="${attribute(options.stylesheetHref)}" />`;
   return {
     summary: { mode, outlineEntries: counts.total, unresolvedOutlineEntries: counts.unresolved },
-    xhtml: `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE html>\n<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="${attribute(language)}" lang="${attribute(language)}">\n  <head>\n    <meta charset="utf-8" />\n    <title>${text(title)}</title>\n  </head>\n  <body>\n    <nav epub:type="toc" id="toc">\n      <h1>${text(title)}</h1>\n      <ol>\n${items}\n      </ol>\n    </nav>${pageList}${retained}\n  </body>\n</html>\n`,
+    xhtml: `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE html>\n<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="${attribute(language)}" lang="${attribute(language)}">\n  <head>\n    <meta charset="utf-8" />\n    <title>${text(title)}</title>${stylesheet}\n  </head>\n  <body>\n    <nav epub:type="toc" id="toc">\n      <h1>${text(title)}</h1>\n      <ol>\n${items}\n      </ol>\n    </nav>${pageList}${retained}\n  </body>\n</html>\n`,
   };
 }
