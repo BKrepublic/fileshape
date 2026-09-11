@@ -61,6 +61,13 @@ function item(text: string, x: number, y: number, width: number, height: number)
   };
 }
 
+function ambiguousItem(text: string, x: number, y: number): InspectTextItem {
+  return {
+    ...item(text, x, y, 10, 10),
+    displayTransform: [1, 1, 0, 1, x, 800 - y],
+  };
+}
+
 function inspection(pages: InspectPage[]): InspectResult {
   return { file: "fixture.pdf", byteLength: 1, pageCount: pages.length, pages };
 }
@@ -108,7 +115,7 @@ test("converts a real PDF into a complete EPUB archive", async () => {
 test("document context resolves a short unknown page between matching orientations", () => {
   const pages = [
     page(1, [item("long horizontal line", 100, 700, 180, 10)]),
-    page(2, [item("X", 100, 700, 10, 10)]),
+    page(2, [ambiguousItem("X", 100, 700)]),
     page(3, [item("another horizontal line", 100, 700, 200, 10)]),
   ];
   const result = buildDocumentFromInspection(inspection(pages), "doc:context");
@@ -117,7 +124,7 @@ test("document context resolves a short unknown page between matching orientatio
 });
 
 test("text-bearing page with unresolved orientation fails closed", () => {
-  const source = inspection([page(1, [item("X", 100, 700, 10, 10)])]);
+  const source = inspection([page(1, [ambiguousItem("X", 100, 700)])]);
   assert.throws(
     () => buildDocumentFromInspection(source, "doc:unknown"),
     /visible text but unresolved writing orientation/,
