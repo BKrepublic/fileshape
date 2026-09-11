@@ -1,8 +1,8 @@
 # FileShape continuation status
 
-Updated after Stage 11 EPUBCheck integration and full-corpus standards verification on 2026-09-11.
+Updated after Stage 12a outline navigation and full-corpus standards verification on 2026-09-11.
 
-## Verified baseline
+## Historical Stage 10 baseline
 
 Code baseline verified locally:
 
@@ -50,9 +50,36 @@ No standards violations were found in the valid fixtures or full corpus, so no p
 
 The full JSON reports and summary are local-only under `local-reports/epubcheck-stage11/`. Generated temporary EPUBs were removed. Missing Java/JAR, incorrect options, and attempts to reuse a report directory fail before corpus conversion. Stage 11 was published as `cbe7518764eda5613e849a0fd4375d62c204bd84` using the configured noreply email; exact remote SHA equality was verified. [GitHub Actions](https://github.com/BKrepublic/fileshape/actions/runs/34614178141) passed for that commit. The staged ruby/semantic/Stage 2 figures below remain historical; the parser/model were not changed or separately rerun in Stage 11.
 
-The [Stage 11 review](stage11-review.md) found no blocking issues. The next bounded increment is Stage 12a: explicit PDF outlines to typed navigation and hierarchical EPUB nav. A read-only inventory found 250 outline entries in six PDFs; three have none.
+The [Stage 11 review](stage11-review.md) found no blocking issues. Its follow-up documentation was published as `683f326b5f785dd46c00d2320e47381bcbc9197f`. A read-only inventory before Stage 12a found 250 outline entries in six PDFs; three have none.
 
 See [Stage 11](stage11-epubcheck.md) for setup, report lifecycle, acceptance rules, and standards references.
+
+## Stage 12a completed locally: explicit PDF outline navigation
+
+Explicit PDF outlines now reach the typed model with original titles, destinations, hierarchy and source index paths. Resolved destinations link to the existing page XHTML. EPUB navigation retains usable hierarchy and includes a page-list; absent or wholly unusable outlines retain the page TOC. Unresolved entries remain explicit, and their labels are retained without guessed or external links. Body heading roles, section boundaries and precise text anchors are not inferred.
+
+Verified on 2026-09-11:
+
+```text
+npm test: PASS (typecheck + 124 tests; no skipped tests)
+npm run verify:epubcheck: PASS (4 real-validator integration tests; no skipped tests)
+npm run verify:ruby: PASS (33 pages, 880/880 mapped runs, 373 exact candidates,
+  2 unresolved retained, representative exact pairs 11/11)
+npm run verify:stage2: PASS (includes the semantic sample verifier)
+  PDFs: 9/9; text pages with semantic output: 5141/5141
+  Document-context orientation resolutions: 12; font-pair semantic match: 223/223
+npm run verify:epub -- --epubcheck --report-dir local-reports/epubcheck-stage12a: PASS
+  PDFs: 9/9; EPUBs: 9/9; pages: 5141/5141
+  Unresolved annotations preserved: 6387
+  Total EPUB bytes: 16639748
+  Outline entries: 250/250; outline PDFs: 6/6; unresolved outline entries: 0
+  EPUBCheck 5.3.0: 9/9 passed (0 fatal errors, 0 errors, 0 warnings, 0 usage)
+  Process exit: 0
+```
+
+All nine JSON reports were read back and checked against the successful summary. Page and unresolved-annotation totals match Stage 11. EPUB size increased by 16,344 bytes with the new navigation. A synthetic package comparison proves that adding navigation leaves all other package members byte-identical; the private full-corpus run is not a byte-for-byte comparison against retained Stage 11 EPUBs. Existing PDF.js `TT: undefined function: 3` extraction diagnostics remain separate from EPUBCheck warnings.
+
+The [Stage 12a review](stage12a-review.md) found no blocking code findings. Local verification is complete; publication and hosted CI evidence will be recorded after push. See [Stage 12a](stage12a-outline-navigation.md) for the source contract, unresolved-entry policy, scope and report lifecycle.
 
 ## Current pipeline
 
@@ -63,7 +90,7 @@ PDF
   -> physical layout
   -> semantic blocks
   -> exact/unresolved ruby association
-  -> typed FileShape Document Model
+  -> typed FileShape Document Model + explicit outline navigation
   -> unresolved-content policy
   -> EPUB XHTML
   -> OPF / nav / container / ZIP package
@@ -115,7 +142,7 @@ The core PDF-to-EPUB path is now proven over the complete local corpus. Continue
 
 High-value next areas are:
 
-1. chapter/heading/section structure in the typed model and nav instead of page-only navigation;
+1. Stage 12b: assess explicit body-heading/section evidence and destination-to-text correspondence, then define a source-backed mapping contract; Stage 12a already supplies outline navigation;
 2. CSS/resources and reading-system compatibility, especially vertical Japanese text and ruby;
 3. cover/image extraction and packaging;
 4. content-policy refinement for the 6,387 unresolved annotations, using geometry/provenance evidence rather than source-specific rules;

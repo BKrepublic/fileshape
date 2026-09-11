@@ -11,18 +11,13 @@ PDFs: 9/9
 EPUBs: 9/9
 Pages: 5141/5141
 Unresolved annotations preserved: 6387
-Total EPUB bytes: 16623404
+Total EPUB bytes: 16639748
+Outline entries: 250 in 6 PDFs; unresolved outline entries: 0
 ```
 
-The verified code baseline for that full-corpus run is:
+Stage 12a adds hierarchical navigation from explicit PDF outlines, retaining page navigation when none are usable. All nine generated EPUBs pass official EPUBCheck 5.3.0 with zero fatal errors, errors and warnings. Typecheck, 124 automated tests, four real-validator integration tests, and the staged ruby/semantic/full-corpus regressions pass locally.
 
-```text
-fe60d30d190926693bd1488138934fc3423dd00a
-```
-
-See `docs/continuation-status.md` for the current handoff state, invariants and next work.
-
-Stage 11 also verified all nine generated EPUBs with official EPUBCheck 5.3.0: zero errors and warnings, with the same page, annotation and total byte counts. Typecheck, 115 automated tests, and three real-validator integration tests pass locally. See [Stage 11](docs/stage11-epubcheck.md) for the evidence and validation setup.
+See [continuation status](docs/continuation-status.md) for current evidence, historical baselines, invariants and next work; [Stage 12a](docs/stage12a-outline-navigation.md) for navigation behavior; and [Stage 11](docs/stage11-epubcheck.md) for validator setup.
 
 ## Pipeline
 
@@ -32,7 +27,7 @@ PDF extraction
   -> orientation + physical layout
   -> semantic blocks
   -> exact/unresolved ruby association
-  -> typed FileShape Document Model
+  -> typed FileShape Document Model + explicit outline navigation
   -> content policy
   -> EPUB XHTML
   -> EPUB package

@@ -6,6 +6,7 @@ import type { UnresolvedRubyPolicy } from "./content-policy.js";
 import { serializeEpubPackage, type EpubPackageOptions } from "./epub-package.js";
 import { buildDocumentFromInspection } from "./pdf-document-pipeline.js";
 import { inspectPdf } from "./pdf-inspector.js";
+import type { EpubNavigationSummary } from "./epub-navigation.js";
 
 export type PdfToEpubOptions = Omit<EpubPackageOptions, "title" | "identifier"> & {
   title?: string;
@@ -19,6 +20,7 @@ export type PdfToEpubResult = {
   pageCount: number;
   unresolvedAnnotationCount: number;
   byteLength: number;
+  navigation: EpubNavigationSummary;
 };
 
 function defaultOutputPath(inputPath: string): string {
@@ -74,6 +76,7 @@ export async function convertPdfToEpub(
     pageCount: document.pages.length,
     unresolvedAnnotationCount,
     byteLength: epub.bytes.byteLength,
+    navigation: epub.navigation,
   };
 }
 
@@ -131,6 +134,9 @@ async function main(): Promise<void> {
   console.log(`UNRESOLVED_ANNOTATIONS=${result.unresolvedAnnotationCount}`);
   console.log(`BYTES=${result.byteLength}`);
   console.log(`DOCUMENT_ID=${result.documentId}`);
+  console.log(`NAVIGATION=${result.navigation.mode}`);
+  console.log(`OUTLINE_ENTRIES=${result.navigation.outlineEntries}`);
+  console.log(`UNRESOLVED_OUTLINE_ENTRIES=${result.navigation.unresolvedOutlineEntries}`);
 }
 
 const invokedPath = process.argv[1] ? path.resolve(process.argv[1]) : "";

@@ -5,6 +5,8 @@ import { getDocument, OPS } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { itemDisplayGeometry, type TextGeometry } from "./display-geometry.js";
 import { fullTextRef, type SourceTextRef } from "./source-text.js";
 import { bindGlyphSources, extractOperatorGlyphs, type ExtractedGlyph } from "./pdfjs-glyph-adapter.js";
+import type { SourceOutlineItem } from "./document-navigation.js";
+import { readPdfOutline } from "./pdf-outline.js";
 
 export type InspectTextItem = {
   text: string;
@@ -46,6 +48,7 @@ export type InspectResult = {
   byteLength: number;
   pageCount: number;
   pages: InspectPage[];
+  outline?: SourceOutlineItem[];
 };
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
@@ -111,6 +114,7 @@ export async function inspectPdf(inputPath: string, options: { includeGlyphs?: b
   try {
     const pdf = await loadingTask.promise;
     const pageCount = pdf.numPages;
+    const outline = await readPdfOutline(pdf);
     const pages: InspectPage[] = [];
 
     for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
@@ -173,6 +177,7 @@ export async function inspectPdf(inputPath: string, options: { includeGlyphs?: b
       byteLength,
       pageCount,
       pages,
+      outline,
     };
   } finally {
     await loadingTask.destroy();

@@ -8,6 +8,7 @@ import { serializeEpubPackage } from "../src/epub-package.js";
 import { convertPdfToEpub } from "../src/pdf-to-epub.js";
 import { epubcheckDocumentFixture } from "./epubcheck-fixture.js";
 import { pdfBytes } from "./pdf-fixture.js";
+import { buildDocumentNavigation, type SourceOutlineItem } from "../src/document-navigation.js";
 
 // This explicit integration command must fail, never skip, when Java/JAR is missing.
 const checker = await createEpubChecker();
@@ -48,17 +49,35 @@ test("real EPUBCheck rejects a deliberately nonconforming language tag", async (
   }
 });
 
-test("production PDF-to-EPUB output passes real EPUBCheck", async () => {
+test("production PDF outline-to-EPUB navigation passes real EPUBCheck", async () => {
   const temporary = await mkdtemp(path.join(os.tmpdir(), "fileshape-epubcheck-production-"));
   try {
     const input = path.join(temporary, "fixture.pdf");
     const output = path.join(temporary, "fixture.epub");
-    await writeFile(input, pdfBytes());
+    await writeFile(input, pdfBytes({ outline: true }));
     const conversion = await convertPdfToEpub(input, output, options);
     assert.equal(conversion.pageCount, 1);
+    assert.deepEqual(conversion.navigation, { mode: "outline", outlineEntries: 4, unresolvedOutlineEntries: 2 });
     const result = await checker.check(output);
     assert.equal(result.valid, true, epubCheckSummary(result) + JSON.stringify(result.messages));
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }
+});
+
+test("all-unresolved outline falls back to conforming page navigation without dropping labels", async () => {
+  const temporary = await mkdtemp(path.join(os.tmpdir(), "fileshape-epubcheck-unlinked-"));
+  try {
+    const document = epubcheckDocumentFixture();
+    const outline: SourceOutlineItem[] = [{ title: "Unavailable", destination: null,
+      target: { status: "unresolved", reason: "no-destination" }, items: [] }];
+    document.source.outline = outline;
+    document.navigation = buildDocumentNavigation(outline);
+    const epub = serializeEpubPackage(document, options);
+    const input = path.join(temporary, "fixture.epub");
+    await writeFile(input, epub.bytes);
+    assert.equal(epub.navigation.mode, "pages");
+    const result = await checker.check(input);
+    assert.equal(result.valid, true, epubCheckSummary(result) + JSON.stringify(result.messages));
+  } finally { await rm(temporary, { recursive: true, force: true }); }
 });

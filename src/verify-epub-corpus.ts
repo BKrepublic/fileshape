@@ -4,12 +4,16 @@ import path from "node:path";
 import process from "node:process";
 import { convertPdfToEpub } from "./pdf-to-epub.js";
 import { createEpubChecker, epubCheckSummary, type EpubCheckResult } from "./epubcheck.js";
+import type { EpubNavigationSummary } from "./epub-navigation.js";
 
 const WIDTH = 72;
 const RULE = "=".repeat(WIDTH);
 const SAMPLE_DIRECTORY = "local-samples";
 const EXPECTED_PDF_COUNT = 9;
 const EXPECTED_TOTAL_PAGES = 5141;
+// Independently inventoried from the unchanged local PDFs before Stage 12a.
+const EXPECTED_OUTLINE_ENTRIES = 250;
+const EXPECTED_OUTLINE_PDFS = 6;
 const EPUB_MIMETYPE = "application/epub+zip";
 
 type Summary = {
@@ -17,6 +21,7 @@ type Summary = {
   pages: number;
   unresolvedAnnotations: number;
   bytes: number;
+  navigation: EpubNavigationSummary;
   epubcheck?: EpubCheckResult;
 };
 
@@ -25,7 +30,7 @@ type Issue = {
   detail: string;
 };
 
-function firstZipEntry(bytes: Buffer): { name: string; method: number; data: Buffer } {
+function firstZipEntry(bytes: Buffer): { name: string; method: number; data: Buffer; endOffset: number } {
   if (bytes.length < 30) throw new Error("archive is too short for a ZIP local header");
   const signature = bytes.readUInt32LE(0);
   if (signature !== 0x04034b50) throw new Error(`invalid first ZIP signature 0x${signature.toString(16)}`);
@@ -41,7 +46,36 @@ function firstZipEntry(bytes: Buffer): { name: string; method: number; data: Buf
     name: bytes.subarray(nameStart, nameStart + nameLength).toString("utf8"),
     method,
     data: bytes.subarray(dataStart, dataEnd),
+    endOffset: dataEnd,
   };
+}
+
+function archiveText(bytes: Buffer, wanted: string): string {
+  let offset = 0;
+  while (offset + 30 <= bytes.length && bytes.readUInt32LE(offset) === 0x04034b50) {
+    const entry = firstZipEntry(bytes.subarray(offset));
+    if (entry.name === wanted) {
+      if (entry.method !== 0) throw new Error("FileShape output verifier expects stored ZIP entries");
+      return entry.data.toString("utf8");
+    }
+    offset += entry.endOffset;
+  }
+  throw new Error(`missing ZIP entry ${wanted}`);
+}
+
+function validateNavigation(bytes: Buffer, navigation: EpubNavigationSummary, pages: number): string[] {
+  const xhtml = archiveText(bytes, "OEBPS/nav.xhtml");
+  const toc = xhtml.match(/<nav\b[^>]*epub:type="toc"[^>]*>([\s\S]*?)<\/nav>/)?.[1];
+  if (toc === undefined) return ["missing EPUB toc navigation"];
+  const links = (toc.match(/<a\b[^>]*href=/g) ?? []).length;
+  const expectedLinks = navigation.mode === "outline" ? navigation.outlineEntries - navigation.unresolvedOutlineEntries : pages;
+  const issues: string[] = [];
+  if (links !== expectedLinks) issues.push(`toc has ${links} links, expected ${expectedLinks}`);
+  if (navigation.mode === "outline") {
+    const pageList = xhtml.match(/<nav\b[^>]*epub:type="page-list"[^>]*>([\s\S]*?)<\/nav>/)?.[1] ?? "";
+    if ((pageList.match(/<a\b[^>]*href=/g) ?? []).length !== pages) issues.push("page-list does not cover every source page");
+  }
+  return issues;
 }
 
 function validateArchive(bytes: Buffer, pages: number): string[] {
@@ -132,11 +166,13 @@ async function main(): Promise<void> {
           issues.push({ file: name, detail: `reported bytes=${result.byteLength}, actual bytes=${bytes.length}` });
         }
         for (const detail of validateArchive(bytes, result.pageCount)) issues.push({ file: name, detail });
+        for (const detail of validateNavigation(bytes, result.navigation, result.pageCount)) issues.push({ file: name, detail });
         const summary: Summary = {
           file: name,
           pages: result.pageCount,
           unresolvedAnnotations: result.unresolvedAnnotationCount,
           bytes: result.byteLength,
+          navigation: result.navigation,
         };
         summaries.push(summary);
         if (checker) {
@@ -167,6 +203,12 @@ async function main(): Promise<void> {
   }
 
   const checked = summaries.filter((summary) => summary.epubcheck?.valid).length;
+  const outlineEntries = summaries.reduce((sum, summary) => sum + summary.navigation.outlineEntries, 0);
+  const outlinePdfs = summaries.filter((summary) => summary.navigation.mode === "outline").length;
+  const unresolvedOutlineEntries = summaries.reduce((sum, summary) => sum + summary.navigation.unresolvedOutlineEntries, 0);
+  if (outlineEntries !== EXPECTED_OUTLINE_ENTRIES || outlinePdfs !== EXPECTED_OUTLINE_PDFS || unresolvedOutlineEntries !== 0) {
+    issues.push({ file: SAMPLE_DIRECTORY, detail: `outline contract mismatch: entries=${outlineEntries}/${EXPECTED_OUTLINE_ENTRIES}, PDFs=${outlinePdfs}/${EXPECTED_OUTLINE_PDFS}, unresolved=${unresolvedOutlineEntries}/0` });
+  }
   if (checker && checked !== EXPECTED_PDF_COUNT) {
     issues.push({ file: SAMPLE_DIRECTORY, detail: `expected ${EXPECTED_PDF_COUNT} EPUBCheck passes but got ${checked}` });
   }
@@ -177,6 +219,9 @@ async function main(): Promise<void> {
       expectedPdfs: EXPECTED_PDF_COUNT,
       expectedPages: EXPECTED_TOTAL_PAGES,
       totalPages,
+      outlineEntries,
+      outlinePdfs,
+      unresolvedOutlineEntries,
       summaries,
       issues,
     }, null, 2) + "\n", { flag: "wx" });
@@ -195,6 +240,7 @@ async function main(): Promise<void> {
   console.log(`Pages: ${totalPages}/${EXPECTED_TOTAL_PAGES}`);
   console.log(`Unresolved annotations preserved: ${totalUnresolved}`);
   console.log(`Total EPUB bytes: ${totalBytes}`);
+  console.log(`Outline entries: ${outlineEntries}/${EXPECTED_OUTLINE_ENTRIES}; outline PDFs: ${outlinePdfs}/${EXPECTED_OUTLINE_PDFS}; unresolved outline entries: ${unresolvedOutlineEntries}`);
   if (checker) console.log(`EPUBCheck ${checker.version}: ${checked}/${EXPECTED_PDF_COUNT} passed (0 errors, 0 warnings)`);
   console.log("All corpus PDFs completed end-to-end PDF -> EPUB conversion.");
   console.log(RULE);

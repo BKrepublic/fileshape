@@ -3,6 +3,12 @@ import type { RubySpan } from "./ruby-spans.js";
 import type { SemanticBlock, SemanticPageBlocks } from "./semantic-blocks.js";
 import { mergeSourceRanges, type SourceGlyphRef, type SourceTextRef } from "./source-text.js";
 import type { WritingOrientation } from "./text-flow.js";
+import {
+  buildDocumentNavigation,
+  validateDocumentNavigation,
+  type DocumentNavigationItem,
+  type SourceOutlineItem,
+} from "./document-navigation.js";
 
 export type SourceTextItemRecord = {
   itemIndex: number;
@@ -20,6 +26,8 @@ export type SourcePageRecord = {
 export type DocumentSourceStore = {
   documentId: string;
   pages: SourcePageRecord[];
+  /** Exact outline titles/destinations captured separately from PDF text items. */
+  outline?: SourceOutlineItem[];
 };
 
 export type SourceBackedText = {
@@ -73,6 +81,7 @@ export type FileShapeDocument = {
   id: string;
   source: DocumentSourceStore;
   pages: DocumentPage[];
+  navigation?: DocumentNavigationItem[];
 };
 
 export type DocumentPageInput = {
@@ -181,6 +190,7 @@ function buildSourceStore(documentId: string, inspection: InspectResult): Docume
   if (documentId.trim().length === 0) throw new Error("documentId must not be empty");
   return {
     documentId,
+    ...(inspection.outline === undefined ? {} : { outline: structuredClone(inspection.outline) }),
     pages: inspection.pages.map((page) => ({
       page: page.page,
       textItems: page.textItems.map((item, itemIndex) => ({ itemIndex, text: item.text })),
@@ -352,7 +362,10 @@ export function buildFileShapeDocument(input: BuildDocumentInput): FileShapeDocu
     if (extras.length > 0) throw new Error(`DocumentPageInput references missing source page(s): ${extras.join(", ")}`);
   }
 
-  return { kind: "document", id: input.documentId, source, pages };
+  return {
+    kind: "document", id: input.documentId, source, pages,
+    ...(source.outline === undefined ? {} : { navigation: buildDocumentNavigation(source.outline) }),
+  };
 }
 
 function validateRanges(store: DocumentSourceStore, ranges: SourceTextRef[], label: string, errors: string[]): void {
@@ -433,6 +446,7 @@ export function validateDocumentModel(document: FileShapeDocument): string[] {
       if (!sameCoverage(block.sourceRanges, owned)) errors.push(`${label} inline source ownership has a gap or extra range`);
     }
   }
+  errors.push(...validateDocumentNavigation(document.source.outline ?? [], document.navigation ?? [], modelPages));
   return errors;
 }
 

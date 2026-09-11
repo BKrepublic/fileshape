@@ -1,4 +1,5 @@
 import type { FileShapeDocument } from "./document-model.js";
+import { serializeEpubNavigation, type EpubNavigationSummary } from "./epub-navigation.js";
 import {
   serializeEpubXhtml,
   type EpubXhtmlOptions,
@@ -28,6 +29,7 @@ export type EpubPackageResult = {
   documentId: string;
   files: EpubPackageFile[];
   bytes: Uint8Array;
+  navigation: EpubNavigationSummary;
 };
 
 const encoder = new TextEncoder();
@@ -60,13 +62,6 @@ function normalizeModified(value: string | undefined): string {
 
 function containerXml(): string {
   return `<?xml version="1.0" encoding="UTF-8"?>\n<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">\n  <rootfiles>\n    <rootfile full-path="${PACKAGE_PATH}" media-type="application/oebps-package+xml"/>\n  </rootfiles>\n</container>\n`;
-}
-
-function navXhtml(title: string, language: string, pages: Array<{ sourcePage: number; href: string }>): string {
-  const items = pages
-    .map((page) => `        <li><a href="${xmlAttr(page.href)}">Page ${page.sourcePage}</a></li>`)
-    .join("\n");
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE html>\n<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="${xmlAttr(language)}" lang="${xmlAttr(language)}">\n  <head>\n    <meta charset="utf-8" />\n    <title>${xmlText(title)}</title>\n  </head>\n  <body>\n    <nav epub:type="toc" id="toc">\n      <h1>${xmlText(title)}</h1>\n      <ol>\n${items}\n      </ol>\n    </nav>\n  </body>\n</html>\n`;
 }
 
 function packageOpf(options: {
@@ -222,6 +217,7 @@ export function serializeEpubPackage(
       : { unresolvedRubyPolicy: options.unresolvedRubyPolicy }),
   });
 
+  const navigation = serializeEpubNavigation(document, title, language, xhtml.pages);
   const files: EpubPackageFile[] = [
     textFile("mimetype", EPUB_MIMETYPE, EPUB_MIMETYPE),
     textFile(CONTAINER_PATH, "application/xml", containerXml()),
@@ -233,12 +229,13 @@ export function serializeEpubPackage(
       modified,
       pages: xhtml.pages,
     })),
-    textFile(NAV_PATH, "application/xhtml+xml", navXhtml(title, language, xhtml.pages)),
+    textFile(NAV_PATH, "application/xhtml+xml", navigation.xhtml),
     ...xhtml.pages.map((page) => textFile(`OEBPS/${page.href}`, page.mediaType, page.xhtml)),
   ];
 
   return {
     documentId: document.id,
+    navigation: navigation.summary,
     files,
     bytes: buildStoredZip(files.map((file) => ({ path: file.path, data: file.data }))),
   };
