@@ -50,9 +50,7 @@ test("reconstructs vertical multi-character runs from right to left", () => {
   assert.equal(result.text, "右列\n左列");
 });
 
-test("reconstructs glyph-by-glyph vertical columns from display-coordinate sequence", () => {
-  // Deliberately keep the glyph transform horizontal. Some PDFs encode glyphs
-  // horizontally and rely on page rotation for visible vertical writing.
+test("joins ordinary glyph-by-glyph vertical column wraps without inventing line breaks", () => {
   const horizontalGlyphTransform = [14, 0, 0, 14, 0, 0];
   const result = reconstructPageFlow(
     page([
@@ -65,7 +63,45 @@ test("reconstructs glyph-by-glyph vertical columns from display-coordinate seque
 
   assert.equal(result.orientation, "vertical");
   assert.equal(result.metrics.sequenceVerticalRatio, 1);
-  assert.equal(result.text, "裁縫\n本文");
+  assert.equal(result.text, "裁縫本文");
+});
+
+test("uses large inter-column gaps as logical paragraph boundaries", () => {
+  const horizontalGlyphTransform = [14, 0, 0, 14, 0, 0];
+  const result = reconstructPageFlow(
+    page([
+      item({ text: "題", displayX: 800, displayY: 100, displayTransform: horizontalGlyphTransform }),
+      item({ text: "名", displayX: 800, displayY: 114, displayTransform: horizontalGlyphTransform }),
+      item({ text: "本", displayX: 700, displayY: 100, displayTransform: horizontalGlyphTransform }),
+      item({ text: "文", displayX: 700, displayY: 114, displayTransform: horizontalGlyphTransform }),
+      item({ text: "続", displayX: 650, displayY: 100, displayTransform: horizontalGlyphTransform }),
+      item({ text: "き", displayX: 650, displayY: 114, displayTransform: horizontalGlyphTransform }),
+      item({ text: "次", displayX: 550, displayY: 100, displayTransform: horizontalGlyphTransform }),
+      item({ text: "段", displayX: 550, displayY: 114, displayTransform: horizontalGlyphTransform }),
+      item({ text: "落", displayX: 550, displayY: 128, displayTransform: horizontalGlyphTransform }),
+      item({ text: "。", displayX: 556, displayY: 142, displayTransform: horizontalGlyphTransform }),
+    ]),
+  );
+
+  assert.equal(result.orientation, "vertical");
+  assert.equal(result.text, "題名\n本文続き\n次段落。");
+});
+
+test("keeps shifted vertical punctuation and long marks in source sequence", () => {
+  const horizontalGlyphTransform = [14, 0, 0, 14, 0, 0];
+  const result = reconstructPageFlow(
+    page([
+      item({ text: "ム", displayX: 700, displayY: 100, displayTransform: horizontalGlyphTransform }),
+      item({ text: " ー", displayX: 705, displayY: 114, displayTransform: horizontalGlyphTransform }),
+      item({ text: "ド", displayX: 700, displayY: 128, displayTransform: horizontalGlyphTransform }),
+      item({ text: "で", displayX: 700, displayY: 142, displayTransform: horizontalGlyphTransform }),
+      item({ text: "す", displayX: 700, displayY: 156, displayTransform: horizontalGlyphTransform }),
+      item({ text: "。", displayX: 706, displayY: 170, displayTransform: horizontalGlyphTransform }),
+    ]),
+  );
+
+  assert.equal(result.orientation, "vertical");
+  assert.equal(result.text, "ムードです。");
 });
 
 test("reconstructs glyph-by-glyph horizontal rows from display-coordinate sequence", () => {
