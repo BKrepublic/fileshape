@@ -20,6 +20,7 @@
     "verify:epub": "tsx src/verify-epub-corpus.ts",
     "setup:epubcheck": "tsx src/setup-epubcheck.ts",
     "verify:epubcheck": "tsx --test test/epubcheck.integration.ts",
+    "fixture:reader": "tsx src/reading-system-fixture.ts",
     "diagnose:orientation": "tsx src/diagnose-unresolved-orientation.ts",
     "convert:epub": "tsx src/pdf-to-epub.ts",
     "typecheck": "tsc --noEmit",
