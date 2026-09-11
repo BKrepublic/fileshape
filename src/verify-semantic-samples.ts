@@ -41,7 +41,7 @@ const EXPECTED_NVL_PAGE4 = `裁縫
 type Check = {
   label: string;
   passed: boolean;
-  detail?: string;
+  detail?: string | undefined;
 };
 
 function runUnitSuite(): Check {
