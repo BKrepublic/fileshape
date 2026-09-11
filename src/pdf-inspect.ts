@@ -180,7 +180,10 @@ function printReport(result: InspectResult, outputPath: string): boolean {
   return passed;
 }
 
-function parseArguments(args: string[]): { inputPath?: string; outputPath?: string } {
+function parseArguments(args: string[]): {
+  inputPath: string | undefined;
+  outputPath: string | undefined;
+} {
   const inputPath = args[0];
   let outputPath: string | undefined;
 
