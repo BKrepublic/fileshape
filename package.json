@@ -1,13 +1,17 @@
 {
   "name": "fileshape",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local-first file format conversion tools.",
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "inspect:pdf": "tsx src/pdf-inspect.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run typecheck"
   },
-  "keywords": [],
-  "type": "commonjs",
+  "dependencies": {
+    "pdfjs-dist": "^6.3.289"
+  },
   "devDependencies": {
     "@types/node": "^22.20.2",
     "tsx": "^4.23.13",
