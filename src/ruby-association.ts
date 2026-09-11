@@ -1,5 +1,6 @@
 import type { InspectPage, InspectTextItem } from "./pdf-inspector.js";
 import type { WritingOrientation } from "./text-flow.js";
+import { dot, subtract } from "./display-geometry.js";
 
 export type RubyCandidate = {
   annotationItemIndex: number;
@@ -7,7 +8,7 @@ export type RubyCandidate = {
   /** Original extraction indexes, never offsets into reconstructed text. */
   baseItemIndexes: number[];
   status: "associated-run" | "unresolved";
-  reason: "unique-nearby-run" | "unknown-orientation" | "no-nearby-run" | "ambiguous-runs";
+  reason: "unique-nearby-run" | "unknown-orientation" | "no-nearby-run" | "ambiguous-runs" | "missing-geometry";
   /** Geometry only: these are not claimed to be exact character boundaries. */
   inlineStart: number;
   inlineEnd: number;
@@ -28,9 +29,9 @@ export function associateRubyCandidates(
     .filter(({ item }) => item.text.trim().length > 0 && item.fontSize > 0);
   const annotations = visible.filter(({ item }) => item.fontSize < bodyFontSize * 0.75);
   const bases = visible.filter(({ item }) => item.fontSize >= bodyFontSize * 0.75);
-  const start = (item: InspectTextItem) => orientation === "vertical" ? item.displayY : item.displayX;
-  const end = (item: InspectTextItem) => start(item) +
-    Math.abs(orientation === "vertical" ? item.height : item.width);
+  const start = (item: InspectTextItem) => item.displayGeometry
+    ? dot(item.displayGeometry.start, item.displayGeometry.inline) : 0;
+  const end = (item: InspectTextItem) => start(item) + (item.displayGeometry?.inlineExtent ?? 0);
 
   return annotations.map(({ item, index }): RubyCandidate => {
     const result: RubyCandidate = {
@@ -43,19 +44,21 @@ export function associateRubyCandidates(
       inlineEnd: end(item),
     };
     if (orientation === "unknown") return { ...result, reason: "unknown-orientation" };
+    if (!item.displayGeometry) return { ...result, reason: "missing-geometry" };
     const matches = bases.filter(({ item: base }) => {
-      const ratio = item.fontSize / base.fontSize;
+      const b = base.displayGeometry, a = item.displayGeometry!;
+      if (!b || dot(a.inline, b.inline) < 0.99) return false;
+      const ratio = a.crossExtent / b.crossExtent;
       if (ratio < 0.35 || ratio >= 0.75) return false;
       // Vertical ruby normally sits right of the base; horizontal ruby above it.
       // This initial candidate model leaves other placements unmatched.
-      const distance = orientation === "vertical"
-        ? item.displayX - base.displayX : base.displayY - item.displayY;
-      if (distance < base.fontSize * 0.45 || distance > base.fontSize * 1.35) return false;
+      const distance = dot(subtract(a.start, b.start), b.side);
+      if (distance < b.crossExtent * 0.45 || distance > b.crossExtent * 1.35) return false;
       const overlap = Math.min(end(item), end(base)) - Math.max(start(item), start(base));
       const length = end(item) - start(item);
       if (length <= 0 || overlap / length < 0.6) return false;
-      return start(item) >= start(base) - base.fontSize * 0.5 &&
-        end(item) <= end(base) + base.fontSize * 0.5;
+      return start(item) >= start(base) - b.crossExtent * 0.5 &&
+        end(item) <= end(base) + b.crossExtent * 0.5;
     });
     if (matches.length > 1) return { ...result, reason: "ambiguous-runs" };
     const match = matches[0];

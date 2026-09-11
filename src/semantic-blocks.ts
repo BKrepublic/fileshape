@@ -1,4 +1,5 @@
 import type { PhysicalPageLayout, PhysicalTextUnit } from "./physical-layout.js";
+import type { SourceTextRef } from "./source-text.js";
 
 export type SemanticBlockKind = "text";
 
@@ -7,6 +8,7 @@ export type SemanticBlock = {
   kind: SemanticBlockKind;
   unitIndexes: number[];
   text: string;
+  sourceRanges?: SourceTextRef[];
 };
 
 export type SemanticBoundaryDecision = {
@@ -77,6 +79,7 @@ function looksLikePhysicalWrap(
 function appendUnit(block: SemanticBlock, unit: PhysicalTextUnit): void {
   block.unitIndexes.push(unit.index);
   block.text += unit.text;
+  block.sourceRanges = [...(block.sourceRanges ?? []), ...(unit.sourceRanges ?? []).map((ref) => ({ ...ref }))];
 }
 
 export function buildSemanticBlocks(
@@ -99,6 +102,7 @@ export function buildSemanticBlocks(
     kind: "text",
     unitIndexes: [first.index],
     text: first.text,
+    sourceRanges: (first.sourceRanges ?? []).map((ref) => ({ ...ref })),
   };
   blocks.push(currentBlock);
 
@@ -141,6 +145,7 @@ export function buildSemanticBlocks(
       kind: "text",
       unitIndexes: [current.index],
       text: current.text,
+      sourceRanges: (current.sourceRanges ?? []).map((ref) => ({ ...ref })),
     };
     blocks.push(currentBlock);
   }

@@ -1,11 +1,14 @@
 import type { InspectPage, InspectTextItem } from "./pdf-inspector.js";
 import type { WritingOrientation } from "./text-flow.js";
+import { fullTextRef, type SourceTextRef } from "./source-text.js";
 
 export type PhysicalTextUnit = {
   index: number;
   position: number;
   itemCount: number;
   text: string;
+  /** Full original item ranges, including whitespace trimmed in the text view. */
+  sourceRanges?: SourceTextRef[];
   /** Start position along the reading axis (Y for vertical, X for horizontal). */
   inlineStart: number;
   /** End position along the reading axis. */
@@ -56,7 +59,7 @@ function isMarginNoise(item: InspectTextItem, page: InspectPage, bodyFontSize: n
 }
 
 function primaryItems(page: InspectPage, bodyFontSize: number): InspectTextItem[] {
-  return page.textItems.filter((item) => {
+  return page.textItems.map((item, index) => ({ ...item, source: item.source ?? fullTextRef(page.page, index, item.text) })).filter((item) => {
     if (item.text.trim().length === 0) return false;
     if (isMarginNoise(item, page, bodyFontSize)) return false;
     if (bodyFontSize > 0 && item.fontSize < bodyFontSize * 0.75) return false;
@@ -161,6 +164,7 @@ function makeUnit(
     position: round(position),
     itemCount: items.length,
     text,
+    sourceRanges: items.flatMap((item) => item.source ? [{ ...item.source }] : []),
     ...inlineBounds(items, orientation, inlineSize),
   };
 }

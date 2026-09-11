@@ -2,12 +2,12 @@ import process from "node:process";
 import { inspectPdf } from "./pdf-inspector.js";
 import { reconstructPageFlow } from "./text-flow.js";
 import { resolveDocumentOrientations } from "./document-orientation.js";
-import { associateRubyCandidates } from "./ruby-association.js";
+import { associateRubySpans } from "./ruby-spans.js";
 
 const input = process.argv[2];
 if (!input) throw new Error("Usage: npm run diagnose:ruby -- <pdf> [page]");
 const selectedPage = process.argv[3] === undefined ? undefined : Number(process.argv[3]);
-const inspection = await inspectPdf(input);
+const inspection = await inspectPdf(input, { includeGlyphs: true });
 if (selectedPage !== undefined && (!Number.isInteger(selectedPage) || selectedPage < 1 || selectedPage > inspection.pageCount)) {
   throw new Error("Page must be an integer within the document");
 }
@@ -17,6 +17,7 @@ const orientations = new Map(resolveDocumentOrientations(initial.map(({ page, fl
   ({ page: page.page, orientation: flow.orientation }))).map((entry) => [entry.page, entry.resolved]));
 for (const { page, flow } of initial) {
   if (selectedPage !== undefined && page.page !== selectedPage) continue;
-  const candidates = associateRubyCandidates(page, orientations.get(page.page) ?? flow.orientation, flow.bodyFontSize);
-  console.log(JSON.stringify({ page: page.page, bodyFontSize: flow.bodyFontSize, candidates }, null, 2));
+  const candidates = associateRubySpans(page, flow.bodyFontSize);
+  console.log(JSON.stringify({ page: page.page, bodyFontSize: flow.bodyFontSize,
+    orientation: orientations.get(page.page), glyphIssues: page.glyphIssues, candidates }, null, 2));
 }

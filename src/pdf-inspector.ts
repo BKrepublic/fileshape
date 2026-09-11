@@ -2,6 +2,9 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getDocument, OPS } from "pdfjs-dist/legacy/build/pdf.mjs";
+import { itemDisplayGeometry, type TextGeometry } from "./display-geometry.js";
+import { fullTextRef, type SourceTextRef } from "./source-text.js";
+import { bindGlyphSources, extractOperatorGlyphs, type ExtractedGlyph } from "./pdfjs-glyph-adapter.js";
 
 export type InspectTextItem = {
   text: string;
@@ -17,6 +20,10 @@ export type InspectTextItem = {
   displayY: number;
   fontSize: number;
   hasEOL: boolean;
+  source?: SourceTextRef;
+  displayGeometry?: TextGeometry;
+  glyphs?: ExtractedGlyph[];
+  glyphMapping?: "exact" | "unmapped" | "ambiguous";
 };
 
 export type InspectPage = {
@@ -29,6 +36,9 @@ export type InspectPage = {
   textItemCount: number;
   imagePaintOps: number;
   textItems: InspectTextItem[];
+  glyphIssues?: string[];
+  /** Includes unmapped operator glyphs; never discard source Unicode on mismatch. */
+  operatorGlyphs?: ExtractedGlyph[];
 };
 
 export type InspectResult = {
@@ -85,7 +95,7 @@ function countImagePaintOps(fnArray: number[]): number {
   return count;
 }
 
-export async function inspectPdf(inputPath: string): Promise<InspectResult> {
+export async function inspectPdf(inputPath: string, options: { includeGlyphs?: boolean } = {}): Promise<InspectResult> {
   const data = new Uint8Array(await readFile(inputPath));
   const byteLength = data.byteLength;
 
@@ -120,6 +130,9 @@ export async function inspectPdf(inputPath: string): Promise<InspectResult> {
         const displayTransform = multiplyTransforms([...viewport.transform], transform);
 
         textItems.push({
+          source: fullTextRef(pageNumber, textItems.length, item.str),
+          displayGeometry: itemDisplayGeometry(transform, [...viewport.transform], item.width, item.height,
+            textContent.styles[item.fontName]?.vertical === true),
           text: item.str,
           dir: item.dir,
           fontName: item.fontName,
@@ -136,7 +149,13 @@ export async function inspectPdf(inputPath: string): Promise<InspectResult> {
         });
       }
 
+      const extracted = options.includeGlyphs
+        ? extractOperatorGlyphs(pageNumber, operatorList, [...viewport.transform], (id) => page.commonObjs.get(id))
+        : undefined;
+      if (extracted) bindGlyphSources(textItems, extracted.glyphs, pageNumber);
+
       pages.push({
+        ...(extracted ? { operatorGlyphs: extracted.glyphs, glyphIssues: extracted.issues } : {}),
         page: pageNumber,
         width: viewport.width,
         height: viewport.height,
