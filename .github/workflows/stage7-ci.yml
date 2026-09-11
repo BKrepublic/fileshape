@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - stage7-pdf-to-epub-cli
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
