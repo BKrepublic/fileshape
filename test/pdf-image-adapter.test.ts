@@ -9,13 +9,29 @@ function op(name: string): number {
   return value as number;
 }
 
-test("image evidence preserves transforms, resource references, forms and clip state", () => {
+function rectangularClipPath(x: number, y: number, width: number, height: number): unknown[] {
+  // PDF.js 6.3.289 constructPath pathBuffer: DrawOPS moveTo=0, lineTo=1, closePath=4.
+  return [
+    op("endPath"),
+    [new Float32Array([
+      0, x, y,
+      1, x + width, y,
+      1, x + width, y + height,
+      1, x, y + height,
+      4,
+    ])],
+    [x, y, x + width, y + height],
+  ];
+}
+
+test("image evidence preserves transforms, resource references, forms and exact clip state", () => {
   const result = extractImagePaintEvidence(3, {
     fnArray: [
       op("save"),
       op("transform"),
       op("paintImageXObject"),
       op("clip"),
+      op("constructPath"),
       op("paintInlineImageXObject"),
       op("paintFormXObjectBegin"),
       op("paintImageXObject"),
@@ -27,6 +43,7 @@ test("image evidence preserves transforms, resource references, forms and clip s
       [2, 0, 0, 3, 10, 20],
       ["img-1", 40, 20],
       [],
+      rectangularClipPath(0, 0, 100, 100),
       [{ width: 2, height: 3 }],
       [[1, 0, 0, 1, 5, 7]],
       ["img-form", 10, 10],
@@ -51,11 +68,14 @@ test("image evidence preserves transforms, resource references, forms and clip s
   assert.equal(inline.width, 2);
   assert.equal(inline.height, 3);
   assert.equal(inline.clipObserved, true);
+  assert.equal(inline.clipStatus, "exact-rect");
+  assert.equal(inline.clipCoverage, "contains-image");
 
   const form = result.paints[2]!;
   assert.equal(form.resourceId, "img-form");
   assert.equal(form.formDepth, 1);
   assert.equal(form.clipObserved, true);
+  assert.equal(form.clipStatus, "exact-rect");
   assert.deepEqual(form.ctm, [2, 0, 0, 3, 20, 41]);
 });
 

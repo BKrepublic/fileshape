@@ -11,6 +11,7 @@ import {
 import { buildDocumentFromInspection } from "./pdf-document-pipeline.js";
 import { inspectPdf } from "./pdf-inspector.js";
 import type { EpubNavigationSummary } from "./epub-navigation.js";
+import type { EpubRubyMode } from "./epub-xhtml.js";
 
 export type PdfToEpubOptions = Omit<EpubPackageOptions, "title" | "identifier"> & {
   title?: string;
@@ -45,6 +46,11 @@ function unresolvedRubyPolicy(value: string): UnresolvedRubyPolicy {
   throw new Error("--unresolved-ruby must be error or preserve-as-page-note");
 }
 
+function rubyMode(value: string): EpubRubyMode {
+  if (value === "on" || value === "off") return value;
+  throw new Error("--ruby must be on or off");
+}
+
 function pageProgressionDirection(value: string): EpubPageProgressionDirection {
   if (value === "ltr" || value === "rtl") return value;
   throw new Error("--page-progression-direction must be ltr or rtl");
@@ -74,6 +80,7 @@ export async function convertPdfToEpub(
     ...(options.language === undefined ? {} : { language: options.language }),
     ...(options.modified === undefined ? {} : { modified: options.modified }),
     ...(options.titlePrefix === undefined ? {} : { titlePrefix: options.titlePrefix }),
+    ...(options.rubyMode === undefined ? {} : { rubyMode: options.rubyMode }),
     ...(options.pageProgressionDirection === undefined
       ? {}
       : { pageProgressionDirection: options.pageProgressionDirection }),
@@ -123,6 +130,7 @@ function parseCliArguments(argv: string[]): CliArguments {
       case "identifier": options.identifier = value; break;
       case "modified": options.modified = value; break;
       case "title-prefix": options.titlePrefix = value; break;
+      case "ruby": options.rubyMode = rubyMode(value); break;
       case "unresolved-ruby": options.unresolvedRubyPolicy = unresolvedRubyPolicy(value); break;
       case "page-progression-direction": options.pageProgressionDirection = pageProgressionDirection(value); break;
       default: throw new Error(`unknown option --${name}`);
@@ -132,7 +140,7 @@ function parseCliArguments(argv: string[]): CliArguments {
   const inputPath = positionals[0];
   if (!inputPath || positionals.length > 2) {
     throw new Error(
-      "usage: npm run convert:epub -- input.pdf [output.epub] [--title TITLE] [--creator NAME] [--language ja] [--unresolved-ruby error|preserve-as-page-note] [--page-progression-direction ltr|rtl]",
+      "usage: npm run convert:epub -- input.pdf [output.epub] [--title TITLE] [--creator NAME] [--language ja] [--ruby on|off] [--unresolved-ruby error|preserve-as-page-note] [--page-progression-direction ltr|rtl]",
     );
   }
   const outputPath = positionals[1];

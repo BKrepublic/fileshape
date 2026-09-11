@@ -228,6 +228,7 @@ export function serializeEpubPackage(
     language,
     titlePrefix: options.titlePrefix ?? title,
     stylesheetHref: EPUB_STYLES_HREF_FROM_TEXT,
+    ...(options.rubyMode === undefined ? {} : { rubyMode: options.rubyMode }),
     ...(options.unresolvedRubyPolicy === undefined
       ? {}
       : { unresolvedRubyPolicy: options.unresolvedRubyPolicy }),

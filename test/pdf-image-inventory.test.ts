@@ -29,6 +29,13 @@ test("real PDF image inventory retains every paint occurrence without publishing
     assert.doesNotMatch(encoded, /Im1|Fm1/);
     assert.ok(report.pageReports[0]!.paints.every((paint) => !("resourceId" in paint)));
     assert.ok(report.pageReports[0]!.paints.some((paint) => paint.resourceRefHash !== undefined));
+
+    const clipped = report.pageReports[0]!.paints.find((paint) => paint.clipObserved);
+    assert.ok(clipped, "expected a clipped paint");
+    assert.equal(clipped.clipStatus, "exact-rect");
+    assert.equal(clipped.clipCoverage, "contains-image");
+    assert.ok(clipped.clipRect);
+    assert.ok(clipped.displayBounds);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

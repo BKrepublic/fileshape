@@ -26,6 +26,8 @@ export type PdfImageInventory = {
   clipObservedPaints: number;
   kindCounts: Record<string, number>;
   reasonCounts: Record<string, number>;
+  clipStatusCounts: Record<string, number>;
+  clipCoverageCounts: Record<string, number>;
   issues: string[];
   pageReports: Array<{
     page: number;
@@ -49,6 +51,8 @@ export type ImageCorpusInventory = {
   clipObservedPaints: number;
   kindCounts: Record<string, number>;
   reasonCounts: Record<string, number>;
+  clipStatusCounts: Record<string, number>;
+  clipCoverageCounts: Record<string, number>;
   reports: PdfImageInventory[];
 };
 
@@ -83,6 +87,8 @@ export async function inspectPdfImages(inputPath: string): Promise<PdfImageInven
     const pageReports: PdfImageInventory["pageReports"] = [];
     const kindCounts: Record<string, number> = {};
     const reasonCounts: Record<string, number> = {};
+    const clipStatusCounts: Record<string, number> = {};
+    const clipCoverageCounts: Record<string, number> = {};
     const issues: string[] = [];
     const resourceRefs = new Set<string>();
     let supportedPaints = 0;
@@ -103,6 +109,8 @@ export async function inspectPdfImages(inputPath: string): Promise<PdfImageInven
         const paints = extracted.paints.map(publicPaint);
         for (const paint of paints) {
           increment(kindCounts, paint.kind);
+          increment(clipStatusCounts, paint.clipStatus);
+          increment(clipCoverageCounts, paint.clipCoverage);
           if (paint.status === "supported-evidence") supportedPaints += 1;
           else unsupportedPaints += 1;
           if (paint.reason) increment(reasonCounts, paint.reason);
@@ -138,6 +146,8 @@ export async function inspectPdfImages(inputPath: string): Promise<PdfImageInven
       clipObservedPaints,
       kindCounts,
       reasonCounts,
+      clipStatusCounts,
+      clipCoverageCounts,
       issues,
       pageReports,
     };
@@ -149,9 +159,13 @@ export async function inspectPdfImages(inputPath: string): Promise<PdfImageInven
 export function summarizeImageCorpus(reports: PdfImageInventory[]): ImageCorpusInventory {
   const kindCounts: Record<string, number> = {};
   const reasonCounts: Record<string, number> = {};
+  const clipStatusCounts: Record<string, number> = {};
+  const clipCoverageCounts: Record<string, number> = {};
   for (const report of reports) {
     mergeCounts(kindCounts, report.kindCounts);
     mergeCounts(reasonCounts, report.reasonCounts);
+    mergeCounts(clipStatusCounts, report.clipStatusCounts);
+    mergeCounts(clipCoverageCounts, report.clipCoverageCounts);
   }
   return {
     pdfs: reports.length,
@@ -165,6 +179,8 @@ export function summarizeImageCorpus(reports: PdfImageInventory[]): ImageCorpusI
     clipObservedPaints: reports.reduce((sum, report) => sum + report.clipObservedPaints, 0),
     kindCounts,
     reasonCounts,
+    clipStatusCounts,
+    clipCoverageCounts,
     reports,
   };
 }
@@ -221,7 +237,7 @@ async function main(): Promise<void> {
     throw new Error(`image inventory scanned ${report.scannedPages}/${report.pages} pages`);
   }
   await writeFile(output, `${JSON.stringify(report, null, 2)}\n`, { flag: "wx" });
-  process.stdout.write(`PDFs=${report.pdfs}\nPAGES=${report.pages}\nIMAGE_PAINTS=${report.paintOperations}\nSUPPORTED=${report.supportedPaints}\nUNSUPPORTED=${report.unsupportedPaints}\nRESOURCE_REFS=${report.uniqueResourceRefs}\nFORM_PAINTS=${report.formPaints}\nCLIPPED_PAINTS=${report.clipObservedPaints}\n`);
+  process.stdout.write(`PDFs=${report.pdfs}\nPAGES=${report.pages}\nIMAGE_PAINTS=${report.paintOperations}\nSUPPORTED=${report.supportedPaints}\nUNSUPPORTED=${report.unsupportedPaints}\nRESOURCE_REFS=${report.uniqueResourceRefs}\nFORM_PAINTS=${report.formPaints}\nCLIPPED_PAINTS=${report.clipObservedPaints}\nCLIP_STATUS=${JSON.stringify(report.clipStatusCounts)}\nCLIP_COVERAGE=${JSON.stringify(report.clipCoverageCounts)}\n`);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

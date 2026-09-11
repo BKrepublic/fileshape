@@ -22,6 +22,8 @@ export type EpubXhtmlSerialization = {
   pages: EpubXhtmlPage[];
 };
 
+export type EpubRubyMode = "on" | "off";
+
 export type EpubXhtmlOptions = {
   /** BCP 47 language tag written to html lang/xml:lang. Defaults to ja. */
   language?: string;
@@ -29,6 +31,8 @@ export type EpubXhtmlOptions = {
   stylesheetHref?: string;
   /** Optional human-readable title prefix. Defaults to FileShape. */
   titlePrefix?: string;
+  /** Exact ruby display. `off` emits only source-backed base text; defaults to `on`. */
+  rubyMode?: EpubRubyMode;
   /** Fail closed by default; optionally preserve unresolved annotation text as page-end notes. */
   unresolvedRubyPolicy?: UnresolvedRubyPolicy;
 };
@@ -51,13 +55,14 @@ function requireNonEmpty(value: string, label: string): string {
   return value;
 }
 
-function renderInline(inline: InlineNode): string {
+function renderInline(inline: InlineNode, rubyMode: EpubRubyMode): string {
   if (inline.kind === "text") return escapeXmlText(inline.text);
+  if (rubyMode === "off") return escapeXmlText(inline.base.text);
   return `<ruby>${escapeXmlText(inline.base.text)}<rt>${escapeXmlText(inline.annotation.text)}</rt></ruby>`;
 }
 
-function renderBlock(block: DocumentTextBlock): string {
-  const body = block.inlines.map(renderInline).join("");
+function renderBlock(block: DocumentTextBlock, rubyMode: EpubRubyMode): string {
+  const body = block.inlines.map((inline) => renderInline(inline, rubyMode)).join("");
   return `    <p class="fileshape-block" data-source-page="${block.sourcePage}" data-semantic-block="${block.semanticBlockIndex}" xml:space="preserve">${body}</p>`;
 }
 
@@ -93,11 +98,12 @@ function serializePageXhtml(
 ): string {
   const language = requireNonEmpty(options.language ?? "ja", "language");
   const titlePrefix = requireNonEmpty(options.titlePrefix ?? "FileShape", "titlePrefix");
+  const rubyMode = options.rubyMode ?? "on";
   const title = `${titlePrefix} ${page.sourcePage}`;
   const stylesheet = options.stylesheetHref === undefined
     ? ""
     : `\n    <link rel="stylesheet" type="text/css" href="${escapeXmlAttribute(requireNonEmpty(options.stylesheetHref, "stylesheetHref"))}" />`;
-  const blocks = page.blocks.map(renderBlock);
+  const blocks = page.blocks.map((block) => renderBlock(block, rubyMode));
   const preservedNotes = renderPreservedNotes(notes);
   const bodyItems = preservedNotes.length === 0 ? blocks : [...blocks, preservedNotes];
   const body = bodyItems.length === 0 ? "" : `\n${bodyItems.join("\n")}\n  `;
