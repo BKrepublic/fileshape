@@ -1,0 +1,78 @@
+# Stage 13a: outline destination → source evidence
+
+This checkpoint implements Task 1A from `docs/remaining-work/01-headings-and-sections.md`. It is an evidence tool only. It does **not** add body heading roles, section boundaries, XHTML headings, or precise EPUB anchors.
+
+## Command
+
+```text
+npm run inspect:outline-evidence -- PDF_OR_DIRECTORY --output NEW_FILE [--expect-outline-count N]
+```
+
+For the current private regression corpus use `--expect-outline-count 250`. Output files must remain local-only; `--output` uses exclusive creation and refuses to overwrite an existing report.
+
+## Privacy and source contract
+
+The JSON report never emits PDF filenames, outline titles, body text, URLs, or named-destination strings. Each PDF is identified by SHA-256 and a shortened anonymous ID. Outline titles and named-destination names are represented only by SHA-256 plus length so duplicate controls can be detected without publishing source strings.
+
+Explicit destination arrays are retained structurally (page references, destination mode, numeric coordinates). Named destinations are resolved through PDF.js, and the resolved destination array is recorded separately. No destination name is treated as coordinate evidence.
+
+## Coordinate contract
+
+Destination coordinates remain PDF coordinates until they are transformed by the target page's PDF.js `PageViewport`. The report records page rotation, `UserUnit`, page view, viewport transform and display-space destination geometry.
+
+Supported explicit destination forms:
+
+- `XYZ`: point when both coordinates are explicit, otherwise a page-spanning line for the explicit axis, otherwise page-only;
+- `FitH` / `FitBH`: transformed horizontal-PDF-coordinate line when `top` is explicit;
+- `FitV` / `FitBV`: transformed vertical-PDF-coordinate line when `left` is explicit;
+- `FitR`: transformed rectangle;
+- `Fit` / `FitB`: page-only.
+
+Unknown or malformed destination forms are retained as `unmappable`. No nearest-text search is performed.
+
+## Source evidence classes
+
+Each resolved outline entry receives one of four evidence classes:
+
+- `unique-position`: the transformed destination geometry intersects exactly one existing physical text unit;
+- `ambiguous-position`: it intersects more than one physical unit;
+- `page-only`: the PDF destination resolves to a page but does not establish one source unit (page destination, no intersection, unresolved writing orientation, empty layout, or no visible text);
+- `unmappable`: destination/page resolution itself is invalid, external, absent, or unsupported.
+
+`unique-position` means only that a PDF destination has one geometrically intersected physical unit. **It is not evidence that the unit is a heading or that a chapter starts there.** A heading/section rule may be designed only after the full 250-entry corpus evidence is reviewed.
+
+The intersection test uses the measured display geometry already attached to source TextItems. Candidate records contain `SourceTextRef[]`, TextItem indexes, glyph source refs and display bounds. It does not substring-match outline titles, split ligatures, divide run widths, or inspect character appearance.
+
+## Relationship controls
+
+The report also records, without text:
+
+- how many outline entries resolve to the same page;
+- exact duplicate resolved destinations;
+- duplicate title hashes (same title at different locations is observable without using the title for mapping);
+- parent/child entries resolving to the same page;
+- non-monotonic target-page order in outline traversal.
+
+These controls are evidence for ambiguity analysis, not tie-breakers.
+
+## Automated controls
+
+`test/outline-source-evidence.test.ts` covers:
+
+- viewport-based coordinate conversion rather than assuming PDF/display axes;
+- exact source-range transport across a ligature plus supplementary Unicode;
+- ambiguous multi-unit intersections without nearest-unit guessing;
+- a real PDF fixture with 0/90/180/270 page rotations and duplicate destinations/titles;
+- aggregate accounting of evidence classes and relationship flags.
+
+## Corpus checkpoint before Task 1B
+
+Run the tool over the unchanged 9-PDF private corpus and save the report under a new local-only path. Required review outputs are:
+
+1. exactly 250 outline entries accounted for;
+2. counts by evidence class, destination kind and reason;
+3. counts of same-page, duplicate-destination, duplicate-title, parent-same-page and non-monotonic controls;
+4. manual inspection of representative records from every non-zero class/reason without publishing source text;
+5. a written conclusion separating conditions that prove a source position from conditions that prove only a page link.
+
+Do not start Task 1B merely because `unique-position` is non-zero. The corpus result must first establish whether any geometry contract is strong enough to justify body heading boundaries without title matching or source-specific heuristics.
