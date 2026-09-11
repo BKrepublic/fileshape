@@ -70,28 +70,36 @@ function pageHref(page: number): string {
   return `text/page-${String(page).padStart(4, "0")}.xhtml`;
 }
 
+function unresolvedRubyError(page: DocumentPage): Error | undefined {
+  if (page.unresolvedRuby.length === 0) return undefined;
+  const details = page.unresolvedRuby
+    .slice(0, 5)
+    .map((span) => span.reason)
+    .join(", ");
+  const suffix = page.unresolvedRuby.length > 5 ? `, +${page.unresolvedRuby.length - 5} more` : "";
+  return new Error(
+    `EPUB serialization requires unresolved ruby policy before rendering page ${page.sourcePage} (${page.unresolvedRuby.length} candidate(s): ${details}${suffix})`,
+  );
+}
+
+function assertPageEpubRenderable(page: DocumentPage): void {
+  const unresolved = unresolvedRubyError(page);
+  if (unresolved) throw unresolved;
+  if (page.unmappedExactRuby.length > 0) {
+    throw new Error(`EPUB serialization cannot render page ${page.sourcePage} with unmapped exact ruby`);
+  }
+}
+
 function assertEpubRenderable(document: FileShapeDocument): void {
   assertDocumentModel(document);
-
-  const unresolved = document.pages.flatMap((page) =>
-    page.unresolvedRuby.map((span) => ({ page: page.sourcePage, reason: span.reason })),
-  );
-  if (unresolved.length > 0) {
-    const details = unresolved
-      .slice(0, 5)
-      .map((entry) => `page ${entry.page}: ${entry.reason}`)
-      .join("; ");
-    const suffix = unresolved.length > 5 ? `; +${unresolved.length - 5} more` : "";
-    throw new Error(
-      `EPUB serialization requires unresolved ruby policy before rendering (${unresolved.length} candidate(s): ${details}${suffix})`,
-    );
-  }
+  for (const page of document.pages) assertPageEpubRenderable(page);
 }
 
 export function serializeEpubPageXhtml(
   page: DocumentPage,
   options: EpubXhtmlOptions = {},
 ): string {
+  assertPageEpubRenderable(page);
   const language = requireNonEmpty(options.language ?? "ja", "language");
   const titlePrefix = requireNonEmpty(options.titlePrefix ?? "FileShape", "titlePrefix");
   const title = `${titlePrefix} ${page.sourcePage}`;
