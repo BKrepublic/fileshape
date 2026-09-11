@@ -5,6 +5,7 @@
   "description": "Local-first file format conversion tools.",
   "type": "module",
   "scripts": {
+    "diagnose:ruby": "tsx src/diagnose-ruby.ts",
     "inspect:pdf": "tsx src/pdf-inspect.ts",
     "inspect:all": "tsx src/pdf-inspect-all.ts",
     "probe:layout": "tsx src/pdf-layout-probe.ts",
