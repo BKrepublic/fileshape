@@ -82,7 +82,8 @@ async function main() {
       .filter((name) => name.toLowerCase().endsWith(".pdf"))
       .sort((left, right) => left.localeCompare(right, "ja"));
 
-    console.log("\n=== FileShape full-document flow check ===");
+    console.log("\n=== FileShape full-document structural flow check ===");
+    console.log("NOTE: this detects structural failures only; PASS does not prove textual fidelity.");
     console.log(`Directory: ${absoluteDirectory}`);
     console.log(`PDFs: ${names.length}`);
     console.log("");
@@ -98,7 +99,7 @@ async function main() {
       reports.push(report);
 
       const passed = report.unknownPages.length === 0 && report.emptyReconstructionPages.length === 0;
-      console.log(`${passed ? "PASS" : "FAIL"}  ${name}`);
+      console.log(`${passed ? "STRUCTURE PASS" : "STRUCTURE FAIL"}  ${name}`);
       console.log(
         `pages: ${report.pageCount}, text: ${report.textPages}, vertical: ${report.verticalPages}, horizontal: ${report.horizontalPages}`,
       );
@@ -131,15 +132,17 @@ async function main() {
       (report) => report.unknownPages.length > 0 || report.emptyReconstructionPages.length > 0,
     );
 
-    console.log("=== Batch result ===");
-    console.log(`PASS: ${reports.length - failed.length}/${reports.length}`);
-    console.log(`FAIL: ${failed.length}/${reports.length}`);
-    console.log(`RESULT: ${reports.length > 0 && failed.length === 0 ? "PASS" : "FAIL"}`);
+    console.log("=== Batch structural result ===");
+    console.log(`STRUCTURE PASS: ${reports.length - failed.length}/${reports.length}`);
+    console.log(`STRUCTURE FAIL: ${failed.length}/${reports.length}`);
+    console.log(
+      `STRUCTURE RESULT: ${reports.length > 0 && failed.length === 0 ? "PASS" : "FAIL"}`,
+    );
 
     if (reports.length === 0 || failed.length > 0) process.exitCode = 1;
   } catch (error) {
-    console.error("\n=== FileShape full-document flow check ===");
-    console.error("RESULT: FAIL");
+    console.error("\n=== FileShape full-document structural flow check ===");
+    console.error("STRUCTURE RESULT: FAIL");
     console.error(error instanceof Error ? error.stack ?? error.message : error);
     process.exitCode = 1;
   }
