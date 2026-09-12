@@ -2,7 +2,7 @@
 
 ## 現在地
 
-**自動受け入れは完了済みです。** Stage 25 private acceptance は branch HEAD `fcc4dff39e5ce6e1c10e5cf2568be8afbe6fafbd` で全項目PASSしました。
+**自動受け入れは完了済みです。** Stage 25 private acceptance は branch HEAD `fcc4dff39e5ce6e1c10e5cf2568be8afbe6fafbd` で全項目PASSし、accepted merge commit `3f5a3754c6ec084a359ac9967c99e60a7f145e90` として `main` に統合済みです。そのmerge commitのmain push CIも成功しています。
 
 今回のproduction変更はCLI境界だけです。
 
@@ -126,7 +126,7 @@ CLI自動受け入れとmanual reader受け入れは証拠を分離します。E
 | 規格 | PASS。EPUBCheck 5.3.0が9/9、error/warning 0 |
 | 安全性 | PASS。source path破壊なし。失敗時に既存outputを変更しない |
 | 利用方法 | PASS。READMEとactual CLI option surface一致 |
-| 公開 | Stage 25 branch CI green。merge後にmain SHA/CIを最終記録する |
+| 公開 | PASS。Stage 25をmainへmerge済み。accepted merge commitのmain push CI成功 |
 | 読書 | 未実施。Thorium/calibreは別項目として残す |
 
-自動CLI checkpointは完了です。merge後はmainを固定し、manual reader確認を必要に応じて実施したうえで [工程6：browser/Android](06-browser-android.md) へ進みます。
+自動CLI checkpointは完了です。次はmanual reader確認を必要に応じて実施し、[工程6：browser/Android](06-browser-android.md) へ進みます。
