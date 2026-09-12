@@ -47,6 +47,8 @@ export const PRODUCTION_IMAGE_LIMITS = Object.freeze({
   maxPngBytes: 268_435_456,
 });
 
+const IMAGE_ASPECT_RATIO_EPSILON = 1e-6;
+
 type ImageOccurrenceLocation = Pick<InspectedImageOccurrence, "sourcePage" | "operatorIndex" | "occurrenceIndex">;
 
 function limitError(name: string, actual: number, limit: number, occurrence?: ImageOccurrenceLocation): Error {
@@ -130,6 +132,17 @@ function acceptedClip(status: ImageClipStatus, coverage: ImageClipCoverage): boo
 function validBounds(bounds: DisplayRect): boolean {
   return [bounds.left, bounds.top, bounds.right, bounds.bottom].every(Number.isFinite) &&
     bounds.right > bounds.left && bounds.bottom > bounds.top;
+}
+
+function requireAspectRatio(label: string, bounds: DisplayRect, resource: InspectedImageResource): void {
+  const displayWidth = bounds.right - bounds.left;
+  const displayHeight = bounds.bottom - bounds.top;
+  const left = displayWidth * resource.height;
+  const right = displayHeight * resource.width;
+  const relativeError = Math.abs(left - right) / Math.max(1, Math.abs(left), Math.abs(right));
+  if (relativeError > IMAGE_ASPECT_RATIO_EPSILON) {
+    throw new Error(`${label} has unsupported non-uniform image scaling (display ${displayWidth}x${displayHeight}, resource ${resource.width}x${resource.height})`);
+  }
 }
 
 function opCode(name: string): number | undefined {
@@ -318,6 +331,7 @@ export function extractProductionPageImages(
       resourcesBySourceId.set(paint.resourceId, sourceResource);
     }
 
+    requireAspectRatio(label, paint.displayBounds, sourceResource.resource);
     occurrences.push({
       sourcePage: page,
       operatorIndex: paint.operatorIndex,
