@@ -1,5 +1,7 @@
 import { defineConfig } from "@playwright/test";
 
+const localChromium = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE?.trim();
+
 export default defineConfig({
   testDir: "./browser-test",
   fullyParallel: false,
@@ -11,6 +13,7 @@ export default defineConfig({
     browserName: "chromium",
     serviceWorkers: "allow",
     viewport: { width: 360, height: 800 },
+    ...(localChromium ? { launchOptions: { executablePath: localChromium } } : {}),
   },
   webServer: {
     command: "npm run preview:browser -- --host 127.0.0.1 --port 4173",
