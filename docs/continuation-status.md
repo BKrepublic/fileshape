@@ -10,30 +10,25 @@ The 9 private corpus PDFs are not committed; their full-corpus checks remain loc
 
 ## Proven production baseline
 
-The hardened production PDF -> EPUB path has passed the complete private corpus with images enabled:
-
 ```text
 PDFs: 9/9
 EPUBs: 9/9
 Pages: 5141/5141
 Unresolved annotations preserved: 6387
 Total EPUB bytes: 17959256
-Outline entries: 250/250; outline PDFs: 6/6; unresolved 0
+Outline entries: 250/250
 Image occurrences: 4/4
 Unique PNG content resources: 1/1
-Interpolated image occurrences: 0
 XHTML/OPF/ZIP image references: consistent
-EPUBCheck 5.3.0: 9/9 passed with 0 errors / 0 warnings
+EPUBCheck 5.3.0: 9/9 passed (0 errors, 0 warnings)
 ```
 
-Known parser/model regression baseline remains:
+Known parser/model regression baseline:
 
 ```text
 ruby: 33 pages; mapped runs 880/880; exact candidates 373;
       unresolved retained 2; representative exact pairs 11/11
-semantic samples: 7/7
-Stage 2: 9/9 PDFs; 5141 pages; semantic output 5141/5141;
-         font-pair semantic match 223/223
+Stage 2: 9/9 PDFs; 5141 pages; semantic output 5141/5141
 ```
 
 ## Ruby evidence checkpoints
@@ -60,34 +55,10 @@ For `no-base`, most candidates are far outside supported geometry. 3,662 have th
 
 ## Other accepted/held scope
 
-- Stage 13a body heading mapping remains on hold: all 250 outline entries are page-level only. Page-level navigation is accepted fallback.
+- Stage 13a body heading mapping remains on hold; page-level navigation is accepted fallback.
 - Stage 14 reading-system implementation exists; manual real-reader acceptance remains.
 - Stages 15–20 image preservation and explicit source-backed cover are accepted. No automatic cover inference.
-- Complete private corpus has zero marked-content occurrences; do not invent special-tag rules for this corpus.
-
-## Current pipeline
-
-```text
-PDF
-  -> PDF.js extraction + exact source/glyph provenance
-  -> writing-orientation resolution
-  -> physical layout
-  -> semantic blocks
-  -> exact/unresolved ruby association
-  -> typed FileShape Document Model + outline navigation + image placement
-  -> unresolved-content policy
-  -> ordered text/image EPUB XHTML + CSS
-  -> OPF / nav / image resources / optional explicit cover marker / ZIP
-  -> .epub
-```
-
-User-facing CLI:
-
-```text
-npm run convert:epub -- input.pdf [output.epub]
-```
-
-Relevant options include unresolved-ruby policy, page progression, `--ruby on|off`, and `--cover-occurrence PAGE:OPERATOR:OCCURRENCE`.
+- Complete private corpus has zero marked-content occurrences.
 
 ## Important invariants
 
