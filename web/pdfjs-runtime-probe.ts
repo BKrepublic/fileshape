@@ -9,11 +9,6 @@ export type PdfJsProbeResult = {
   realWorkerPort: boolean;
 };
 
-type PdfWorkerWithPortConstructor = new (params: {
-  name?: string;
-  port?: Worker;
-}) => pdfjsLib.PDFWorker;
-
 class ProbeTimeoutError extends Error {
   constructor(readonly stage: string) {
     super(`PDF.js probe timed out during ${stage}.`);
@@ -35,9 +30,9 @@ async function within<T>(promise: Promise<T>, stage: string, timeoutMs = 8_000):
   }
 }
 
-async function settleCleanup(promise: Promise<unknown>): Promise<void> {
+async function settleCleanup(cleanup: () => unknown): Promise<void> {
   await Promise.race([
-    promise.catch(() => undefined),
+    Promise.resolve().then(cleanup).then(() => undefined, () => undefined),
     new Promise<void>((resolve) => setTimeout(resolve, 1_000)),
   ]);
 }
@@ -78,22 +73,20 @@ export async function probePdfJsRuntime(): Promise<PdfJsProbeResult> {
 
   pdfjsLib.GlobalWorkerOptions.workerSrc = workerLocation.href;
   let workerPort: Worker | undefined;
-  let worker: pdfjsLib.PDFWorker | undefined;
   let loadingTask: pdfjsLib.PDFDocumentLoadingTask | undefined;
   let document: pdfjsLib.PDFDocumentProxy | undefined;
   try {
+    // PDF.js's browser entry itself uses GlobalWorkerOptions.workerPort for an
+    // explicitly created module worker. Let getDocument own the PDFWorker
+    // wrapper so the public adapter does not depend on its constructor typing.
     workerPort = new Worker(workerLocation, { type: "module", name: "fileshape-pdfjs-probe" });
-    // pdfjs-dist 6.3.289 documents a Worker-valued `port`, but its generated
-    // constructor declaration narrows that field to null. Keep the cast at this
-    // adapter boundary rather than leaking a package declaration defect outward.
-    const PdfWorkerWithPort = pdfjsLib.PDFWorker as unknown as PdfWorkerWithPortConstructor;
-    const activeWorker = new PdfWorkerWithPort({ name: "fileshape-probe", port: workerPort });
-    worker = activeWorker;
-    await within(activeWorker.promise, "worker startup");
-    if (activeWorker.port !== workerPort) return unsupported("PDF.js did not retain the explicit real worker port.");
+    pdfjsLib.GlobalWorkerOptions.workerPort = workerPort;
+    if (pdfjsLib.GlobalWorkerOptions.workerPort !== workerPort) {
+      return unsupported("PDF.js did not retain the explicit real worker port.");
+    }
 
     const data = fixturePdf().slice();
-    loadingTask = pdfjsLib.getDocument({ data, worker: activeWorker, useSystemFonts: false, disableFontFace: true });
+    loadingTask = pdfjsLib.getDocument({ data, useSystemFonts: false, disableFontFace: true });
     document = await within(loadingTask.promise, "document load");
     if (document.numPages !== 1) return unsupported("PDF.js fixture page count was unexpected.", true);
     const page = await within(document.getPage(1), "page load");
@@ -111,12 +104,15 @@ export async function probePdfJsRuntime(): Promise<PdfJsProbeResult> {
     return unsupported(message, workerPort !== undefined);
   } finally {
     if (document) {
-      await settleCleanup(document.destroy());
+      await settleCleanup(() => document?.destroy());
     } else if (loadingTask) {
-      await settleCleanup(loadingTask.destroy());
-    } else {
-      worker?.destroy();
+      await settleCleanup(() => loadingTask?.destroy());
     }
-    workerPort?.terminate();
+    await settleCleanup(() => {
+      if (pdfjsLib.GlobalWorkerOptions.workerPort === workerPort) {
+        pdfjsLib.GlobalWorkerOptions.workerPort = null;
+      }
+      workerPort?.terminate();
+    });
   }
 }
