@@ -1,5 +1,23 @@
 # 工程4：未解決ルビを根拠に基づいて改善する
 
+## 2026-09-12 現在の checkpoint
+
+Task 3 は Stage 20 まで accepted。Task 4 は **4Aの全候補分類から開始**しています。Stage 21 で、各PDFを一度だけglyph付きinspectionし、private本文をreportへ書かずに全ruby候補を分類する `npm run inspect:ruby-refinement` を追加しました。
+
+現時点では association rule は変更していません。6,387件を減らす前に、開始点の exact/unresolved 全候補、reason、orientation、rotation、annotation glyph mapping、base alternatives、source range integrity を固定します。
+
+private corpusでのStage 21 acceptance command:
+
+```sh
+npm run inspect:ruby-refinement -- local-samples \
+  --output local-reports/<NEW_FILE>.json \
+  --expect-pdf-count 9 \
+  --expect-page-count 5141 \
+  --expect-unresolved-count 6387
+```
+
+期待値を弱めて通しません。`SOURCE_INTEGRITY_ISSUES=0` と `UNKNOWN_REASON_COUNT=0` も必須です。詳細は [Stage 21](../stage21-ruby-refinement-inventory.md) を参照してください。
+
 ## 目的と開始条件
 
 現在ページ末尾の注記として保存している候補のうち、実測glyphとsourceから一意に対応付けられるものを改善します。**6,387件を0件にすることは完了条件ではありません。** 正しい対応を増やし、不明な文字情報を失わないことを検証します。
@@ -11,6 +29,7 @@
 | ファイル | 見る内容 |
 | --- | --- |
 | [diagnose-ruby.ts](../../src/diagnose-ruby.ts) | 現行の候補診断。単一PDFと任意ページを指定できる |
+| [ruby-refinement-inventory.ts](../../src/ruby-refinement-inventory.ts) | Stage 21 全候補分類、安定candidate ID、privacy-safe aggregate |
 | [pdfjs-glyph-adapter.ts](../../src/pdfjs-glyph-adapter.ts)、[display-geometry.ts](../../src/display-geometry.ts) | glyph計測、状態再生、座標、未対応原因 |
 | [ruby-spans.ts](../../src/ruby-spans.ts) | 一意性、連続性、競合、未解決理由 |
 | [document-model.ts](../../src/document-model.ts)、[content-policy.ts](../../src/content-policy.ts) | source所有、exact／未解決の保存 |
@@ -18,16 +37,15 @@
 
 ## 4A：全候補を分類する
 
-1. 開始SHA、入力指紋、PDF.js／設定を固定します。既存診断は次の形式です。私的PDFのパスを引用符で囲み、ページは1始まりの整数を指定します。
+1. 開始SHA、入力指紋、PDF.js／設定を固定します。Stage 21では全件集計に `inspect:ruby-refinement` を使い、同じPDFをページごとに再読込しません。個別の意味確認だけ既存診断を使います。
 
    ```sh
    npm run diagnose:ruby -- 'local-samples/INPUT.pdf' 4
    ```
 
-   `INPUT.pdf`は実在する対象名へ置き換えます。このコマンドは指定ページだけを印字する場合もPDF全体をinspectionします。全件集計では同じPDFをページごとに再読込せず、PDFごとに一度取得した候補を集計します。
-2. 匿名PDF ID、sourceページ、annotationSourceRangesを候補識別の軸にし、glyph refs、base候補、代替候補、reasonを記録します。配列の何番目かだけを安定IDにしません。
+2. 匿名PDF ID、sourceページ、annotationSourceRangesを候補識別の軸にし、glyph refs、base候補、代替候補、reasonを記録します。配列の何番目かだけを安定IDにしません。Stage 21 candidate IDはPDF ID・page・annotation source rangesだけから作り、現在のreason/statusを含めません。
 3. 現行の未解決理由 `missing-glyph-geometry`、`no-base`、`ambiguous-base`、`noncontiguous-base`、`conflicting-annotations` で全件を集計し、候補総数とsource範囲の保存を照合します。未知の理由は別枠に表示し、集計から落としません。
-4. 各理由を、回転・書字方向・glyph欠落・重なり・離れ方などの構造的な特徴でさらに分けます。件数の多い群、全書籍にまたがる群、補助文字や競合など少数の難しい群から代表例を選び、選び方を先に記録します。
+4. 各理由を、回転・書字方向・glyph欠落/曖昧mapping・base alternative数・page glyph issueなどの構造的な特徴でさらに分けます。件数の多い群、全書籍にまたがる群、補助文字や競合など少数の難しい群から代表例を選び、選び方を先に記録します。
 5. 代表例について、raw text item、実測glyph、候補source、期待される親文字／注記、現在の不成立理由を比較します。目視確認で意味を補う場合は、その証拠と自動処理に利用できる構造的根拠を区別します。
 
 成果物は全件分類と、採用する修正候補／見送る候補の表です。理由別件数の上位だけを出して全6,387件の分析完了とはしません。

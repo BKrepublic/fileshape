@@ -1,12 +1,10 @@
 # FileShape continuation status
 
-Updated 2026-09-12 after final Stage 20 explicit-cover acceptance.
+Updated 2026-09-12 after Stage 21 private-corpus ruby inventory acceptance.
 
 ## Current GitHub baseline
 
-Stage 19 ordinary image preservation is merged to `main` through PR #11. Stage 20 explicit/source-backed cover selection has completed public CI, private default full-corpus regression, and private explicit-cover smoke acceptance on PR #12.
-
-After PR #12 is merged, new implementation work should start from the latest `main`.
+Stage 19 ordinary image preservation and Stage 20 explicit/source-backed cover selection are accepted. Stage 21 Task 4A ruby inventory is also accepted on `stage21-ruby-refinement-inventory`; merge this checkpoint before starting production ruby rule changes.
 
 The 9 private corpus PDFs are not committed; their full-corpus checks remain local-only.
 
@@ -28,20 +26,7 @@ XHTML/OPF/ZIP image references: consistent
 EPUBCheck 5.3.0: 9/9 passed with 0 errors / 0 warnings
 ```
 
-Stage 20 default conversion independently reproduced the same aggregate, proving that merely adding explicit-cover support does not alter default output.
-
-The Stage 20 private explicit-cover smoke also passed:
-
-```text
-COVER_SMOKE=PASS
-PDFS=9
-BODY_IMAGE_OCCURRENCES=1
-PNG_RESOURCES=1
-COVER_MARKERS=1
-BODY_OCCURRENCES_PRESERVED=yes
-PNG_RESOURCES_UNCHANGED=yes
-EPUBCheck 5.3.0: pass (0 errors, 0 warnings)
-```
+Stage 20 explicit-cover smoke also passed with one cover marker, unchanged body image occurrence, unchanged PNG resource count, and clean EPUBCheck.
 
 Known parser/model regression baseline remains:
 
@@ -61,44 +46,47 @@ All 250 outline entries in six PDFs were analyzed without using titles for body 
 
 ### Stage 14: reading-system CSS/resources
 
-Implemented deterministic packaged CSS, manifest registration, XHTML stylesheet links, reflow-safe horizontal/vertical rules, ruby/note styling, explicit page progression direction, and a synthetic reading-system fixture.
+Implemented deterministic packaged CSS, manifest registration, XHTML stylesheet links, reflow-safe horizontal/vertical rules, ruby/note styling, explicit page progression direction, and a synthetic reading-system fixture. Task 2 still needs manual real-reader validation.
 
-Task 2 is not fully accepted until real-reader validation is performed on selected desktop readers. Standards validation is not a substitute for that manual compatibility check.
+### Stages 15–20: images and cover
 
-### Stages 15–19: production images
+Stages 15–19 established and implemented source-backed image extraction, typed resource/occurrence provenance, geometry-backed placement, XHTML/OPF/ZIP packaging, production limits, package verification, and fail-closed handling of unsupported transforms/effects. The private corpus has four image occurrences that deduplicate to one PNG resource, and the final private regression passes 9/9 with EPUBCheck clean.
 
-The private corpus contains four accepted XObject image occurrences across 5,141 pages. All decode as 800x600 RGB24 and deduplicate to one PNG content resource. Stage 17 proved all four clips are exact rectangles containing the transformed image bounds; no current-corpus crop is required. Stage 18 transported resource/occurrence provenance into the typed model. Stage 19 implemented geometry-backed placement, XHTML output, OPF/ZIP packaging, production limits, atomic output replacement, and post-review hardening.
-
-Independent-review findings R1–R7 were addressed with fail-closed boundaries for unsupported non-uniform scaling, compositing, overlap and interpolation, plus model cross-checks, preflight limits and full-package image accounting. Final private Stage 19 acceptance passed 9/9 EPUBs and EPUBCheck clean. Stage 19 is accepted and merged.
-
-### Stage 20: explicit cover policy
-
-Stage 20 adds only explicit/source-backed cover designation. There is no cover inference.
+Stage 20 adds explicit cover designation via:
 
 ```text
 --cover-occurrence PAGE:OPERATOR:OCCURRENCE
 ```
 
-The selector resolves exact `DocumentImageOccurrence` provenance to an existing image resource. The selected manifest item receives `properties="cover-image"`; the original body occurrence remains in place; no synthetic cover XHTML/spine item is created; shared PNG bytes remain deduplicated. Missing, malformed or ambiguous selectors fail before output replacement.
+No automatic cover inference is performed. The selected existing image manifest item receives `properties="cover-image"`; its body occurrence remains; shared PNG bytes remain deduplicated. Stage 20 is accepted.
 
-Public unit/typecheck/real EPUBCheck CI is green. The fresh private default 9-PDF full regression reproduced the accepted Stage 19 aggregate, and the private explicit-cover smoke proved exactly one cover marker with unchanged body occurrence and PNG resource counts plus clean EPUBCheck.
+### Stage 21: ruby refinement inventory
 
-**Stage 20 is accepted.** Automatic cover inference remains intentionally absent.
+Stage 21 performs Task 4A classification only. It does not change `ruby-spans.ts` thresholds or promote any unresolved candidate.
+
+Accepted private inventory:
+
+```text
+PDFS=9
+PAGES=5141
+RUBY_CANDIDATES=23097
+EXACT_CANDIDATES=16710
+UNRESOLVED_CANDIDATES=6387
+UNRESOLVED_REASON_COUNTS={"no-base":5004,"ambiguous-base":577,"noncontiguous-base":792,"missing-glyph-geometry":14}
+ORIENTATION_COUNTS={"vertical":23079,"horizontal":18}
+ROTATION_COUNTS={"0":23045,"90":52}
+ANNOTATION_EVIDENCE_COUNTS={"all-exact-with-geometry":23083,"has-unmapped-glyph-mapping":14}
+ALTERNATIVE_BUCKET_COUNTS={"0":6197,"1":16900}
+PAGE_GLYPH_ISSUE_CANDIDATES=0
+SOURCE_INTEGRITY_ISSUES=0
+UNKNOWN_REASON_COUNT=0
+```
+
+Dominant unresolved feature: 4,960 candidates are `no-base|vertical|rot0|all-exact-with-geometry|alts:0|page-glyph-clean`. This is a diagnosis target, not a license to widen thresholds. The next checkpoint must measure geometric near misses before changing production association rules.
 
 ### marked content / 「特殊効果」
 
-The complete private corpus contains zero marked-content occurrences:
-
-```text
-MARKED_OCCURRENCES=0
-TAG_COUNTS={}
-WRAPPER_TAG_COUNTS={}
-POINT_TAG_COUNTS={}
-MAX_MARKED_DEPTH=0
-MARKED_ISSUES=0
-```
-
-Do not invent special-tag conversion rules for this corpus. Future unsupported presentation-only wrappers may be safely unwrapped only when child content is preserved; content-bearing/interactive/ambiguous behavior must not be silently deleted.
+The complete private corpus contains zero marked-content occurrences. Do not invent special-tag conversion rules for this corpus. Future unsupported presentation-only wrappers may be safely unwrapped only when child content is preserved; content-bearing/interactive/ambiguous behavior must not be silently deleted.
 
 ## Current pipeline
 
@@ -116,52 +104,30 @@ PDF
   -> .epub
 ```
 
-The user-facing CLI remains:
+User-facing CLI:
 
 ```text
 npm run convert:epub -- input.pdf [output.epub]
 ```
 
-Relevant current options include explicit unresolved-ruby policy, page-progression direction, `--ruby on|off`, and `--cover-occurrence PAGE:OPERATOR:OCCURRENCE`.
+Relevant options include unresolved-ruby policy, explicit page progression direction, `--ruby on|off`, and `--cover-occurrence PAGE:OPERATOR:OCCURRENCE`.
 
 ## Important invariants
 
-Do not introduce behavior keyed to website, filename, URL, PDF Creator/Producer, generator name, font name, N-code, particular character appearance, or visual guesses about a cover. Parser decisions must come from PDF structure, geometry, ordering and provenance.
-
-Do not loosen existing verifiers or change expected values merely to obtain green tests. Preserve original `TextItem.str` and source references as source truth. Never split ligatures or supplementary Unicode by guessed character/glyph widths. Uncertain ruby, unsupported images, ambiguous effects and cover designation must remain explicit rather than disappearing or being guessed.
-
-Do not commit private PDFs, extracted private images, source text excerpts, generated private EPUBs, or local reports.
-
-## Regression commands
-
-During development:
-
-```text
-npm test
-```
-
-For XHTML/CSS/package changes:
-
-```text
-npm test
-npm run verify:epubcheck
-npm run verify:epub -- --epubcheck --report-dir <new-local-report-dir>
-```
-
-For parser/model/ruby/source-ownership changes, also run:
-
-```text
-npm run verify:ruby
-npm run verify:stage2
-```
+- no website, filename, URL, Creator/Producer, generator, font-name, N-code, particular character appearance, or title matching heuristics;
+- parser/model decisions come from PDF structure, geometry, ordering and provenance;
+- preserve original `TextItem.str` and source ownership;
+- never split ligatures or supplementary Unicode by guessed widths;
+- unresolved ruby must stay explicit unless a generic source-backed rule proves a unique base;
+- do not weaken verifiers or rewrite expectations merely to obtain green results;
+- do not commit private PDFs, extracted images, source text excerpts, generated private EPUBs, or local reports.
 
 ## Next work
 
-Current priority order:
+1. **Task 4B geometric near-miss analysis**: measure why unresolved groups fail current cross-distance, inline-overlap, continuity and uniqueness gates. Keep it read-only first. The 5,004 `no-base` group is the primary population; the other reasons are controls, not merged into it.
+2. If a generic structural pattern establishes a safe improvement, add positive and adversarial negative fixtures before changing `ruby-spans.ts`, then compare source-stable candidate IDs before/after across the full corpus.
+3. **Task 2 real-reader acceptance** remains manual/environment-dependent and does not block independent Task 4 work.
+4. **Task 5 CLI final acceptance** follows accepted Task 4 scope and real-reader conclusions.
+5. Browser/Android follows CLI acceptance.
 
-1. **Task 4 unresolved-ruby refinement**: 6,387 unresolved annotations remain. Start with a privacy-safe full-corpus classification/inventory checkpoint before changing association rules. Any promoted exact ruby must be source-backed; ambiguous cases remain explicit.
-2. **Task 2 real-reader acceptance**: Stage 14/19/20 implementation exists, but selected real readers still need manual compatibility validation for vertical text, ruby, unresolved notes, images and cover metadata. This environment-dependent task does not block independent Task 4 work.
-3. **Task 5 CLI final acceptance**: integrate completed/accepted scope, run the full validation matrix, document known limits, and freeze the supported CLI contract.
-4. **Browser/Android adapter** follows CLI acceptance and is not part of the CLI completion condition.
-
-Task 1 body heading/section mapping remains on hold until genuinely new PDF-native source evidence appears. Do not block independent Tasks 2/4/5 on an evidence source the current corpus does not contain.
+Task 1 body heading/section mapping remains on hold until genuinely new PDF-native source evidence appears.
