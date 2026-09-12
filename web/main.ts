@@ -107,4 +107,11 @@ function showProbe(result: PdfJsProbeResult): void {
   runtimeMessage.textContent = result.message;
 }
 
-void Promise.all([registerOfflineShell(), probePdfJsRuntime().then(showProbe)]);
+void registerOfflineShell();
+void probePdfJsRuntime().then(showProbe, () => {
+  showProbe({
+    state: "unsupported",
+    message: "PDF.js のブラウザ実行環境を確認できませんでした。",
+    realWorkerPort: false,
+  });
+});
