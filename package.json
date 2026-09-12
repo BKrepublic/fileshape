@@ -37,8 +37,9 @@
     "convert:epub": "tsx src/pdf-to-epub.ts",
     "typecheck": "tsc --noEmit",
     "test": "tsx src/test-runner.ts",
-    "dev:browser": "vite --config vite.config.ts",
-    "build:browser": "tsc -p tsconfig.browser.json && vite build --config vite.config.ts",
+    "prepare:browser-assets": "tsx src/prepare-browser-pdfjs-assets.ts",
+    "dev:browser": "npm run prepare:browser-assets && vite --config vite.config.ts",
+    "build:browser": "npm run prepare:browser-assets && tsc -p tsconfig.browser.json && vite build --config vite.config.ts",
     "preview:browser": "vite preview --config vite.config.ts",
     "verify:browser-static": "node --import tsx src/verify-browser.ts",
     "verify:browser": "npm run build:browser && npm run verify:browser-static && playwright test --config playwright.config.ts"
