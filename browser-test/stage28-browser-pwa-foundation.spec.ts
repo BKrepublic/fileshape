@@ -50,17 +50,29 @@ function assertLocalRequests(requests: string[], pageUrl: string, sourceNames: s
   expect(requests.every((url) => sourceNames.every((sourceName) => !url.includes(sourceName)) && !url.includes("%PDF"))).toBeTruthy();
 }
 
+function trackBrowserDiagnostics(page: import("@playwright/test").Page): {
+  consoleErrors: string[];
+  pageErrors: string[];
+  httpErrors: string[];
+  requests: string[];
+} {
+  const consoleErrors: string[] = [];
+  const pageErrors: string[] = [];
+  const httpErrors: string[] = [];
+  const requests: string[] = [];
+  page.on("console", (message) => { if (message.type() === "error") consoleErrors.push(message.text()); });
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  page.on("response", (response) => { if (response.status() >= 400) httpErrors.push(`${response.status()} ${response.url()}`); });
+  page.on("request", (request) => requests.push(request.url()));
+  return { consoleErrors, pageErrors, httpErrors, requests };
+}
+
 test("browser worker converts the public text fixture byte-identically and remains local/offline", async ({ page, context }) => {
   test.setTimeout(60_000);
   const sourceName = "stage29-public.pdf";
   const fixture = pdfBytes();
   const expected = await convertPdfBytesToEpub(new Uint8Array(fixture), sourceName, { modified: MODIFIED });
-  const consoleErrors: string[] = [];
-  const pageErrors: string[] = [];
-  const requests: string[] = [];
-  page.on("console", (message) => { if (message.type() === "error") consoleErrors.push(message.text()); });
-  page.on("pageerror", (error) => pageErrors.push(error.message));
-  page.on("request", (request) => requests.push(request.url()));
+  const diagnostics = trackBrowserDiagnostics(page);
 
   await page.goto("/");
   await expect(page.locator("#page-title")).toHaveText("PDFを、手元でEPUBへ。");
@@ -77,9 +89,10 @@ test("browser worker converts the public text fixture byte-identically and remai
   const onlineBytes = await convertFixture(page, fixture, sourceName);
   expect(Buffer.compare(onlineBytes, Buffer.from(expected.bytes))).toBe(0);
 
-  assertLocalRequests(requests, page.url(), [sourceName]);
-  expect(consoleErrors).toEqual([]);
-  expect(pageErrors).toEqual([]);
+  assertLocalRequests(diagnostics.requests, page.url(), [sourceName]);
+  expect(diagnostics.httpErrors).toEqual([]);
+  expect(diagnostics.consoleErrors).toEqual([]);
+  expect(diagnostics.pageErrors).toEqual([]);
 
   // The same real conversion must still work with networking disabled.
   await context.setOffline(true);
@@ -90,8 +103,9 @@ test("browser worker converts the public text fixture byte-identically and remai
   expect(Buffer.compare(offlineBytes, Buffer.from(expected.bytes))).toBe(0);
   await context.setOffline(false);
 
-  expect(consoleErrors).toEqual([]);
-  expect(pageErrors).toEqual([]);
+  expect(diagnostics.httpErrors).toEqual([]);
+  expect(diagnostics.consoleErrors).toEqual([]);
+  expect(diagnostics.pageErrors).toEqual([]);
 });
 
 test("browser worker exercises production PNG deflate byte-identically", async ({ page }) => {
@@ -99,18 +113,14 @@ test("browser worker exercises production PNG deflate byte-identically", async (
   const sourceName = "stage29-image.pdf";
   const fixture = imagePdfBytes({ includeInline: false, rotation: 0 });
   const expected = await convertPdfBytesToEpub(new Uint8Array(fixture), sourceName, { modified: MODIFIED });
-  const requests: string[] = [];
-  const consoleErrors: string[] = [];
-  const pageErrors: string[] = [];
-  page.on("request", (request) => requests.push(request.url()));
-  page.on("console", (message) => { if (message.type() === "error") consoleErrors.push(message.text()); });
-  page.on("pageerror", (error) => pageErrors.push(error.message));
+  const diagnostics = trackBrowserDiagnostics(page);
 
   await page.goto("/");
   await expectRuntimeSupported(page);
   const browserBytes = await convertFixture(page, fixture, sourceName);
   expect(Buffer.compare(browserBytes, Buffer.from(expected.bytes))).toBe(0);
-  assertLocalRequests(requests, page.url(), [sourceName]);
-  expect(consoleErrors).toEqual([]);
-  expect(pageErrors).toEqual([]);
+  assertLocalRequests(diagnostics.requests, page.url(), [sourceName]);
+  expect(diagnostics.httpErrors).toEqual([]);
+  expect(diagnostics.consoleErrors).toEqual([]);
+  expect(diagnostics.pageErrors).toEqual([]);
 });
