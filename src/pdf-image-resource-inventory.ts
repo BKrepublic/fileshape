@@ -120,7 +120,7 @@ export async function inspectPdfImageResources(inputPath: string): Promise<PdfIm
             const dedupeKey = `${pageNumber}:${paint.resourceId}`;
             publicResource = seenRefs.get(dedupeKey);
             if (!publicResource) {
-              const extracted = resolvePdfImageResource(store, paint.resourceId);
+              const extracted = await resolvePdfImageResource(store, paint.resourceId);
               if ("status" in extracted) {
                 publicResource = {
                   page: pageNumber,
