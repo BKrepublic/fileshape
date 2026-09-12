@@ -1,6 +1,6 @@
 # FileShape continuation status
 
-Updated 2026-09-12 during Stage 26 Task 6A implementation.
+Updated 2026-09-12 after Stage 26 Task 6A acceptance and merge.
 
 ## Current GitHub baseline
 
@@ -16,7 +16,7 @@ The `main` push CI for that merge commit completed successfully. Later documenta
 
 The 9 private corpus PDFs are not committed; their full-corpus checks remain local-only.
 
-Stage 26 is the first bounded Task 6A checkpoint. It adds byte-input inspection/conversion seams, makes the PDF.js resource configuration explicit, and changes the Node CLI adapter to read the source once. Local public verification passed with 202/202 tests and pinned EPUBCheck 5/5 integration tests. GitHub CI and merge remain required before Stage 26 is accepted.
+Stage 26 is the first accepted Task 6A checkpoint. It adds byte-input inspection/conversion seams, makes the PDF.js resource configuration explicit, and changes the Node CLI adapter to read the source once. PR #19 was merged as `fca44cf7e4fee433951801cbb243668af671cd52`; its PR CI and the merge commit's `main` push CI both passed.
 
 ## Accepted CLI checkpoint
 
@@ -111,7 +111,7 @@ Stages 22–24 found no generic source-backed production rule that could safely 
 
 ## Next work
 
-1. Complete Stage 26 GitHub CI and merge before building on the new byte boundary.
+1. Start the next bounded Task 6A checkpoint from the latest `main`; do not reset to the Stage 26 implementation or merge SHA.
 2. Manual reading-system acceptance is the only open CLI-adjacent validation: Thorium and calibre should be checked explicitly on representative vertical/horizontal/ruby/note/image/navigation cases. If unavailable, keep the status as unperformed rather than inventing a pass.
 3. Continue Task 6A by measuring the transitive runtime graph from the byte APIs, then design environment-supplied hashing, PNG compression, PDF.js resource/runtime loading, progress, cancellation, and diagnostics. Do not start a large UI before those contracts and a browser fixture are reviewed.
 4. Do not reopen Task 4 or widen ruby thresholds without new generic source-backed evidence.

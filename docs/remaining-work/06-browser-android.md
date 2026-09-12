@@ -8,7 +8,7 @@
 
 ## 現在のcheckpoint
 
-[Stage 26 byte-oriented conversion boundary](../stage26-byte-core-boundary.md) で、byte入力のinspection/conversion API、明示的なPDF.js resource config、Node CLIの一回読込、byte ownership、固定metadataでのpath/byte出力一致を実装しました。ローカル公開検証は202/202 testsとpinned EPUBCheck 5/5 integration testsに合格しています。GitHub CIとmergeが完了するまではaccepted扱いにしません。
+[Stage 26 byte-oriented conversion boundary](../stage26-byte-core-boundary.md) で、byte入力のinspection/conversion API、明示的なPDF.js resource config、Node CLIの一回読込、byte ownership、固定metadataでのpath/byte出力一致を実装しました。ローカル公開検証は202/202 testsとpinned EPUBCheck 5/5 integration testsに合格し、PR #19とmerge後の`main` CIも成功したためacceptedです。
 
 この時点でも変換runtimeはbrowser-readyではありません。変換graphにはNode SHA-256、Node zlib deflate、Node由来のPDF.js資源path、pinned legacy PDF.js importが残っています。worker、進捗、キャンセル、診断、browser bundle、保存UI、large-file policyも未実装です。次checkpointはこのtransitive runtime境界を測定して契約化し、browser fixtureへ進める最小構成を決めます。
 

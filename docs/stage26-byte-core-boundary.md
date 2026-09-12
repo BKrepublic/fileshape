@@ -1,6 +1,6 @@
 # Stage 26: byte-oriented conversion boundary
 
-Status: implemented and locally verified; GitHub CI/merge pending
+Status: accepted and merged
 
 ## Purpose
 
@@ -153,3 +153,13 @@ git diff --check: PASS
 ```
 
 No private PDF, generated private EPUB, or local report is part of this checkpoint. Private corpus parity remains required before a later browser/Android acceptance claim.
+
+GitHub acceptance:
+
+```text
+IMPLEMENTATION_COMMIT: c57240591bdefd23970add65c0a3cd695a79d015
+PR: #19
+MERGE_COMMIT: fca44cf7e4fee433951801cbb243668af671cd52
+PR_CI: SUCCESS
+MAIN_PUSH_CI: SUCCESS
+```
