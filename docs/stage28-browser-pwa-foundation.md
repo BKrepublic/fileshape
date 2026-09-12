@@ -1,16 +1,23 @@
 # Stage 28: browser/PWA foundation
 
-Status: proposed for Sol-Luna review
+Status: accepted and merged in PR #21.
+
+Accepted merge commit:
+
+```text
+b5100164d95d623c7c8631e6ff265686f10320a3
+```
+
+GitHub Actions PR CI run #143 and the merge commit `main` push CI run #144 both completed successfully.
 
 ## Purpose
 
 Stage 28 starts the browser-first path selected after the accepted Stage 27 runtime boundary. It creates a small, installable, offline-capable PWA shell and proves the pinned PDF.js browser build with a real module worker. It also fixes the browser conversion message contract before the remaining shared-core blockers are replaced.
 
-This checkpoint does **not** claim that browser conversion is available. The accepted conversion graph still reaches `node:crypto` and `node:zlib`, and the browser PDF.js CMap/font/WASM resource package has not yet been accepted against the private corpus. The UI must expose that state plainly and keep its conversion action disabled. No PDF bytes may be uploaded or sent to a backend.
+This checkpoint does **not** claim that browser conversion is available. The accepted conversion graph still reaches `node:crypto` and `node:zlib`, and the browser PDF.js CMap/font/WASM resource package has not yet been accepted against the private corpus. The UI exposes that state plainly and keeps its conversion action disabled. No PDF bytes are uploaded or sent to a backend.
 
 ## Accepted baseline
 
-- Start from `main` at `641284fd21d9f9af3f52c1b99304225b28070d19` or later.
 - Stage 25 CLI acceptance, Stage 26 byte ownership, and Stage 27 module boundaries remain accepted.
 - Stages 13 and 15-24 remain closed. Do not change PDF interpretation, ruby promotion, image/cover policy, EPUB serialization, or CLI behavior.
 - Manual Thorium and calibre validation remains pending.
@@ -20,9 +27,9 @@ This checkpoint does **not** claim that browser conversion is available. The acc
 
 - PDF.js documents a modern browser display build and a separate `pdf.worker.mjs`. Its API accepts `Uint8Array` data, may transfer ownership of that data to its worker, exposes `PDFWorker.port`, and provides `destroy()` cleanup. Stage 28 uses those public surfaces and a defensive fixture copy.
 - Browser `ArrayBuffer` ownership can be transferred through `postMessage`. The future conversion contract therefore transfers one owned buffer into a dedicated conversion worker rather than cloning large PDFs repeatedly.
-- A web app manifest describes the installed app, while a service worker and Cache Storage provide the offline shell. The service worker is optional at runtime: inability to register it must be diagnosed without breaking local file selection.
-- Vite is selected as a development/build dependency for a framework-free TypeScript app. Its production build is a static `dist/browser` directory. Hosting and GitHub Pages deployment remain outside this checkpoint.
-- Material Design 3 is a visual and interaction reference, implemented with local CSS design tokens and semantic HTML. Do not add a component framework or network font dependency for this shell.
+- A web app manifest describes the installed app, while a service worker and Cache Storage provide the offline shell. The service worker is optional at runtime: inability to register it is diagnosed without breaking local file selection.
+- Vite is used as a development/build dependency for a framework-free TypeScript app. Its production build is a static `dist/browser` directory. Hosting and GitHub Pages deployment remain outside this checkpoint.
+- Material Design 3 is a visual and interaction reference, implemented with local CSS design tokens and semantic HTML. No component framework or network font dependency was added.
 
 Primary references:
 
@@ -36,7 +43,7 @@ Primary references:
 
 ## Scope and repository layout
 
-Add a framework-free app under `web/` and keep browser-only code out of the accepted Node adapters.
+A framework-free app lives under `web/`, while browser-only code stays out of the accepted Node adapters.
 
 ```text
 web/
@@ -52,7 +59,6 @@ src/
   browser-conversion-contract.ts
 test/
   browser-conversion-contract.test.ts
-  stage28-browser-pwa-foundation.test.ts
 browser-test/
   stage28-browser-pwa-foundation.spec.ts
 playwright.config.ts
@@ -60,26 +66,26 @@ vite.config.ts
 tsconfig.browser.json
 ```
 
-The icon PNGs must be deterministic repository assets with the declared dimensions. Keep their source shape simple and legible at small sizes; no external font or image request is allowed.
+The icon PNGs are deterministic repository assets with the declared dimensions. No external font or image request is required.
 
-Add scripts with these responsibilities:
+Scripts:
 
 ```text
 dev:browser       # Vite development server
 build:browser     # browser typecheck followed by Vite production build
 preview:browser   # local preview of dist/browser only
-verify:browser    # build plus deterministic static PWA/bundle verifier
+verify:browser    # build, deterministic static verifier, and Playwright Chromium test
 ```
 
-`npm test` must continue to run the existing Node typecheck and all unit tests. `verify:browser` must run the static verifier and Playwright Chromium test against the production preview. Add Vite and Playwright as pinned development dependencies. CI must install the pinned Playwright Chromium binary and run `npm run verify:browser` after `npm test`, so neither the bundle nor the real-browser path can silently rot.
+`npm test` continues to run the existing Node typecheck and all unit tests. CI installs the pinned Playwright Chromium binary and runs `npm run verify:browser`, so neither the bundle nor the real-browser path can silently rot.
 
 ## Browser conversion contract
 
-`src/browser-conversion-contract.ts` is environment-neutral and must not import DOM, Worker, Node, PDF.js, or FileShape implementation modules. Define discriminated message types for one request at a time.
+`src/browser-conversion-contract.ts` is environment-neutral and does not import DOM, Worker, Node, PDF.js, or FileShape implementation modules. It defines discriminated message types for one request at a time.
 
-The `start.options` object is an explicitly serializable mirror of the accepted public CLI surface. Every field is optional: `title`, `creator`, `language`, `identifier`, `modified`, and `titlePrefix` are strings; `rubyMode` is `"on" | "off"`; `unresolvedRubyPolicy` is `"error" | "preserve-as-page-note"`; `pageProgressionDirection` is `"ltr" | "rtl"`; and `coverOccurrence` contains safe integers `sourcePage >= 1`, `operatorIndex >= 0`, and `occurrenceIndex >= 0`. Unknown keys, invalid enum values, invalid timestamps, empty values where the production serializer rejects them, and unsafe cover integers must be rejected. This mirror is tested against the exported `PdfToEpubOptions` assignment shape so drift is a compile failure.
+The `start.options` object is an explicitly serializable mirror of the accepted public CLI surface. Every field is optional: `title`, `creator`, `language`, `identifier`, `modified`, and `titlePrefix` are strings; `rubyMode` is `"on" | "off"`; `unresolvedRubyPolicy` is `"error" | "preserve-as-page-note"`; `pageProgressionDirection` is `"ltr" | "rtl"`; and `coverOccurrence` contains safe integers `sourcePage >= 1`, `operatorIndex >= 0`, and `occurrenceIndex >= 0`. Unknown keys, invalid enum values, invalid timestamps, empty values where the production serializer rejects them, and unsafe cover integers are rejected. This mirror is tested against the exported `PdfToEpubOptions` assignment shape so drift is a compile failure.
 
-Request IDs must match `^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`. A source name must use 1-255 UTF-16 code units and must not contain `/`, `\\`, or NUL; this preserves the accepted core rule while imposing a bounded browser-message label. The start buffer must be a non-empty `ArrayBuffer`.
+Request IDs match `^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`. A source name uses 1-255 UTF-16 code units and must not contain `/`, `\\`, or NUL; this preserves the accepted core rule while imposing a bounded browser-message label. The start buffer must be a non-empty `ArrayBuffer`.
 
 Messages are:
 
@@ -95,72 +101,60 @@ One worker instance owns zero or one active request and is single-use after that
 3. A matching `cancel` while active moves the request to cancelling. After that command is processed, no new progress or success event is valid; cleanup ends with exactly one `cancelled` event. A cancel with no matching active request is ignored, so it cannot manufacture a second terminal event.
 4. `succeeded`, `cancelled`, and `failed` are terminal. The main-thread owner ignores later events, revokes result URLs if any, and terminates the worker. A new conversion requires a new worker instance.
 
-The contract must reject non-integer, negative, or regressing progress, a changed known total, `completed > total`, events before `accepted`, and terminal events followed by further events. It must preserve “total unknown” instead of inventing a percentage. Unit tests must cover interleaved request IDs and the cancel/success ordering rule. ArrayBuffer transfer and termination semantics must be documented, but Stage 28 must not implement a fake conversion worker or mark cancellation/download as operational.
+The contract rejects non-integer, negative, or regressing progress, a changed known total, `completed > total`, events before `accepted`, and terminal events followed by further events. It preserves “total unknown” instead of inventing a percentage. Unit tests cover interleaved request IDs and the cancel/success ordering rule. ArrayBuffer transfer and termination semantics are documented, but Stage 28 does not implement a fake conversion worker or mark cancellation/download as operational.
 
 ## Real PDF.js browser probe
 
-`web/pdfjs-runtime-probe.ts` must use `pdfjs-dist/build/pdf.mjs` and import `pdfjs-dist/build/pdf.worker.mjs?url` so Vite emits and rewrites the worker asset under the configured application base. Set `GlobalWorkerOptions.workerSrc` to that imported URL, resolve it against `location.href`, and reject it unless the result has the current page origin. It must:
+`web/pdfjs-runtime-probe.ts` uses `pdfjs-dist/build/pdf.mjs` and imports `pdfjs-dist/build/pdf.worker.mjs?url`, so Vite emits and rewrites the worker asset under the configured application base. `GlobalWorkerOptions.workerSrc` points to that imported URL and the resolved URL is rejected unless it has the current page origin.
 
-1. create a public `PDFWorker`, await it, and require a real `Worker` port rather than accepting PDF.js fake-worker fallback;
-2. load a deterministic embedded one-page PDF fixture from a fresh `Uint8Array`;
-3. verify page count and expected text from the display API;
-4. destroy the PDF loading task/document and PDF worker in `finally` paths;
-5. return structured, user-safe diagnostics without exposing stack traces in the page.
+The probe:
 
-The probe proves the modern PDF.js browser/worker bundle only. It must not import `pdf-inspector-core.ts` or `pdf-to-epub-core.ts`, and it must not be described as CLI/browser output parity. CMap, standard-font, WASM, SHA-256, and PNG deflate portability remain explicit blockers for the next checkpoint.
+1. creates a public `PDFWorker`, awaits it, and requires a real `Worker` port rather than accepting PDF.js fake-worker fallback;
+2. loads a deterministic embedded one-page PDF fixture from a fresh `Uint8Array`;
+3. verifies page count and expected text from the display API;
+4. destroys the PDF loading task/document and PDF worker in `finally` paths;
+5. returns structured, user-safe diagnostics without exposing stack traces in the page.
+
+The probe proves the modern PDF.js browser/worker bundle only. It does not import `pdf-inspector-core.ts` or `pdf-to-epub-core.ts`, and it is not CLI/browser output parity. CMap, standard-font, WASM, SHA-256, and PNG deflate portability remain explicit blockers for the next checkpoint.
 
 ## PWA and local-data behavior
 
-- Configure Vite with `root: "web"`, `base: "./"`, `publicDir: "public"`, and `build.outDir: "../dist/browser"`. The built HTML, manifest, worker URL, and service-worker registration must work when the directory is mounted below an arbitrary origin path.
-- `app.webmanifest` must contain stable `id: "./"`, `name`, `short_name`, `start_url: "."`, `scope: "."`, `display: "standalone"`, background/theme colors, and 192/512 icons.
-- Build the application base as `new URL(import.meta.env.BASE_URL, location.href)`. Register `new URL("service-worker.js", appBase)` with `scope: appBase.pathname` only on secure contexts/localhost and report registration failure non-fatally. “Root” in this checkpoint means the deployed application root, never the whole origin root.
-- Cache only same-origin GET app resources. Do not cache, persist, log, upload, or fetch the user-selected PDF.
-- The production build must remain usable at a relative base path. The service worker must delete its own obsolete versioned caches and provide an app-shell navigation fallback after one successful online load.
-- Add this CSP as an HTML `meta http-equiv="Content-Security-Policy"`: `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'self'; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'`. Header-only directives are outside this static checkpoint. Do not add analytics, telemetry, a CDN, a backend endpoint, or external font/image requests.
-- Selecting a PDF may read only its name, size, and MIME/type validation. Keep the `File` object in page memory; clear the input and reference on reset.
+- Vite uses `root: "web"`, `base: "./"`, `publicDir: "public"`, and `build.outDir: "../dist/browser"`. The built HTML, manifest, worker URL, and service-worker registration work when the directory is mounted below an arbitrary origin path.
+- `app.webmanifest` contains stable `id: "./"`, `name`, `short_name`, `start_url: "."`, `scope: "."`, `display: "standalone"`, background/theme colors, and 192/512 icons.
+- The application base is built as `new URL(import.meta.env.BASE_URL, location.href)`. The service worker is registered under the deployed application root only.
+- Cache handling is same-origin GET app resources only. User-selected PDF bytes are not cached, persisted, logged, uploaded, or fetched.
+- The production build remains usable at a relative base path. The service worker deletes its own obsolete versioned caches and provides an app-shell navigation fallback after one successful online load.
+- The static HTML CSP is `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'self'; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'`.
+- No analytics, telemetry, CDN, backend endpoint, or external font/image request was added.
 
-## Mobile-first Material Design 3 shell
+## Mobile-first shell
 
-The first useful viewport is 360 CSS pixels wide. Use a single column up to 599 px, add spacing at 600 px, and cap readable content near 760 px. Desktop is the widened form of the same flow.
+The first useful viewport is 360 CSS pixels wide. The shell is single-column through 599 px and widens the same flow on desktop. It contains the FileShape app bar/local-processing indicator, PDF selection, selected-file metadata, collapsed advanced settings, runtime/PWA status, and a disabled “EPUBに変換” primary action with a reason.
 
-The shell contains:
-
-1. a compact top app bar with “FileShape” and a local-processing status chip;
-2. a short title and explanation;
-3. a file selection surface with a native visible file input/label accepting PDF;
-4. selected-file name and byte size;
-5. a collapsed advanced-settings section showing the already accepted CLI concepts without implying they are active yet;
-6. a runtime status surface containing the PDF.js worker probe result, PWA/offline capability, and the exact remaining blockers;
-7. a full-width primary “EPUBに変換” action that remains disabled with an adjacent explanation until the real conversion worker is connected.
-
-Use Material 3-like color roles, surface hierarchy, rounded shapes, tonal emphasis, and type scale as CSS custom properties. Keep the screen quiet: no decorative hero, carousel, gradient spectacle, or animated progress. Controls need at least a 48 px interactive box, visible keyboard focus, semantic labels, strong contrast, and `aria-live` status text. Honor `prefers-reduced-motion`; motion is limited to short state transitions that are not required to understand status. Support light and dark system color schemes.
-
-The UI must never say conversion is ready merely because the PDF.js probe passed. Runtime states are `checking`, `supported`, and `unsupported`; conversion availability is separately fixed to `unavailable` in this checkpoint.
+Controls use semantic labels, 48 px minimum interactive boxes, visible focus, reduced-motion handling, light/dark system schemes, and local CSS design tokens. The UI never says conversion is ready merely because the PDF.js probe passed.
 
 ## Verification and acceptance
 
-Add meaningful tests and a deterministic verifier for:
-
-1. conversion message validation, monotonic progress, unknown totals, request isolation, terminal-state enforcement, and transfer ownership documentation;
-2. production browser typecheck and Vite build;
-3. built HTML linking the manifest and local entry assets, valid manifest fields and real 192/512 PNG dimensions, service-worker registration, and relative-base compatibility;
-4. no `node:` imports or Node global shims in the emitted JavaScript, no HTTP(S) runtime asset URLs, and no import of the accepted conversion/inspection cores from the browser entry graph;
-5. semantic file input, disabled conversion action, live status region, 360 px single-column CSS, 48 px controls, visible focus, reduced-motion rule, and light/dark token sets;
-6. the real PDF.js probe result in Playwright Chromium served from the production preview over localhost, including a real worker port, one page, expected fixture text, and no console/page errors;
-7. an online load followed by an offline reload of the app shell after service-worker activation;
-8. a network record showing no request containing the selected fixture bytes and no non-local runtime requests.
-
-Required automated verification:
+Accepted automated verification on PR head `dfacd55017011f95a7f3c6edddb541c4b87d8185` and merge commit `b5100164d95d623c7c8631e6ff265686f10320a3`:
 
 ```text
-npm test
-npm run verify:runtime-deps
-npm run verify:browser
-npm run verify:epubcheck
-git diff --check
+npm test                         PASS (212/212)
+npm run verify:runtime-deps      PASS
+npm run verify:browser           PASS
+npm run verify:epubcheck         PASS (5/5)
+git diff --check                 PASS
 ```
 
-`verify:browser` must fail if Chromium is unavailable or any item 2-8 fails. The same command runs locally and in CI; there is no static-only green acceptance path. The Playwright test itself is the reviewable evidence, while the final local and GitHub Actions results are recorded in this document after implementation. Private `local-samples/` are not required because this checkpoint does not invoke the FileShape conversion core or claim corpus parity.
+`verify:browser` includes the production browser typecheck and Vite build, deterministic static PWA verifier, real PDF.js module worker in pinned Playwright Chromium, one-page text extraction fixture, no console/page errors, service-worker activation, online-then-offline app-shell reload, and network assertions that the selected fixture is not uploaded and no non-local runtime request is made.
+
+GitHub Actions evidence:
+
+```text
+PR CI:   run #143  success
+main CI: run #144  success
+```
+
+Private `local-samples/` are not required for Stage 28 because this checkpoint does not invoke the FileShape conversion core or claim corpus parity.
 
 ## Out of scope and next checkpoint
 
@@ -171,4 +165,4 @@ git diff --check
 - Hosting, GitHub Pages publication, install-prompt promotion, Android packaging, TWA, WebView, or store submission.
 - Manual Thorium/calibre acceptance.
 
-The next design must use the Stage 28 real-browser evidence to replace or inject SHA-256 and PNG deflate without changing CLI semantics, package the required PDF.js resources, and connect one public-fixture conversion through the dedicated worker contract. Private-corpus verification becomes mandatory before CLI/browser parity or supported input limits are accepted.
+Stage 29 must use the accepted Stage 28 real-browser evidence to replace or inject SHA-256 and PNG deflate without changing CLI semantics, package the required PDF.js resources, and connect one public-fixture conversion through the dedicated worker contract. Private-corpus verification becomes mandatory before CLI/browser parity or supported input limits are accepted.
