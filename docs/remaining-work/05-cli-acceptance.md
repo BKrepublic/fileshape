@@ -1,57 +1,132 @@
 # 工程5：CLI版の最終受け入れ
 
-## 目的と開始条件
+## 現在地
 
-個別に成功した機能を同じコミット・入力・設定で統合検証し、CLI版の使い方と対応限界を確定します。[一覧](README.md) の工程1〜4が受け入れ済みであることを確認します。未完了を残す場合は、限定する完成範囲をユーザーが明示的に承認した記録が必要です。手順書の存在や調査の終了だけでは開始条件を満たしません。
+**自動受け入れは完了済みです。** Stage 25 private acceptance は branch HEAD `fcc4dff39e5ce6e1c10e5cf2568be8afbe6fafbd` で全項目PASSしました。
 
-## 5A：受け入れ対象を固定する
+今回のproduction変更はCLI境界だけです。
 
-1. 対象SHA、依存バージョン、対応するPDFの種類、選択したリーダー、必須機能、既知制限を一枚の受け入れ記録へまとめます。未解決ルビの全件解消、任意のPDFへの完全対応、OCR、ブラウザー／Androidアプリは勝手に条件へ加えません。
-2. 9 PDFの入力指紋と各工程のレビューを照合します。入力の取り替えや、途中で変えた設定があれば先に明記します。
-3. 新しいローカル出力先を用意します。現在のCLIは指定出力を上書きし得るため、既存のPDF／EPUBを出力先に使いません。以下の例では入力名・出力名を実際のものに置き換え、存在確認が終了0である場合だけ変換します。
+- `inputPath === outputPath` を変換前に拒否する。
+- `--help` / `-h` を追加する。
+- 実装済み全オプションをusageへ列挙する。
+- parserをpublic contract testから検証可能にする。
+- 既存のatomic output replacementを維持する。
 
-   ```sh
-   mkdir -p local-reports
-   test ! -e 'local-reports/acceptance-book.epub'
-   npm run convert:epub -- 'local-samples/INPUT.pdf' 'local-reports/acceptance-book.epub' --modified '2026-09-11T00:00:00Z'
-   ```
+PDF抽出、ruby association、画像配置、navigation、EPUB serializationの判定規則は変更していません。
 
-   固定modifiedは比較用です。複数書籍はそれぞれ別の新規出力へ保存します。全コーパスverifierの出力は終了時に削除されるため、読書ソフト確認用のEPUBは別途生成します。
+## 5A：受け入れ対象
 
-## 5B：自動検証を実行する
+CLIの完成範囲:
 
-1. [共通の全検証](README.md) を対象コードで実行します。同じコード・入力・設定の統合検証を直前に済ませている場合はその証拠を使用でき、文書だけの更新を理由に繰り返す必要はありません。
-2. 9冊／5,141 sourceページ、しおりと本文アンカー、本文source所有、画像出現と資源、ルビ／注記の保存を照合します。表紙等で増えたEPUB項目数はsourceページ数と分けて記録します。
-3. 各EPUBCheck JSONを読み返し、対象・validator version・exit code・fatal/error/warningが合格条件を満たすことを確認します。summaryと個別結果が食い違う場合は止めます。
-4. 現行オプションの既定動作とstrict動作を確認します。未解決注記を含むfixtureでは、既定は注記を残して成功し、次は非0終了になることが期待結果です。
+- PDF -> EPUB変換。
+- source-backedな本文、exact ruby、unresolved annotation保存。
+- explicit PDF outline navigation。source-backed headingがない場合はpage navigation fallback。
+- production image preservationとexplicit cover designation。
+- official EPUBCheck 5.3.0 clean。
+- `--ruby on|off`、`--unresolved-ruby`、metadata、page progression、cover occurrence等の実装済みオプション。
 
-   ```sh
-   npm run convert:epub -- 'INPUT_WITH_UNRESOLVED.pdf' 'NEW_OUTPUT.epub' --unresolved-ruby error
-   ```
+完成条件に含めないもの:
 
-   この例の入力は実際に未解決注記を含む自作fixtureへ置き換えます。strictの期待どおりの失敗を、通常変換の失敗や規格検証失敗と混同しません。
-5. 存在しない入力、不正なオプション、不正なモデル参照、対応範囲外の画像・構造で、成功したように見える欠落出力を返さないことを確認します。新規オプションは正常・異常・既定値を実CLI経由で検証します。
-6. 同じ入力・固定メタデータで2回生成し、決定性を検証します。byte比較ができない設計変更をした場合は、非決定的な要因と比較対象を先に説明し、本文・資源・順序の不一致を隠しません。
+- OCR。
+- 任意PDFへの完全対応。
+- automatic cover inference。
+- browser/Android UI。
+- 未実施のThorium/calibre確認を自動PASS扱いすること。
 
-## 5C：表示・使い方・資源使用を確認する
+## 5B：CLI境界と実コマンド
 
-1. 工程2のfixtureと9冊の代表ページを最終EPUBで開き直します。工程3で追加した画像・表紙、工程4で変わったルビ、工程1の本文アンカーを含め、同じ対象リーダーで確認表を完成させます。
-2. 利用者向けREADMEに、依存導入、基本変換、使えるオプション、出力の扱い、注記の意味、対応外入力での失敗、既知の表示制限を記載します。未実装オプションや架空の実行結果を載せません。
-3. READMEだけを読んで自作PDFを変換する操作を一度行い、入力から出力まで辿れることを確認します。開発用キャッシュに偶然依存して成功していないか、依存の導入条件も照合します。
-4. 全コーパス実行の所要時間と、観測可能なら最大メモリを記録します。測定環境と取得方法を併記し、固定の速度目標を後付けしません。メモリ不足・異常な肥大化・入力サイズでの停止を見つけたら原因を確認します。
+Public testで全実装オプション、unknown/missing/invalid option、usage、source PDF自身をoutputに指定した場合の拒否を固定済みです。
+
+Private real-CLI acceptance:
+
+```text
+CLI_ACCEPTANCE=PASS
+PDFS=9
+SELECTED_PDF_ID=sha256:c498e2c0069aabd2
+SELECTED_PAGES=46
+SELECTED_UNRESOLVED=3
+DEFAULT_BYTES=128957
+DETERMINISTIC_BYTES=yes
+STRICT_REJECTED=yes
+FAILED_OUTPUT_PRESERVED=yes
+INVALID_OPTION_REJECTED=yes
+MISSING_INPUT_REJECTED=yes
+HELP_SUCCEEDED=yes
+DOCUMENTED_OPTIONS_SUCCEEDED=yes
+ELAPSED_MS=25509
+```
+
+再現コマンド:
+
+```sh
+mkdir -p local-reports
+npm run verify:cli -- local-samples \
+  --report local-reports/cli-acceptance-NEW.json \
+  --expect-pdf-count 9
+```
+
+## 5C：統合private regression
+
+同一HEADで以下をPASS済みです。
+
+```text
+RUBY_EXIT=0
+STAGE2_EXIT=0
+COVER_EXIT=0
+VERIFY_EPUB_EXIT=0
+PDFs: 9/9
+EPUBs: 9/9
+Pages: 5141/5141
+Unresolved annotations preserved: 6387
+Total EPUB bytes: 17959256
+Outline entries: 250/250; outline PDFs: 6/6; unresolved outline entries: 0
+Image occurrences: 4/4; unique PNG content resources: 1/1; XHTML/OPF/ZIP references: consistent
+EPUBCheck 5.3.0: 9/9 passed (0 errors, 0 warnings)
+```
+
+cover smokeも同一コードでPASS:
+
+```text
+COVER_SMOKE=PASS
+BODY_IMAGE_OCCURRENCES=1
+PNG_RESOURCES=1
+COVER_MARKERS=1
+BODY_OCCURRENCES_PRESERVED=yes
+PNG_RESOURCES_UNCHANGED=yes
+EPUBCheck 5.3.0: pass (0 errors, 0 warnings)
+```
+
+## 5D：利用者向け契約
+
+READMEには以下を実装どおり記載済みです。
+
+- `npm ci` と基本変換コマンド。
+- 全実装オプション。
+- ruby ON/OFFの意味。
+- unresolved rubyのdefault preserveとstrict error。
+- output未指定時の場所。
+- source pathへの上書き禁止。
+- successful conversionはrequested outputをatomic replacementし得ること。
+- failure時は既存outputを変更しないこと。
+- fixed `--modified`がbyte determinismに必要なこと。
+- OCRなし、automatic coverなし、unsupported inputはfail closedであること。
+
+## manual reader acceptance
+
+Thorium/calibreの実reader確認は環境依存の別項目です。**現時点では未実施**です。
+
+CLI自動受け入れとmanual reader受け入れは証拠を分離します。EPUBCheck greenをmanual reader PASSとして扱いません。
 
 ## 完了判定
 
-| 必須項目 | 受け入れ条件 |
+| 必須項目 | 結果 |
 | --- | --- |
-| 機能 | 工程1〜4の完了条件を満たす、またはユーザー承認済みの限定範囲が明記されている |
-| 保存性 | 本文・注記・画像の説明できない欠落／重複が0件。曖昧な対応を確定扱いしない |
-| 自動検証 | 対象コードで必要な全検証が成功。公開fixtureとローカルコーパスの証拠を分離 |
-| 読書 | 選択した対象アプリ・設定で確認表が合格。未実施項目を合格扱いしない |
-| 利用方法 | READMEの操作で変換でき、実装済みオプションと制限が一致する |
-| 公開 | noreplyでpush、対象SHAのCI成功、ローカルとGitHub mainのSHA一致 |
-| 引き継ぎ | 対象SHA・実測値・既知制限・次の任意工程が記録され、一時成果物の終了処理が済んでいる |
+| CLI | PASS。default / strict / options / invalid input / help / determinismを実コマンドで検証済み |
+| 保存性 | PASS。9冊・5,141ページ、6,387 unresolved、outline、画像資源baseline維持 |
+| 規格 | PASS。EPUBCheck 5.3.0が9/9、error/warning 0 |
+| 安全性 | PASS。source path破壊なし。失敗時に既存outputを変更しない |
+| 利用方法 | PASS。READMEとactual CLI option surface一致 |
+| 公開 | Stage 25 branch CI green。merge後にmain SHA/CIを最終記録する |
+| 読書 | 未実施。Thorium/calibreは別項目として残す |
 
-欠落・誤対応・読めない表示などの必須項目が未解決なら受け入れは保留です。問題一覧を作って担当工程へ戻し、修正が影響する検証だけを追加・再実行します。完成範囲の変更以外の通常の修正で毎回承認を求めません。
-
-成果物は [レビュー書式](review-template.md) に基づく最終受け入れ記録、更新README／continuation status、測定結果、既知制限です。成果物の公開はGitHubへの通常pushで完了し、リリースタグ、パッケージ公開、ホスティング、ストア申請をこの手順だけで追加実行しません。後続アプリ開発は工程6の開始条件を確認して着手します。
+自動CLI checkpointは完了です。merge後はmainを固定し、manual reader確認を必要に応じて実施したうえで [工程6：browser/Android](06-browser-android.md) へ進みます。

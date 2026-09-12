@@ -1,27 +1,29 @@
 # FileShape
 
-FileShape is a provenance-preserving PDF conversion pipeline focused on reconstructing readable document structure and producing EPUB without source-specific hacks.
+FileShape is a provenance-preserving PDF-to-EPUB conversion pipeline. It reconstructs readable document structure from PDF geometry and source ranges without filename, site, font-name, title, or character-specific hacks.
 
 ## Current status
 
-The complete local regression corpus now passes end to end through the production PDF -> EPUB path.
+The accepted private regression corpus passes end to end through the production PDF -> EPUB path:
 
 ```text
 PDFs: 9/9
 EPUBs: 9/9
 Pages: 5141/5141
 Unresolved annotations preserved: 6387
-Total EPUB bytes: 16639748
-Outline entries: 250 in 6 PDFs; unresolved outline entries: 0
+Total EPUB bytes: 17959256
+Outline entries: 250/250 in 6 PDFs; unresolved outline entries: 0
+Image occurrences: 4/4
+Unique PNG content resources: 1/1
+XHTML/OPF/ZIP image references: consistent
+EPUBCheck 5.3.0: 9/9 passed (0 errors, 0 warnings)
 ```
 
-Stage 12a adds hierarchical navigation from explicit PDF outlines, retaining page navigation when none are usable. All nine generated EPUBs pass official EPUBCheck 5.3.0 with zero fatal errors, errors and warnings. Typecheck, 124 automated tests, four real-validator integration tests, and the staged ruby/semantic/full-corpus regressions pass locally.
+Stages 15–20 add production image preservation and explicit source-backed cover designation. Stages 21–24 audited all 23,097 ruby candidates; 16,710 are exact and 6,387 remain intentionally unresolved because no generic source-backed rule can safely promote them. The default EPUB preserves those unresolved annotations as page notes.
 
-See [continuation status](docs/continuation-status.md) for current evidence, historical baselines, invariants and next work; [Stage 12a](docs/stage12a-outline-navigation.md) for navigation behavior; and [Stage 11](docs/stage11-epubcheck.md) for validator setup.
+Stage 25 automated CLI acceptance also passes: fixed-metadata output is byte-deterministic, strict unresolved-ruby mode rejects as designed, failed conversions preserve an existing output, invalid/missing CLI input is rejected, help works, and the documented option surface succeeds through the real CLI. Manual Thorium/calibre validation remains a separate unperformed item and is not implied by EPUBCheck success.
 
-The subsequent Stage 12b diagnostic increment passes 126 automated tests. Its complete 5,141-page scan found no heading tags exposed by PDF.js in this corpus; body heading/section mapping remains open. See [the evidence assessment](docs/stage12b-structure-evidence.md).
-
-The [remaining-work runbook (Japanese)](docs/remaining-work/README.md) gives ordered implementation instructions for headings/sections, reading-system compatibility, images/cover, ruby refinement, final CLI acceptance, and the subsequent browser/Android adapters. Each task includes evidence gathering, code entry points, validation, completion conditions, review and publication steps. These are planned tasks, not completed features.
+See [continuation status](docs/continuation-status.md) for the current evidence and [the remaining-work runbook](docs/remaining-work/README.md) for ordered acceptance work.
 
 ## Pipeline
 
@@ -32,31 +34,81 @@ PDF extraction
   -> semantic blocks
   -> exact/unresolved ruby association
   -> typed FileShape Document Model + explicit outline navigation
+  -> image resources + source-backed image placement
   -> content policy
-  -> EPUB XHTML
-  -> EPUB package
+  -> EPUB XHTML/CSS
+  -> OPF/nav/container/ZIP
+  -> .epub
 ```
 
-Original PDF text items and source ranges remain source truth throughout the pipeline. Ruby association is geometry/provenance based; unresolved candidates are never silently guessed or discarded.
+Original PDF text items and source ranges remain source truth throughout the pipeline. Ambiguous relationships are kept explicit instead of being guessed.
 
-## Commands
+## Install
 
-Install dependencies:
+Requires Node.js 22 for the supported development/test path.
 
 ```sh
 npm ci
 ```
 
-Run typecheck and automated tests:
+Java 17 and `unzip` are only required when installing/running the pinned official EPUBCheck validator.
 
-```sh
-npm test
-```
+## Convert a PDF
 
-Convert a PDF:
+Basic conversion:
 
 ```sh
 npm run convert:epub -- input.pdf [output.epub]
+```
+
+Show CLI usage:
+
+```sh
+npm run convert:epub -- --help
+```
+
+Implemented options:
+
+```text
+--title TITLE
+--creator NAME
+--language TAG
+--identifier ID
+--modified YYYY-MM-DDTHH:MM:SSZ
+--title-prefix PREFIX
+--ruby on|off
+--unresolved-ruby error|preserve-as-page-note
+--page-progression-direction ltr|rtl
+--cover-occurrence PAGE:OPERATOR:OCCURRENCE
+```
+
+Defaults and safety behavior:
+
+- `--ruby on` is the effective default. `--ruby off` removes rendered `<rt>` readings from exact ruby while preserving the parent text; it does not delete unresolved source information.
+- unresolved ruby defaults to `preserve-as-page-note`. `--unresolved-ruby error` is strict mode and fails instead of serializing a document that still contains unresolved ruby.
+- page progression is not inferred. Omit the option to leave it to the reading system, or explicitly choose `ltr` / `rtl`.
+- cover designation is never guessed. `--cover-occurrence` must name an existing source image occurrence by exact page/operator/occurrence provenance.
+- if `output.epub` is omitted, FileShape writes `<input-basename>.epub` next to the PDF.
+- the input PDF path itself is never accepted as the output path.
+- EPUB generation is completed into a temporary file first and then renamed into place. A conversion failure does not replace an existing output file; a successful conversion may replace the requested existing EPUB path atomically on supported local filesystems.
+- `--modified` should be fixed when byte-for-byte reproducibility is required. Without it, EPUB metadata uses the current UTC second.
+
+Example with explicit metadata and strict unresolved-ruby handling:
+
+```sh
+npm run convert:epub -- book.pdf book.epub \
+  --title 'Book title' \
+  --language ja \
+  --modified '2026-09-12T00:00:00Z' \
+  --unresolved-ruby error
+```
+
+## Verification
+
+Run typecheck and all public unit tests:
+
+```sh
+npm test
 ```
 
 Run staged regression verification:
@@ -67,40 +119,47 @@ npm run verify:semantic
 npm run verify:stage2
 ```
 
-Inspect explicit PDF structure/heading tags without changing conversion output:
-
-```sh
-npm run inspect:structure -- input.pdf
-npm run inspect:structure -- local-samples --output local-reports/structure-NEW.json
-```
-
-The output parent directory must already exist; an existing output file is never overwritten. A successful inventory reports completed reads, including zero available tags, rather than certifying heading inference.
-
-Run the final local 9-PDF / 5,141-page PDF-to-EPUB corpus verification:
-
-```sh
-npm run verify:epub
-```
-
-`verify:epub` requires the uncommitted `local-samples/` corpus and therefore cannot run on the public GitHub Actions runner.
-
-Install the pinned official EPUBCheck validator (requires Java 17 and `unzip`), then run the standards fixture tests:
+Install the pinned official EPUBCheck validator, then run the real-validator integration tests:
 
 ```sh
 npm run setup:epubcheck
 npm run verify:epubcheck
 ```
 
-Validate all nine locally converted EPUBs with EPUBCheck, failing on errors or warnings:
+The private corpus is intentionally not committed. When `local-samples/` is available, run the complete PDF-to-EPUB regression with official EPUBCheck:
 
 ```sh
 npm run verify:epub -- --epubcheck
 ```
 
-See [Stage 11](docs/stage11-epubcheck.md) for JSON reports, offline installations, CI coverage, and failure conditions.
+The real-CLI acceptance verifier checks fixed-metadata determinism, default conversion, strict unresolved-ruby rejection, failure preservation of an existing output, invalid-option handling, help output, and the documented option surface without writing private source text into its report:
+
+```sh
+mkdir -p local-reports
+npm run verify:cli -- local-samples \
+  --report local-reports/cli-acceptance-NEW.json \
+  --expect-pdf-count 9
+```
+
+Image/cover-specific private acceptance remains separately reproducible with:
+
+```sh
+npm run verify:image-model -- local-samples --expect-pdf-count 9 --expect-page-count 5141
+npm run verify:cover
+```
+
+## Known scope and limits
+
+- FileShape does not perform OCR. Scanned/image-only PDFs need a separate OCR path unless their meaningful content can be preserved as supported images.
+- unsupported or ambiguous image transforms, clipping, compositing, interpolation, or placement fail closed rather than being silently dropped.
+- body headings/sections are not invented from typography. For the accepted corpus, explicit PDF outline navigation is used where source-backed; otherwise page navigation is retained.
+- automatic cover inference is intentionally not implemented.
+- unresolved ruby is preserved, not guessed. The accepted corpus currently contains 6,387 unresolved annotations.
+- EPUBCheck success is automated. Manual real-reader validation in Thorium/calibre remains a separate environment-dependent acceptance item and must not be reported as complete until actually performed.
+- browser/Android adapters are downstream work and are not part of the automated CLI checkpoint.
 
 ## Design rules
 
-Parser behavior must not depend on website, filename, URL, PDF metadata/generator, font name, N-code, or particular character appearance. Decisions come from PDF structure, geometry, reading order and provenance.
+Parser behavior must not depend on website, filename, URL, PDF metadata/generator, font name, N-code, title, language-specific text heuristics, or particular character appearance. Decisions come from PDF structure, geometry, ordering, and provenance.
 
-Do not weaken verifiers to make a change pass. Do not replace uncertain evidence with guessed text relationships. Preserve whitespace/source evidence during parsing and make presentation cleanup a later policy/rendering concern.
+Do not weaken verifiers to make a change pass. Do not replace uncertain evidence with guessed text relationships. Preserve source ownership and fail closed when a relationship cannot be proved.
