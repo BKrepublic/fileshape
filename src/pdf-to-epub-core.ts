@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { assertSha256Hex, type BinaryRuntime } from "./binary-runtime.js";
 import type { UnresolvedRubyPolicy } from "./content-policy.js";
 import {
   resolveCoverImageResourceId,
@@ -38,8 +38,8 @@ function defaultTitle(sourceName: string): string {
   return lastDot > 0 ? sourceName.slice(0, lastDot) : sourceName;
 }
 
-function sourceId(bytes: Uint8Array): string {
-  return `urn:sha256:${createHash("sha256").update(bytes).digest("hex")}`;
+async function sourceId(bytes: Uint8Array, runtime: BinaryRuntime): Promise<string> {
+  return `urn:sha256:${assertSha256Hex(await runtime.sha256Hex(bytes))}`;
 }
 
 function validateSourceInput(sourceBytes: Uint8Array, sourceName: string): void {
@@ -55,15 +55,17 @@ export async function convertPdfBytesToEpubWithResources(
   sourceName: string,
   options: PdfToEpubOptions | undefined,
   resources: PdfJsResourceConfig,
+  binaryRuntime: BinaryRuntime,
 ): Promise<PdfBytesToEpubResult> {
   validateSourceInput(sourceBytes, sourceName);
   const effectiveOptions = options ?? {};
-  const documentId = sourceId(sourceBytes);
+  const documentId = await sourceId(sourceBytes, binaryRuntime);
   const inspection = await inspectPdfBytes(
     sourceBytes,
     sourceName,
     { includeGlyphs: true, includeImages: true },
     resources,
+    binaryRuntime,
   );
   const { document } = buildDocumentFromInspection(inspection, documentId);
   const unresolvedAnnotationCount = document.pages.reduce(
