@@ -4,7 +4,7 @@ import {
   type FileShapeDocument,
 } from "./document-model.js";
 import { resolveDocumentOrientations } from "./document-orientation.js";
-import type { InspectResult } from "./pdf-inspector.js";
+import type { InspectResult } from "./pdf-inspection-model.js";
 import { reconstructPhysicalLayout } from "./physical-layout.js";
 import { associateRubySpans } from "./ruby-spans.js";
 import { buildSemanticBlocks } from "./semantic-blocks.js";

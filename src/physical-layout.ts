@@ -1,4 +1,4 @@
-import type { InspectPage, InspectTextItem } from "./pdf-inspector.js";
+import type { InspectPage, InspectTextItem } from "./pdf-inspection-model.js";
 import type { WritingOrientation } from "./text-flow.js";
 import { fullTextRef, type SourceTextRef } from "./source-text.js";
 

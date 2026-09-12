@@ -1,4 +1,4 @@
-import type { InspectPage, InspectTextItem } from "./pdf-inspector.js";
+import type { InspectPage, InspectTextItem } from "./pdf-inspection-model.js";
 
 export type WritingOrientation = "vertical" | "horizontal" | "unknown";
 

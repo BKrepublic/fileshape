@@ -21,6 +21,8 @@
     "verify:cover": "tsx src/verify-cover-policy.ts",
     "verify:cli": "tsx src/verify-cli-acceptance.ts",
     "inspect:marked-content": "tsx src/pdf-marked-content-inventory.ts",
+    "inspect:runtime-deps": "tsx src/runtime-dependency-inventory.ts --write",
+    "verify:runtime-deps": "tsx src/runtime-dependency-inventory.ts --verify",
     "probe:layout": "tsx src/pdf-layout-probe.ts",
     "reconstruct:page": "tsx src/pdf-reconstruct-page.ts",
     "check:flow": "tsx src/pdf-flow-check.ts",

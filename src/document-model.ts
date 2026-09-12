@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { InspectResult } from "./pdf-inspector.js";
+import type { InspectResult } from "./pdf-inspection-model.js";
 import type { RubySpan } from "./ruby-spans.js";
 import type { SemanticBlock, SemanticPageBlocks } from "./semantic-blocks.js";
 import { mergeSourceRanges, type SourceGlyphRef, type SourceTextRef } from "./source-text.js";
