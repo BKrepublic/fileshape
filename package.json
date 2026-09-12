@@ -50,6 +50,7 @@
     "verify:local-private": "npm run setup:epubcheck && npm run verify:ruby && npm run verify:semantic && npm run verify:stage2 && npm run verify:epub -- --epubcheck && npm run verify:browser-private"
   },
   "dependencies": {
+    "pako": "3.0.1",
     "pdfjs-dist": "6.3.289"
   },
   "devDependencies": {
