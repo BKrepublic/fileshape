@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { InspectResult } from "./pdf-inspector.js";
 import type { RubySpan } from "./ruby-spans.js";
 import type { SemanticBlock, SemanticPageBlocks } from "./semantic-blocks.js";
@@ -64,12 +65,38 @@ export type DocumentTextBlock = {
   inlines: InlineNode[];
 };
 
+export type DocumentImageResource = {
+  id: string;
+  contentHash: string;
+  mediaType: "image/png";
+  extension: "png";
+  width: number;
+  height: number;
+  bytes: Uint8Array;
+};
+
+export type DocumentImageOccurrence = {
+  kind: "image";
+  sourcePage: number;
+  operatorIndex: number;
+  occurrenceIndex: number;
+  resourceId: string;
+  displayTransform: number[];
+  displayBounds: { left: number; top: number; right: number; bottom: number };
+  formDepth: number;
+  interpolate: boolean;
+  clipStatus: "none" | "exact-rect";
+  clipCoverage: "none" | "contains-image";
+  clipRect?: { left: number; top: number; right: number; bottom: number };
+};
+
 export type DocumentPage = {
   kind: "page";
   sourcePage: number;
   rotation: number;
   orientation: WritingOrientation;
   blocks: DocumentTextBlock[];
+  imageOccurrences: DocumentImageOccurrence[];
   /** Fail-closed Stage 3 candidates retained for later policy/reconsideration. */
   unresolvedRuby: RubySpan[];
   /** Exact spans that could not be mapped to exactly one semantic block. */
@@ -81,6 +108,7 @@ export type FileShapeDocument = {
   id: string;
   source: DocumentSourceStore;
   pages: DocumentPage[];
+  imageResources: DocumentImageResource[];
   navigation?: DocumentNavigationItem[];
 };
 
@@ -114,6 +142,29 @@ function cloneRubySpan(span: RubySpan): RubySpan {
     annotationGlyphRefs: cloneGlyphRefs(span.annotationGlyphRefs),
     baseGlyphRefs: cloneGlyphRefs(span.baseGlyphRefs),
     alternatives: span.alternatives.map(cloneTextRefs),
+  };
+}
+
+function cloneImageOccurrence(occurrence: NonNullable<InspectResult["pages"][number]["imageOccurrences"]>[number]): DocumentImageOccurrence {
+  if (occurrence.clipStatus !== "none" && occurrence.clipStatus !== "exact-rect") {
+    throw new Error(`unsupported model image clip status ${occurrence.clipStatus}`);
+  }
+  if (occurrence.clipCoverage !== "none" && occurrence.clipCoverage !== "contains-image") {
+    throw new Error(`unsupported model image clip coverage ${occurrence.clipCoverage}`);
+  }
+  return {
+    kind: "image",
+    sourcePage: occurrence.sourcePage,
+    operatorIndex: occurrence.operatorIndex,
+    occurrenceIndex: occurrence.occurrenceIndex,
+    resourceId: occurrence.resourceId,
+    displayTransform: [...occurrence.displayTransform],
+    displayBounds: { ...occurrence.displayBounds },
+    formDepth: occurrence.formDepth,
+    interpolate: occurrence.interpolate,
+    clipStatus: occurrence.clipStatus,
+    clipCoverage: occurrence.clipCoverage,
+    ...(occurrence.clipRect === undefined ? {} : { clipRect: { ...occurrence.clipRect } }),
   };
 }
 
@@ -352,6 +403,7 @@ export function buildFileShapeDocument(input: BuildDocumentInput): FileShapeDocu
       rotation: inspectionPage.rotation,
       orientation: pageInput.orientation,
       blocks,
+      imageOccurrences: (inspectionPage.imageOccurrences ?? []).map(cloneImageOccurrence),
       unresolvedRuby: pageInput.rubySpans.filter((span) => span.status === "unresolved").map(cloneRubySpan),
       unmappedExactRuby: unmapped,
     };
@@ -364,6 +416,15 @@ export function buildFileShapeDocument(input: BuildDocumentInput): FileShapeDocu
 
   return {
     kind: "document", id: input.documentId, source, pages,
+    imageResources: (input.inspection.imageResources ?? []).map((resource) => ({
+      id: resource.id,
+      contentHash: resource.contentHash,
+      mediaType: resource.mediaType,
+      extension: resource.extension,
+      width: resource.width,
+      height: resource.height,
+      bytes: Uint8Array.from(resource.bytes),
+    })),
     ...(source.outline === undefined ? {} : { navigation: buildDocumentNavigation(source.outline) }),
   };
 }
@@ -388,6 +449,26 @@ export function validateDocumentModel(document: FileShapeDocument): string[] {
   if (document.id.trim().length === 0) errors.push("document id is empty");
   if (document.source.documentId !== document.id) errors.push("source store documentId does not match document id");
 
+  const imageResourceIds = new Set<string>();
+  const imageContentHashes = new Set<string>();
+  for (const resource of document.imageResources) {
+    const label = `image resource ${resource.id}`;
+    if (resource.id.trim().length === 0) errors.push("image resource id is empty");
+    if (imageResourceIds.has(resource.id)) errors.push(`duplicate image resource id ${resource.id}`);
+    imageResourceIds.add(resource.id);
+    if (!/^[0-9a-f]{64}$/.test(resource.contentHash)) errors.push(`${label} has invalid content hash`);
+    if (resource.id !== `image-${resource.contentHash}`) errors.push(`${label} id does not match content hash`);
+    if (imageContentHashes.has(resource.contentHash)) errors.push(`duplicate image content hash ${resource.contentHash}`);
+    imageContentHashes.add(resource.contentHash);
+    if (resource.mediaType !== "image/png" || resource.extension !== "png") errors.push(`${label} has unsupported format`);
+    if (!Number.isInteger(resource.width) || resource.width <= 0 ||
+        !Number.isInteger(resource.height) || resource.height <= 0) errors.push(`${label} has invalid dimensions`);
+    if (resource.bytes.byteLength === 0) errors.push(`${label} has no bytes`);
+    else if (createHash("sha256").update(resource.bytes).digest("hex") !== resource.contentHash) {
+      errors.push(`${label} bytes do not match content hash`);
+    }
+  }
+
   const sourcePages = new Set<number>();
   for (const page of document.source.pages) {
     if (sourcePages.has(page.page)) errors.push(`duplicate source page ${page.page}`);
@@ -398,10 +479,43 @@ export function validateDocumentModel(document: FileShapeDocument): string[] {
   }
 
   const modelPages = new Set<number>();
+  const imageOccurrenceSources = new Set<string>();
+  const referencedImageResourceIds = new Set<string>();
   for (const page of document.pages) {
     if (modelPages.has(page.sourcePage)) errors.push(`duplicate document page ${page.sourcePage}`);
     modelPages.add(page.sourcePage);
     if (!sourcePages.has(page.sourcePage)) errors.push(`document page ${page.sourcePage} has no source page`);
+    let previousImageSource: [number, number] | undefined;
+    for (const occurrence of page.imageOccurrences) {
+      const label = `page ${page.sourcePage} image ${occurrence.operatorIndex}/${occurrence.occurrenceIndex}`;
+      const sourceKey = `${occurrence.sourcePage}:${occurrence.operatorIndex}:${occurrence.occurrenceIndex}`;
+      if (occurrence.sourcePage !== page.sourcePage) errors.push(`${label} source page does not match containing page`);
+      if (!Number.isInteger(occurrence.operatorIndex) || occurrence.operatorIndex < 0 ||
+          !Number.isInteger(occurrence.occurrenceIndex) || occurrence.occurrenceIndex < 0) {
+        errors.push(`${label} has invalid source indexes`);
+      }
+      if (imageOccurrenceSources.has(sourceKey)) errors.push(`duplicate image occurrence source ${sourceKey}`);
+      imageOccurrenceSources.add(sourceKey);
+      if (!imageResourceIds.has(occurrence.resourceId)) errors.push(`${label} references missing resource ${occurrence.resourceId}`);
+      referencedImageResourceIds.add(occurrence.resourceId);
+      if (previousImageSource && (occurrence.operatorIndex < previousImageSource[0] ||
+          (occurrence.operatorIndex === previousImageSource[0] && occurrence.occurrenceIndex <= previousImageSource[1]))) {
+        errors.push(`${label} is not in source operator order`);
+      }
+      previousImageSource = [occurrence.operatorIndex, occurrence.occurrenceIndex];
+      if (occurrence.displayTransform.length !== 6 || !occurrence.displayTransform.every(Number.isFinite)) {
+        errors.push(`${label} has invalid display transform`);
+      }
+      const bounds = occurrence.displayBounds;
+      if (![bounds.left, bounds.top, bounds.right, bounds.bottom].every(Number.isFinite) ||
+          bounds.right <= bounds.left || bounds.bottom <= bounds.top) errors.push(`${label} has invalid display bounds`);
+      if (!Number.isInteger(occurrence.formDepth) || occurrence.formDepth < 0) errors.push(`${label} has invalid form depth`);
+      if (typeof occurrence.interpolate !== "boolean") errors.push(`${label} has invalid interpolation evidence`);
+      if (!((occurrence.clipStatus === "none" && occurrence.clipCoverage === "none") ||
+          (occurrence.clipStatus === "exact-rect" && occurrence.clipCoverage === "contains-image"))) {
+        errors.push(`${label} has unsupported clip state ${occurrence.clipStatus}/${occurrence.clipCoverage}`);
+      }
+    }
     for (let index = 0; index < page.unresolvedRuby.length; index += 1) {
       const span = page.unresolvedRuby[index]!;
       if (span.status !== "unresolved") errors.push(`page ${page.sourcePage} unresolvedRuby ${index} is not unresolved`);
@@ -445,6 +559,9 @@ export function validateDocumentModel(document: FileShapeDocument): string[] {
       if (hasOverlap(owned)) errors.push(`${label} inline source ownership overlaps`);
       if (!sameCoverage(block.sourceRanges, owned)) errors.push(`${label} inline source ownership has a gap or extra range`);
     }
+  }
+  for (const resourceId of imageResourceIds) {
+    if (!referencedImageResourceIds.has(resourceId)) errors.push(`unused image resource ${resourceId}`);
   }
   errors.push(...validateDocumentNavigation(document.source.outline ?? [], document.navigation ?? [], modelPages));
   return errors;

@@ -10,7 +10,7 @@
 | --- | --- | --- | --- |
 | 1 | [本文見出し・章構造](01-headings-and-sections.md) | PDF-native evidence があれば本文見出し/章境界へ反映 | **保留**。Stage 12b/13a で使える source-backed body anchor が 0。Stage 12a page-level nav を accepted fallback とする |
 | 2 | [縦書き・ルビの表示互換性](02-reading-systems.md) | CSS、reading direction、実 reader での確認 | **検証中**。Stage 14 で packaged CSS / fixture / explicit page progression を実装済み。実 reader acceptance が未完了 |
-| 3 | [表紙・挿絵](03-images-and-cover.md) | 画像資源、出現位置、EPUB同梱、明示的 cover policy | **実装中**。Stage 15-17 で evidence / decode / clip 判定まで完了。次は production image integration。cover はその後 |
+| 3 | [表紙・挿絵](03-images-and-cover.md) | 画像資源、出現位置、EPUB同梱、明示的 cover policy | **実装中**。Stage 18 で typed resource/occurrence 境界まで実装。次は geometry-backed placement と EPUB package。cover はその後 |
 | 4 | [未解決ルビの改善](04-ruby-refinement.md) | unresolved 6,387件の分類・改善・保存性確認 | **未完了**。Stage 17 の exact ruby on/off は追加済みだが、unresolved refinement とは別 |
 | 5 | [CLI版の最終受け入れ](05-cli-acceptance.md) | 1〜4の accepted scope を統合し、CLIと既知制限を確定 | **未着手** |
 | 後続 | [ブラウザー／Android](06-browser-android.md) | UI/環境依存adapter/実機 | **CLI完了後**。CLI完成条件には含めない |
@@ -86,14 +86,13 @@ MARKED_ISSUES=0
 
 現在の最優先は **Task 3 production image integration** です。
 
-1. Stage 15〜17 の image adapter/resource/clip evidence を読み直す。
-2. image content resource と image occurrence provenance を分離した typed representation を追加する。
-3. current corpus の `exact-rect + contains-image` occurrence を通常の reflowable EPUB image として同梱する。
-4. body XHTML の source/geometry ordering に基づいて occurrence を配置する。位置が一意でない場合は推測で page末尾へ送らない。
-5. PNG resource を deterministic path で ZIP に入れ、OPF manifest と XHTML relative reference を一致させる。
-6. cropped / complex / unknown clip、mask、unsupported schema は synthetic fixture で fail closed を維持する。
-7. cover を自動推測しない。通常 image preservation を先に完成させ、explicit cover policy を別 checkpoint で実装する。
-8. production path 変更後に full validation を行う。
+1. Stage 18 の typed image content resource と occurrence provenance を前提にする。content hash dedupe は resource だけに適用済み。
+2. body XHTML の source/geometry ordering に基づいて occurrence を配置する。位置が一意でない場合は推測で page末尾へ送らない。
+3. PNG resource を deterministic path で ZIP に入れ、OPF manifest と XHTML relative reference を一致させる。
+4. placement と package を一体で検証した後にだけ production converter の image extraction を有効にする。
+5. cropped / complex / unknown clip、mask、unsupported schema は synthetic fixture で fail closed を維持する。
+6. cover を自動推測しない。通常 image preservation を先に完成させ、explicit cover policy を別 checkpoint で実装する。
+7. production path 変更後に full validation を行う。
 
 詳細は [工程3](03-images-and-cover.md) と [Codex handoff](../codex-handoff-20260912.md) を参照。
 

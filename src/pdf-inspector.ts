@@ -7,6 +7,11 @@ import { fullTextRef, type SourceTextRef } from "./source-text.js";
 import { bindGlyphSources, extractOperatorGlyphs, type ExtractedGlyph } from "./pdfjs-glyph-adapter.js";
 import type { SourceOutlineItem } from "./document-navigation.js";
 import { readPdfOutline } from "./pdf-outline.js";
+import {
+  extractProductionPageImages,
+  type InspectedImageOccurrence,
+  type InspectedImageResource,
+} from "./pdf-production-images.js";
 
 export type InspectTextItem = {
   text: string;
@@ -41,6 +46,8 @@ export type InspectPage = {
   glyphIssues?: string[];
   /** Includes unmapped operator glyphs; never discard source Unicode on mismatch. */
   operatorGlyphs?: ExtractedGlyph[];
+  /** Present only when production image extraction was explicitly requested. */
+  imageOccurrences?: InspectedImageOccurrence[];
 };
 
 export type InspectResult = {
@@ -49,6 +56,8 @@ export type InspectResult = {
   pageCount: number;
   pages: InspectPage[];
   outline?: SourceOutlineItem[];
+  /** PNG content resources deduplicated across the complete source document. */
+  imageResources?: InspectedImageResource[];
 };
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
@@ -98,7 +107,10 @@ function countImagePaintOps(fnArray: number[]): number {
   return count;
 }
 
-export async function inspectPdf(inputPath: string, options: { includeGlyphs?: boolean } = {}): Promise<InspectResult> {
+export async function inspectPdf(
+  inputPath: string,
+  options: { includeGlyphs?: boolean; includeImages?: boolean } = {},
+): Promise<InspectResult> {
   const data = new Uint8Array(await readFile(inputPath));
   const byteLength = data.byteLength;
 
@@ -116,6 +128,7 @@ export async function inspectPdf(inputPath: string, options: { includeGlyphs?: b
     const pageCount = pdf.numPages;
     const outline = await readPdfOutline(pdf);
     const pages: InspectPage[] = [];
+    const imageResources = new Map<string, InspectedImageResource>();
 
     for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
       const page = await pdf.getPage(pageNumber);
@@ -157,6 +170,22 @@ export async function inspectPdf(inputPath: string, options: { includeGlyphs?: b
         ? extractOperatorGlyphs(pageNumber, operatorList, [...viewport.transform], (id) => page.commonObjs.get(id))
         : undefined;
       if (extracted) bindGlyphSources(textItems, extracted.glyphs, pageNumber);
+      const productionImages = options.includeImages
+        ? extractProductionPageImages(
+          pageNumber,
+          { fnArray: operatorList.fnArray, argsArray: operatorList.argsArray },
+          [...viewport.transform],
+          (page as unknown as { objs: { get(id: string): unknown } }).objs,
+        )
+        : undefined;
+      for (const resource of productionImages?.resources ?? []) {
+        const existing = imageResources.get(resource.id);
+        if (existing && (existing.width !== resource.width || existing.height !== resource.height ||
+            existing.mediaType !== resource.mediaType || existing.contentHash !== resource.contentHash)) {
+          throw new Error(`conflicting image resource identity ${resource.id}`);
+        }
+        imageResources.set(resource.id, existing ?? resource);
+      }
 
       pages.push({
         ...(extracted ? { operatorGlyphs: extracted.glyphs, glyphIssues: extracted.issues } : {}),
@@ -169,6 +198,7 @@ export async function inspectPdf(inputPath: string, options: { includeGlyphs?: b
         textItemCount: textItems.length,
         imagePaintOps: countImagePaintOps(operatorList.fnArray),
         textItems,
+        ...(productionImages === undefined ? {} : { imageOccurrences: productionImages.occurrences }),
       });
     }
 
@@ -178,6 +208,7 @@ export async function inspectPdf(inputPath: string, options: { includeGlyphs?: b
       pageCount,
       pages,
       outline,
+      ...(options.includeImages ? { imageResources: [...imageResources.values()] } : {}),
     };
   } finally {
     await loadingTask.destroy();

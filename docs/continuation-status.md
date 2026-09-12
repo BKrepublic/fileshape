@@ -1,6 +1,6 @@
 # FileShape continuation status
 
-Updated 2026-09-12 after Stage 17 publication and the complete private image-clip / marked-content inventory.
+Updated 2026-09-12 after Stage 18 local acceptance of the production image model boundary.
 
 ## Current GitHub baseline
 
@@ -119,6 +119,14 @@ Therefore the current private corpus has no PDF marked-content tags requiring a 
 
 See [Stage 17](stage17-content-controls-image-placement.md).
 
+### Stage 18: production image model boundary
+
+The accepted Stage 15–17 XObject subset now has an opt-in production inspection path and typed `FileShapeDocument` resource/occurrence representation. PNG content bytes deduplicate independently from paint occurrences; occurrence provenance retains page/operator/repeat identity, geometry, Form depth, interpolation and clip evidence. Model validation rejects byte/hash corruption, missing resources, duplicate/out-of-order occurrences and unsupported clip state.
+
+Inline images, masks, cropping, complex/unknown clips, unsupported schemas and failed decoding remain fail-closed. EPUB XHTML/package output is deliberately not enabled at this intermediate checkpoint, so Stage 18 is not yet an image-preserving conversion claim. See [Stage 18](stage18-production-image-model.md).
+
+Local acceptance passed 154 tests, ruby and Stage 2 full-corpus baselines, four real EPUBCheck integration cases, the complete 9-PDF EPUB regression, and the new production image model verifier. The latter transported 4/4 occurrences as four model resources across the source PDFs while confirming one unique PNG content hash.
+
 ## Current pipeline
 
 ```text
@@ -182,7 +190,7 @@ The [remaining-work runbook](remaining-work/README.md) is the CLI-completion roa
 
 Current priority order:
 
-1. **Task 3 production image integration**: Stage 15-17 evidence gathering for the private corpus is complete enough to proceed. Add typed image resource/occurrence handling, deterministic EPUB image packaging, and source/geometry-backed body placement. Preserve four occurrences while deduplicating identical content resource bytes. Current-corpus clips need no crop. Do not auto-guess a cover.
+1. **Task 3 production image integration**: Stage 18 adds the typed resource/occurrence boundary. Next, add unique source/geometry-backed body placement plus deterministic XHTML/OPF/ZIP image packaging, and only then enable image extraction in the converter. Preserve four occurrences while deduplicating identical content resource bytes. Current-corpus clips need no crop. Do not auto-guess a cover.
 2. **Task 2 real-reader acceptance**: Stage 14 implementation exists, but the selected real readers still need explicit compatibility validation. Re-run affected display checks after image integration.
 3. **Task 3 explicit cover policy**: only after ordinary image preservation is stable. Cover choice must be explicit or source-backed, never visual guesswork.
 4. **Task 4 unresolved ruby refinement**: 6,387 unresolved annotations remain a separate improvement area. The Stage 17 ruby on/off control does not complete this task.

@@ -1,5 +1,6 @@
 /** Real PDF fixture with XObject reuse, clipping, inline image and a Form-contained image. */
-export function imagePdfBytes(): Buffer {
+export function imagePdfBytes(options: { includeInline?: boolean } = {}): Buffer {
+  const includeInline = options.includeInline ?? true;
   const pageContent = [
     "q",
     "50 50 100 100 re W n",
@@ -10,10 +11,12 @@ export function imagePdfBytes(): Buffer {
     "80 0 0 80 200 50 cm",
     "/Im1 Do",
     "Q",
-    "q",
-    "50 0 0 50 320 50 cm",
-    "BI /W 1 /H 1 /CS /RGB /BPC 8 /F /AHx ID 00FF00> EI",
-    "Q",
+    ...(includeInline ? [
+      "q",
+      "50 0 0 50 320 50 cm",
+      "BI /W 1 /H 1 /CS /RGB /BPC 8 /F /AHx ID 00FF00> EI",
+      "Q",
+    ] : []),
     "q",
     "1 0 0 1 100 300 cm",
     "/Fm1 Do",

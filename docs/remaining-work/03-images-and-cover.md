@@ -21,7 +21,9 @@ IMAGE_ISSUES=0
 
 4 occurrence はすべて保持対象です。同じ PNG content hash を持つため resource bytes は1個に dedupe できますが、occurrence provenance を1個に潰してはいけません。4件とも exact rectangular clip が transformed image bounds を包含しており、current corpus では pixel cropping は不要です。
 
-次は **production image integration** です。typed image resource/occurrence、本文内 placement、EPUB manifest/resource/reference を実装し、その後 explicit cover policy へ進みます。cover の自動推測はしません。cropped / complex / unknown clip、mask、unsupported schema は current corpus に無くても fixture で fail closed を維持してください。
+Stage 18 で production inspection と typed image resource/occurrence 境界まで実装済みです。次は本文内 placement と EPUB manifest/resource/reference を一体で実装し、その後 explicit cover policy へ進みます。cover の自動推測はしません。cropped / complex / unknown clip、mask、unsupported schema は current corpus に無くても fixture で fail closed を維持してください。
+
+Stage 18 時点では converter は画像抽出を有効にしておらず、EPUB画像保持を完了とは扱いません。詳細は [Stage 18](../stage18-production-image-model.md) を参照してください。
 
 詳細な引き継ぎは [Codex handoff](../codex-handoff-20260912.md)、集計は [Stage 17](../stage17-content-controls-image-placement.md) を参照してください。
 

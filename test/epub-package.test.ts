@@ -9,6 +9,7 @@ function documentFixture(): FileShapeDocument {
   return {
     kind: "document",
     id: "fixture:book",
+    imageResources: [],
     source: {
       documentId: "fixture:book",
       pages: [
@@ -28,6 +29,7 @@ function documentFixture(): FileShapeDocument {
     pages: [
       {
         kind: "page",
+        imageOccurrences: [],
         sourcePage: 1,
         rotation: 0,
         orientation: "horizontal",
@@ -64,6 +66,7 @@ function documentFixture(): FileShapeDocument {
       },
       {
         kind: "page",
+        imageOccurrences: [],
         sourcePage: 2,
         rotation: 90,
         orientation: "vertical",

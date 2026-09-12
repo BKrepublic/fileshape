@@ -63,15 +63,15 @@ Generic policy:
 
 ## 次にやること
 
-現在の優先作業は `docs/remaining-work/03-images-and-cover.md` の **production image integration** です。Stage 15〜17 の evidence gathering は current corpus について必要な地点まで完了しています。
+現在の優先作業は `docs/remaining-work/03-images-and-cover.md` の **production image integration** です。Stage 15〜17 の evidence gathering は current corpus について必要な地点まで完了し、Stage 18 で typed production image resource/occurrence 境界まで進みました。
 
 実装の順序:
 
-1. 現行 image resource / occurrence evidence と `FileShapeDocument` / EPUB package 境界を再読する。
-2. image resource identity と occurrence provenance を分離した typed representation を追加する。content hash dedupe は resource にのみ適用し、4 occurrence を 1 occurrence に潰さない。
-3. current corpus の `exact-rect + contains-image` は通常画像として EPUB へ同梱できるようにする。
-4. body XHTML の source/geometry ordering に従って image occurrence を配置する。一意でない配置を推測で page末尾に置いて「保持済み」としない。
-5. PNG resource を OPF manifest に登録し、XHTML relative reference と archive path を決定的にする。
+1. Stage 18 の typed resource/occurrence と fail-closed boundary を再読する。
+2. body XHTML の source/geometry ordering に従って image occurrence を配置する。一意でない配置を推測で page末尾に置いて「保持済み」としない。
+3. current corpus の `exact-rect + contains-image` を通常画像として EPUB へ同梱する。
+4. PNG resource を OPF manifest に登録し、XHTML relative reference と archive path を決定的にする。
+5. placement/package の end-to-end tests が通ってから production converter の `includeImages` を有効にする。
 6. cropped / complex / unknown clip、mask、unsupported image schema は fixture で fail closed を維持する。現在 corpus に無いからと処理を削除しない。
 7. cover は自動推測しない。通常の画像保持を先に完成させ、cover 指定は explicit policy / CLI として別 checkpoint にする。
 8. production path を変えたら `npm test`、`npm run verify:epubcheck`、private 9-PDF full corpus を実行する。model/parser を変える場合は `npm run verify:ruby` と `npm run verify:stage2` も実行する。
