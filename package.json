@@ -42,7 +42,10 @@
     "build:browser": "npm run prepare:browser-assets && tsc -p tsconfig.browser.json && vite build --config vite.config.ts",
     "preview:browser": "vite preview --config vite.config.ts",
     "verify:browser-static": "node --import tsx src/verify-browser.ts",
-    "verify:browser": "npm run build:browser && npm run verify:browser-static && playwright test --config playwright.config.ts"
+    "verify:browser": "npm run build:browser && npm run verify:browser-static && playwright test --config playwright.config.ts",
+    "verify:browser-private": "npm run build:browser && playwright test --config playwright.private.config.ts",
+    "verify:local": "npm test && npm run verify:runtime-deps && npm run verify:browser && npm run setup:epubcheck && npm run verify:epubcheck",
+    "verify:local-private": "npm run setup:epubcheck && npm run verify:ruby && npm run verify:semantic && npm run verify:stage2 && npm run verify:epub -- --epubcheck && npm run verify:browser-private"
   },
   "dependencies": {
     "pdfjs-dist": "6.3.289"
