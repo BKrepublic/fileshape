@@ -18,5 +18,10 @@ export function browserPdfJsResourceConfig(): PdfJsResourceConfig {
     useWorkerFetch: true,
     useSystemFonts: false,
     disableFontFace: true,
+    // PDF.js defaults these to true in browsers but false in Node. Keeping
+    // them false makes PDF.js expose decoded pixel data rather than browser-
+    // specific bitmap objects, preserving the accepted Node image semantics.
+    isOffscreenCanvasSupported: false,
+    isImageDecoderSupported: false,
   };
 }
