@@ -10,7 +10,7 @@
 
 [Stage 26 byte-oriented conversion boundary](../stage26-byte-core-boundary.md) で、byte入力のinspection/conversion API、明示的なPDF.js resource config、Node CLIの一回読込、byte ownership、固定metadataでのpath/byte出力一致を実装しました。ローカル公開検証は202/202 testsとpinned EPUBCheck 5/5 integration testsに合格し、PR #19とmerge後の`main` CIも成功したためacceptedです。
 
-[Stage 27 runtime module boundary](../stage27-runtime-module-boundary.md) ではinspection model、byte inspection core、byte conversion core、Node adapterを物理moduleとして分離し、[決定的なdependency inventory](../stage27-runtime-dependency-inventory.json) を追加しました。ローカル公開検証は205/205 tests、inventory verifier、pinned EPUBCheck 5/5 integration testsに合格しています。GitHub CIとmergeが完了するまではaccepted扱いにしません。
+[Stage 27 runtime module boundary](../stage27-runtime-module-boundary.md) ではinspection model、byte inspection core、byte conversion core、Node adapterを物理moduleとして分離し、[決定的なdependency inventory](../stage27-runtime-dependency-inventory.json) を追加しました。ローカル公開検証は205/205 tests、inventory verifier、pinned EPUBCheck 5/5 integration testsに合格し、PR #20とmerge後の`main` CIも成功したためacceptedです。
 
 この時点でも変換runtimeはbrowser-readyではありません。inventoryはNode SHA-256、Node zlib deflate、Node由来のPDF.js資源provider、pinned legacy PDF.js importを明示しています。worker、進捗、キャンセル、診断、browser bundle、保存UI、large-file policyも未実装です。次checkpointは実測可能なbrowser fixtureでSHA-256、PNG deflate、PDF.js runtime/resource方式を選定します。
 

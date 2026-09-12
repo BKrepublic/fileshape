@@ -1,6 +1,6 @@
 # Stage 27: runtime module boundary and dependency inventory
 
-Status: implemented and locally verified; GitHub CI/merge pending
+Status: accepted and merged
 
 ## Purpose
 
@@ -198,3 +198,13 @@ The generated inventory reports:
 - all seven browser operation contracts in this design: absent.
 
 The inventory tool uses the TypeScript 7 `typescript/unstable/ast` scanner API because the installed package exposes compiler syntax APIs through that path. Its output is committed and byte-verified, but this API remains a development-tool maintenance risk if the pinned dependency changes.
+
+GitHub acceptance:
+
+```text
+IMPLEMENTATION_COMMIT: 2fdd4d062470305978127de0c0d448867f21632c
+PR: #20
+MERGE_COMMIT: d2329fd35b2b4960d052dbb6d42be3c10e428e40
+PR_CI: SUCCESS
+MAIN_PUSH_CI: SUCCESS
+```

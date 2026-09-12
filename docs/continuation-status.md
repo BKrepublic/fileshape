@@ -1,6 +1,6 @@
 # FileShape continuation status
 
-Updated 2026-09-12 during Stage 27 Task 6A implementation.
+Updated 2026-09-12 after Stage 27 Task 6A acceptance and merge.
 
 ## Current GitHub baseline
 
@@ -18,7 +18,7 @@ The 9 private corpus PDFs are not committed; their full-corpus checks remain loc
 
 Stage 26 is the first accepted Task 6A checkpoint. It adds byte-input inspection/conversion seams, makes the PDF.js resource configuration explicit, and changes the Node CLI adapter to read the source once. PR #19 was merged as `fca44cf7e4fee433951801cbb243668af671cd52`; its PR CI and the merge commit's `main` push CI both passed.
 
-Stage 27 physically separates the inspection model, byte inspection core, byte conversion core, and Node adapters. A deterministic TypeScript-scanned dependency artifact now records direct/transitive Node imports, PDF.js, the Node resource provider, unreachable Java validation tooling, and missing browser contracts. Local public verification passed with 205/205 tests, runtime inventory verification, and pinned EPUBCheck 5/5 integration tests. GitHub CI and merge remain required before Stage 27 is accepted.
+Stage 27 physically separates the inspection model, byte inspection core, byte conversion core, and Node adapters. A deterministic TypeScript-scanned dependency artifact now records direct/transitive Node imports, PDF.js, the Node resource provider, unreachable Java validation tooling, and missing browser contracts. PR #20 was merged as `d2329fd35b2b4960d052dbb6d42be3c10e428e40`; its PR CI and the merge commit's `main` push CI both passed.
 
 ## Accepted CLI checkpoint
 
@@ -113,7 +113,7 @@ Stages 22–24 found no generic source-backed production rule that could safely 
 
 ## Next work
 
-1. Complete Stage 27 GitHub CI and merge before building on the new core modules.
+1. Start the next bounded Task 6 checkpoint from the latest `main`; do not reset to the Stage 27 implementation or merge SHA.
 2. Manual reading-system acceptance is the only open CLI-adjacent validation: Thorium and calibre should be checked explicitly on representative vertical/horizontal/ruby/note/image/navigation cases. If unavailable, keep the status as unperformed rather than inventing a pass.
 3. Use `docs/stage27-runtime-dependency-inventory.json` to design and measure browser-capable SHA-256, zlib/PNG, and PDF.js runtime/resource strategies. Progress, cancellation, diagnostics, file-size/memory policy, download/save, and cleanup also remain explicit missing contracts. Do not start a large UI before those contracts and a browser fixture are reviewed.
 4. Do not reopen Task 4 or widen ruby thresholds without new generic source-backed evidence.
