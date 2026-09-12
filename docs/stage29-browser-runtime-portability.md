@@ -1,6 +1,6 @@
 # Stage 29: browser runtime portability and end-to-end conversion
 
-Status: **implementation complete enough for local acceptance; not yet accepted**.
+Status: **browser runtime parity implementation specified; not yet accepted**.
 
 Current Codex/session handoff: [stage29-codex-handoff.md](stage29-codex-handoff.md).
 
@@ -52,14 +52,96 @@ A pako 3.0.1 experiment was attempted with both Node-compatible and legacy/stock
 
 The branch is intentionally restored to the last public-browser-passing `CompressionStream` implementation while the private zlib-ng parity blocker remains open. This is a known limitation, not an acceptance claim.
 
+### Confirmed implementation contract
+
+A native control experiment against the official zlib-ng 2.3.3 source at commit
+`12731092979c6d07f42da27da673a9f6c7b13586` established the missing condition:
+
+- `compress2(..., Z_DEFAULT_COMPRESSION)` does **not** match Node on the
+  1,440,600-byte PNG scanline fixture even when linked to the same zlib-ng
+  version;
+- `deflateInit2()` with Node defaults followed by repeated
+  `deflate(..., Z_FINISH)` calls using 16 KiB output windows matches Node
+  byte-for-byte;
+- the matching control covers empty, one-byte, 257-byte, 65,537-byte, and
+  1,440,600-byte inputs;
+- the large fixture produces 274,150 bytes with SHA-256 prefix
+  `358e881dbc7f908e` from Node, the installed compatibility library, and the
+  source-built compatibility library.
+
+The 16 KiB window is part of the accepted byte contract. It reproduces Node
+v26.7.0's synchronous zlib wrapper call pattern; merely choosing the same zlib
+implementation is insufficient.
+
+Implement the browser deflate provider as a small local WebAssembly module
+built from the pinned official zlib-ng source. Its C boundary must:
+
+1. initialize zlib with level `Z_DEFAULT_COMPRESSION`, method `Z_DEFLATED`,
+   window bits 15, memory level 8, and `Z_DEFAULT_STRATEGY`;
+2. expose an output-bound function and one deflate function over caller-owned
+   input/output buffers;
+3. drive `deflate(..., Z_FINISH)` with at most 16,384 output bytes per call
+   until `Z_STREAM_END`;
+4. return an explicit non-zero status for initialization, capacity, deflate,
+   or teardown failure;
+5. reject byte lengths that cannot be represented safely by the exported
+   32-bit WebAssembly ABI;
+6. keep allocation ownership explicit so every per-call allocation is freed on
+   success and failure.
+
+The JavaScript provider must instantiate the committed same-origin WASM asset
+once per dedicated conversion worker, validate the required exports, copy
+input into WASM memory, copy the exact returned output into a fresh
+`Uint8Array`, and release WASM allocations in `finally`. It must fail closed on
+load, export, length, allocation, or zlib errors. It must not fall back to
+`CompressionStream`, pako, a CDN, or a Node shim.
+
+The repository must contain the wrapper source, the pinned zlib-ng license and
+provenance, the generated WASM asset, and a reproducible developer-only build
+command pinned to zlib-ng 2.3.3 commit
+`12731092979c6d07f42da27da673a9f6c7b13586` and Emscripten 6.0.9. The
+developer-only command must verify the zlib-ng checkout commit before building
+and write only the committed WASM artifact; it must not silently select another
+source or toolchain. Ordinary `npm ci`, browser builds, and tests consume the
+committed asset and must not download or compile native code.
+
+Keep the environment-neutral WASM ABI/instance adapter under `src/`, with no
+Node import or browser-global dependency. Keep asset URL resolution and fetch
+under `web/`, where Vite owns the same-origin `?url` import. Unit tests may read
+the committed WASM file with Node and pass its bytes to the same neutral
+instance adapter; production code must fetch the Vite-emitted URL and cache one
+instantiation promise per worker. This separation keeps Node filesystem access
+out of the browser bundle and permits the exact same artifact to be tested in
+both environments.
+
+The browser static verifier must confirm that the WASM asset is emitted,
+non-empty, same-origin, and that the production bundle contains no
+`CompressionStream` fallback or Node import. Runtime readiness must report Web
+Crypto SHA-256 plus pinned zlib-ng WASM and must fail before conversion if WASM
+loading or its deterministic fixture probe fails. The service worker's existing
+same-origin runtime cache must cache the WASM request during the online warm-up
+so the accepted offline conversion test continues to pass.
+
+Public tests must compare the browser/WASM provider directly with the unchanged
+`node:zlib.deflateSync()` provider for all five control fixtures above. The
+1,440,600-byte fixture uses 600 unfiltered RGB rows of 800 pixels, matching the
+production PNG raw layout (`600 * (1 + 800 * 3)`). Its full compressed byte
+array must match; a decompression-only check, length check, or hash-prefix check
+is insufficient. The runtime-neutral PNG test must also retain full PNG byte
+identity.
+
 ### Required next implementation
 
 1. Keep the accepted Node provider and all Stage 25–28 semantics unchanged.
-2. Replace only the browser deflate provider with an implementation that reproduces the accepted zlib-ng compatibility output byte-for-byte. A browser-local zlib-ng/WASM implementation is the leading path because the Node baseline itself is zlib-ng-backed.
-3. Before rerunning the private corpus, add a public/local parity test using large PNG-like scanline input that proves the browser provider matches `node:zlib.deflateSync()` on the current accepted environment. Small fixtures are insufficient because both `CompressionStream` and pako matched some trivial inputs while diverging on production-sized image data.
-4. Rerun the public browser gate after any production runtime change.
-5. Only after public parity passes, rerun `verify:browser-private` and require all 9 PDFs / 5,141 pages / 6,387 unresolved annotations / exact EPUB bytes.
-6. Do not alter expected hashes, image extraction, PNG filtering, parser semantics, ruby rules, or EPUB equality to make the gate pass.
+2. Replace only the browser deflate provider with the pinned zlib-ng 2.3.3 WASM
+   implementation and exact 16 KiB Node v26.7.0 call contract above.
+3. Add the public/local large-fixture parity test before any private rerun.
+4. Rerun the entire public local gate with system Chrome after the runtime
+   change.
+5. Only after public parity passes, rerun `verify:browser-private` and require
+   all 9 PDFs / 5,141 pages / 6,387 unresolved annotations / exact EPUB bytes.
+6. Do not alter expected hashes, image extraction, PNG filtering, parser
+   semantics, ruby rules, or EPUB equality to make the gate pass.
 
 ## Local commands
 
