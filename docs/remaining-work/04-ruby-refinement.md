@@ -2,66 +2,66 @@
 
 ## 現在地
 
-Stage 21で全23,097候補を分類し、Stage 22でcoarse geometry near-miss evidence、Stage 23でproduction後段のglyph-selection replayまで完了しました。productionのルビ判定規則はまだ変更していません。
+**完了。** Stage 21〜24で全23,097候補を分類・再生・分解し、productionのルビ判定規則を変更せずにTask 4を閉じました。
 
 ```text
 EXACT_CANDIDATES=16710
 UNRESOLVED_CANDIDATES=6387
 UNRESOLVED_REASON_COUNTS={"no-base":5004,"ambiguous-base":577,"noncontiguous-base":792,"missing-glyph-geometry":14}
 REPLAY_MISMATCHES=0
-NO_BASE_STAGE_COUNTS={"no-eligible-line":3800,"no-glyph-selected":1204}
 ```
 
-Stage 22–23の結論は、`no-base`閾値を緩和しないことです。1,204件のcoarse-eligible `no-base`も全件で選択glyph=0・choice=0であり、1,130件はglyph cellとのoverlapが50%以下、残り74件はglyph cellの前後または間にあります。したがって5,004件の`no-base`は現状のまま意図的にunresolvedで保持します。
+6,387件を0件にすることは完了条件ではありません。source-backedで一意に改善できる構造的欠陥が見つからなかったため、既存のunresolved-content preservationを正式な受け入れ動作とします。
 
-## 原則
+## 根拠
 
-- 6,387件を0件にすることは完了条件ではない。
-- source-backedで一意な改善だけをexactへ昇格する。
-- filename、font name、文字内容、OCR、辞書、作品固有ルールを使わない。
-- ligatureやsupplementary Unicodeを推測幅で分割しない。
-- 曖昧な候補は未解決のまま保存する。
-- verifierの期待値を弱めない。
+### no-base 5,004
 
-## 4A 全候補分類
+Stage 22〜23で分析済みです。
 
-完了済み。`inspect:ruby-refinement`で各PDFを一度だけglyph付きinspectionし、candidate ID、reason、orientation、rotation、glyph mapping、base alternatives、source integrityをprivacy-safeに全件分類しました。
+- 3,800件はproduction geometryを満たすbody lineがない。
+- 残り1,204件も全件で選択base glyph=0、choice=0。
+- 1,130/1,204はglyph cell overlapが50%以下。
+- 残り74件はglyph cellの前、後、または間にある。
 
-## 4B 原因別改善
+閾値や`>50%` overlap ruleを緩和すると誤対応側へ倒れるため、production変更は行いません。
 
-現在ここです。
+### noncontiguous-base 792
 
-`no-base`はStage 22–23で分析完了し、production変更なしで保持する判断になりました。次は残るpost-selection群をread-onlyで分解します。
+Stage 24で全件を構造分解しました。
 
-主対象:
+```text
+NONCONTIGUOUS_FAILURE_COUNTS={"same-item-source-gap":652,"same-item-source-gap+wide-gap":52,"wide-gap":88}
+```
 
-- `noncontiguous-base`: 792件;
-- `ambiguous-base`: 577件;
-- Stage 23 `noncontiguous-selection`: 798件;
-- `boundary-uncertainty`: 541件;
-- `annotation-overhang`: 28件;
-- `line-glyph-unmapped`: 2件;
-- `missing-annotation-geometry`: 14件。
+全件にsource不連続または実測glyph間の物理的不連続があります。missing source transitionは0件です。離れたsource文字を連結してruby baseを捏造しないため、そのままunresolvedにします。
 
-次checkpointでは、normalized internal glyph gap、source continuity、boundary margin、annotation overhang量を測ります。ここでも分布が出るまで`ruby-spans.ts`は変更しません。
+### ambiguous-base 577
 
-production変更を行う場合は、まず正例fixtureと adversarial negative fixtureを追加し、その後に一つの構造規則だけを変更します。変更後はstable candidate IDでbefore/afterを全private corpus比較します。
+主因は明確です。
 
-## 4C source単位の保存照合
+```text
+boundary-uncertainty=541
+annotation-overhang=28
+noncontiguous-selection=6
+line-glyph-unmapped=2
+```
 
-production変更後に必須です。
+boundary-uncertain 541件は全件が既存1% margin以内です。一方、16,710 exact controlsは全件margin外で、観測上の境界が明確に分離しています。overhang 28件も全件が半body-sizeを超えます。したがって安全に緩和できる閾値はありません。
 
-- 旧unresolved sourceが新exactまたは残るunresolvedのどちらかへ完全対応すること;
-- 新exact全件に一意base、実測glyph、連続source、競合なしがあること;
-- 既存exact変更は理由付き個別review;
-- EPUBで注記二重化やsource消失がないこと。
+### missing-glyph-geometry 14
 
-## 完了条件
+推測幅で補完しません。source-backedなgeometryがないためunresolvedのまま保持します。
 
-- source範囲欠落・意図しない二重所有0件;
-- 採用修正は正例・反例・実PDF構造で検証済み;
-- mapped 880/880、代表対応11/11等の意味的baselineを維持;
-- 5,141 source pages保持;
-- 全9冊EPUBCheck clean;
-- 最終unresolved内訳、新exact数、変更旧exact数、見送った群と理由を記録;
-- 改善根拠が無ければ無理に件数を減らさず、保存方針のままTask 4を閉じる判断を行う。
+## 受け入れ結論
+
+- production `ruby-spans.ts` の変更なし。
+- 16,710 exact候補は維持。
+- 6,387 unresolved候補は理由付きで保持。
+- default EPUBではunresolved annotationをpage noteとして保存。
+- strict CLIでは`--unresolved-ruby error`で明示的に拒否できる。
+- source integrity issue 0、unknown reason 0、production/replay mismatch 0。
+
+Task 4は「改善実装なし」ではなく、**全候補を根拠付きで評価した結果、現在のfail-closed判定と保存方針を受け入れた**状態です。件数を減らすためだけの閾値変更は禁止します。
+
+次は[工程5：CLI版の最終受け入れ](05-cli-acceptance.md)へ進みます。
