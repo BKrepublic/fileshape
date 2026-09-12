@@ -11,6 +11,7 @@ import type {
   FileShapeDocument,
   InlineNode,
 } from "./document-model.js";
+import { validateImageAspectRatio } from "./production-image-placement.js";
 
 export type EpubXhtmlPage = {
   sourcePage: number;
@@ -72,6 +73,10 @@ function renderImage(
   occurrence: DocumentImageOccurrence,
   resource: DocumentImageResource,
 ): string {
+  const aspectError = validateImageAspectRatio(occurrence, resource.width, resource.height);
+  if (aspectError) {
+    throw new Error(`page ${occurrence.sourcePage} image operator ${occurrence.operatorIndex} occurrence ${occurrence.occurrenceIndex} ${aspectError}`);
+  }
   const alt = `Source image from page ${occurrence.sourcePage}`;
   const src = `../images/${resource.contentHash}.png`;
   return `    <figure class="fileshape-image" data-source-page="${occurrence.sourcePage}" data-operator-index="${occurrence.operatorIndex}" data-occurrence-index="${occurrence.occurrenceIndex}"><img src="${escapeXmlAttribute(src)}" width="${resource.width}" height="${resource.height}" alt="${escapeXmlAttribute(alt)}" /></figure>`;
