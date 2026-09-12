@@ -170,7 +170,10 @@ function validModified(value: string): string {
     throw new BrowserContractError("modified must be an EPUB UTC timestamp");
   }
   const timestamp = Date.parse(value);
-  if (!Number.isFinite(timestamp) || new Date(timestamp).toISOString() !== value) {
+  const canonical = Number.isFinite(timestamp)
+    ? new Date(timestamp).toISOString().replace(/\.000Z$/, "Z")
+    : "";
+  if (!Number.isFinite(timestamp) || canonical !== value) {
     throw new BrowserContractError("modified must be a valid UTC timestamp");
   }
   return value;
