@@ -31,17 +31,39 @@ Focused tests cover:
 - one OPF `cover-image` marker for a selected shared resource;
 - preservation of all body occurrences;
 - package rejection of a missing cover resource;
-- real EPUBCheck validation of an explicitly selected production image occurrence.
+- real EPUBCheck validation of an explicitly selected production image occurrence;
+- archive-level cover marker accounting through the same image-package validator used by full-corpus verification.
 
-Required commands:
+`verify:cover` is a local/private smoke verifier. It scans the unchanged private corpus only to obtain one exact existing image occurrence, then performs both default and explicit-cover conversions of that same PDF. This is test selection only; production conversion never auto-selects a cover. The verifier exposes only aggregate results and deletes generated EPUBs after the check.
+
+Required public commands:
 
 ```text
 npm test
 npm run verify:epubcheck
 ```
 
-## Private acceptance still required
+## Private acceptance
 
-Because this changes package/CLI behavior, Stage 20 is not accepted until a fresh private-corpus default full regression passes and one existing private image occurrence is selected explicitly for a cover smoke test. The default run must preserve the Stage 19 aggregate: 9 EPUBs, 5,141 pages, 6,387 unresolved annotations, 250/250 outline entries, 4 image occurrences, 1 unique PNG content resource, consistent XHTML/OPF/ZIP references, and EPUBCheck 9/9 clean.
+The fresh default full-corpus regression passed on 2026-09-12 at Stage 20 implementation `9ac5ead90767aee94c14bd3e735476b1307eddf8`:
 
-The cover smoke test must verify only privacy-safe aggregate facts: selector resolves, exactly one OPF image item has `cover-image`, no extra PNG is created, the selected body occurrence remains present, and EPUBCheck is clean. Private image/PDF/EPUB/report data must not be committed.
+```text
+PDFs: 9/9
+EPUBs: 9/9
+Pages: 5141/5141
+Unresolved annotations preserved: 6387
+Total EPUB bytes: 17959256
+Outline entries: 250/250; outline PDFs: 6/6; unresolved outline entries: 0
+Image occurrences: 4/4; unique PNG content resources: 1/1; XHTML/OPF/ZIP references: consistent
+EPUBCheck 5.3.0: 9/9 passed (0 errors, 0 warnings)
+```
+
+This confirms that merely adding the explicit-cover option does not alter default output behavior or the accepted Stage 19 image contract.
+
+One private explicit-cover smoke check still remains before Stage 20 is accepted. Run:
+
+```text
+npm run verify:cover
+```
+
+Acceptance requires: exactly one cover marker, unchanged body image occurrence count, unchanged PNG resource set/count, and EPUBCheck zero errors/warnings. Private image/PDF/EPUB/report data must not be committed.
