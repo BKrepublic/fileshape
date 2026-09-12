@@ -9,6 +9,11 @@ export type PdfJsProbeResult = {
   realWorkerPort: boolean;
 };
 
+type PdfWorkerWithPortConstructor = new (params: {
+  name?: string;
+  port?: Worker;
+}) => pdfjsLib.PDFWorker;
+
 class ProbeTimeoutError extends Error {
   constructor(readonly stage: string) {
     super(`PDF.js probe timed out during ${stage}.`);
@@ -78,12 +83,17 @@ export async function probePdfJsRuntime(): Promise<PdfJsProbeResult> {
   let document: pdfjsLib.PDFDocumentProxy | undefined;
   try {
     workerPort = new Worker(workerLocation, { type: "module", name: "fileshape-pdfjs-probe" });
-    worker = pdfjsLib.PDFWorker.create({ name: "fileshape-probe", port: workerPort });
-    await within(worker.promise, "worker startup");
-    if (worker.port !== workerPort) return unsupported("PDF.js did not retain the explicit real worker port.");
+    // pdfjs-dist 6.3.289 documents a Worker-valued `port`, but its generated
+    // constructor declaration narrows that field to null. Keep the cast at this
+    // adapter boundary rather than leaking a package declaration defect outward.
+    const PdfWorkerWithPort = pdfjsLib.PDFWorker as unknown as PdfWorkerWithPortConstructor;
+    const activeWorker = new PdfWorkerWithPort({ name: "fileshape-probe", port: workerPort });
+    worker = activeWorker;
+    await within(activeWorker.promise, "worker startup");
+    if (activeWorker.port !== workerPort) return unsupported("PDF.js did not retain the explicit real worker port.");
 
     const data = fixturePdf().slice();
-    loadingTask = pdfjsLib.getDocument({ data, worker, useSystemFonts: false, disableFontFace: true });
+    loadingTask = pdfjsLib.getDocument({ data, worker: activeWorker, useSystemFonts: false, disableFontFace: true });
     document = await within(loadingTask.promise, "document load");
     if (document.numPages !== 1) return unsupported("PDF.js fixture page count was unexpected.", true);
     const page = await within(document.getPage(1), "page load");
