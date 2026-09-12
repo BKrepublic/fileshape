@@ -2,17 +2,17 @@
 
 ## 現在地
 
-Stage 21で全23,097候補を分類し、Stage 22でcoarse geometry near-miss evidenceまで取得済みです。productionのルビ判定規則はまだ変更していません。
+Stage 21で全23,097候補を分類し、Stage 22でcoarse geometry near-miss evidence、Stage 23でproduction後段のglyph-selection replayまで完了しました。productionのルビ判定規則はまだ変更していません。
 
 ```text
 EXACT_CANDIDATES=16710
 UNRESOLVED_CANDIDATES=6387
 UNRESOLVED_REASON_COUNTS={"no-base":5004,"ambiguous-base":577,"noncontiguous-base":792,"missing-glyph-geometry":14}
-NO_BASE_COARSE_ELIGIBLE=1204
-NO_BASE_CROSS_DISTANCE_GE_2_BODY_WIDTHS=3662
+REPLAY_MISMATCHES=0
+NO_BASE_STAGE_COUNTS={"no-eligible-line":3800,"no-glyph-selected":1204}
 ```
 
-Stage 22の結論は、`no-base`全体に対する閾値緩和をしないことです。1,204件だけがcoarse entry-level gatesを通るため、次はproduction後段のglyph-cell overlap / annotation coverage / source continuity / line-choiceをread-only再生し、failure mechanismを分類します。
+Stage 22–23の結論は、`no-base`閾値を緩和しないことです。1,204件のcoarse-eligible `no-base`も全件で選択glyph=0・choice=0であり、1,130件はglyph cellとのoverlapが50%以下、残り74件はglyph cellの前後または間にあります。したがって5,004件の`no-base`は現状のまま意図的にunresolvedで保持します。
 
 ## 原則
 
@@ -31,15 +31,19 @@ Stage 22の結論は、`no-base`全体に対する閾値緩和をしないこと
 
 現在ここです。
 
-Stage 22により、大多数の`no-base`は単純なnear missではないことが確認できました。次checkpointではproduction後段をread-onlyで再生し、1,204件のcoarse-eligible `no-base`を以下に分類します。
+`no-base`はStage 22–23で分析完了し、production変更なしで保持する判断になりました。次は残るpost-selection群をread-onlyで分解します。
 
-- eligible lineはあるがglyph cellが一つも選択されない;
-- boundary uncertainty / annotation overhang;
-- source/glyph non-contiguity;
-- 複数line/choice競合;
-- replayとproduction status/reasonの不一致。
+主対象:
 
-この分布が出るまで`ruby-spans.ts`は変更しません。
+- `noncontiguous-base`: 792件;
+- `ambiguous-base`: 577件;
+- Stage 23 `noncontiguous-selection`: 798件;
+- `boundary-uncertainty`: 541件;
+- `annotation-overhang`: 28件;
+- `line-glyph-unmapped`: 2件;
+- `missing-annotation-geometry`: 14件。
+
+次checkpointでは、normalized internal glyph gap、source continuity、boundary margin、annotation overhang量を測ります。ここでも分布が出るまで`ruby-spans.ts`は変更しません。
 
 production変更を行う場合は、まず正例fixtureと adversarial negative fixtureを追加し、その後に一つの構造規則だけを変更します。変更後はstable candidate IDでbefore/afterを全private corpus比較します。
 
