@@ -45,7 +45,7 @@ npm run verify:epubcheck
 
 ## Private acceptance
 
-The fresh default full-corpus regression passed on 2026-09-12 at Stage 20 implementation `9ac5ead90767aee94c14bd3e735476b1307eddf8`:
+The fresh default full-corpus regression passed on 2026-09-12:
 
 ```text
 PDFs: 9/9
@@ -60,10 +60,23 @@ EPUBCheck 5.3.0: 9/9 passed (0 errors, 0 warnings)
 
 This confirms that merely adding the explicit-cover option does not alter default output behavior or the accepted Stage 19 image contract.
 
-One private explicit-cover smoke check still remains before Stage 20 is accepted. Run:
+The private explicit-cover smoke also passed:
 
 ```text
-npm run verify:cover
+COVER_SMOKE=PASS
+PDFS=9
+BODY_IMAGE_OCCURRENCES=1
+PNG_RESOURCES=1
+COVER_MARKERS=1
+BODY_OCCURRENCES_PRESERVED=yes
+PNG_RESOURCES_UNCHANGED=yes
+EPUBCheck 5.3.0: pass (0 errors, 0 warnings)
 ```
 
-Acceptance requires: exactly one cover marker, unchanged body image occurrence count, unchanged PNG resource set/count, and EPUBCheck zero errors/warnings. Private image/PDF/EPUB/report data must not be committed.
+The smoke selected one exact existing image occurrence only for test execution. It confirmed that the explicit cover marker is unique, no extra PNG resource is created, the original body occurrence is preserved, and the resulting EPUB remains standards-clean.
+
+## Acceptance
+
+**Stage 20 is accepted.** Explicit cover selection is source/user-backed only; automatic cover inference remains intentionally absent. Future source-native cover metadata may be added if trustworthy evidence becomes available, but it must not weaken this explicit/fail-closed contract.
+
+Private image/PDF/EPUB/report data are not committed.
