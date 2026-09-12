@@ -77,8 +77,8 @@ async function main(): Promise<void> {
   if (/https?:\/\//.test(browserSources)) throw new Error("browser application source contains an HTTP(S) runtime URL");
   requireMatch(browserSources, /isOffscreenCanvasSupported:\s*false/, "browser PDF.js config must keep OffscreenCanvas image conversion disabled for Node parity");
   requireMatch(browserSources, /isImageDecoderSupported:\s*false/, "browser PDF.js config must keep ImageDecoder disabled for Node parity");
-  requireMatch(browserSources, /pako\/browser\/deflate/, "browser binary runtime must use the pinned Node-compatible deflate provider");
-  requireMatch(browserSources, /legacyHash:\s*false/, "browser deflate provider must explicitly select Node-compatible hashing");
+  requireMatch(browserSources, /pako\/browser\/deflate/, "browser binary runtime must use the pinned deterministic deflate provider");
+  requireMatch(browserSources, /legacyHash:\s*true/, "browser deflate provider must explicitly select the stock-zlib-compatible hash path");
   if (/CompressionStream/.test(browserSources)) throw new Error("browser binary runtime must not depend on runtime-specific CompressionStream deflate bytes");
   requireMatch(emitted, /PDFWorker/, "PDF.js browser worker code was not emitted");
   requireMatch(emitted, /PDF input must not be empty/, "dedicated conversion worker did not include the accepted conversion core");
