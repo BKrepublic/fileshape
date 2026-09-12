@@ -74,7 +74,37 @@ v26.7.0's synchronous zlib wrapper call pattern; merely choosing the same zlib
 implementation is insufficient.
 
 Implement the browser deflate provider as a small local WebAssembly module
-built from the pinned official zlib-ng source. Its C boundary must:
+built from the pinned official zlib-ng source. The required application-facing
+raw WASM exports are `memory`, `malloc`, `free`, `fileshape_zlib_bound`, and
+`fileshape_zlib_deflate`; the adapter ignores Emscripten bookkeeping exports
+that are not callable through this contract. The C ABI is:
+
+```c
+uint32_t fileshape_zlib_bound(uint32_t source_length);
+int32_t fileshape_zlib_deflate(
+    const uint8_t *source,
+    uint32_t source_length,
+    uint8_t *destination,
+    uint32_t destination_capacity,
+    uint32_t *destination_length);
+```
+
+Pointers and all lengths are WebAssembly `i32` values interpreted as unsigned
+32-bit integers. `fileshape_zlib_bound` returns `compressBound(source_length)`
+when representable as a non-zero `uint32_t`, otherwise zero. The deflate status
+values are fixed as follows:
+
+- `0`: success;
+- `1`: invalid pointer or length combination;
+- `2`: destination capacity is insufficient;
+- `3`: `deflateInit2` failed;
+- `4`: `deflate` returned neither `Z_OK` nor `Z_STREAM_END`;
+- `5`: `deflateEnd` failed after otherwise successful compression.
+
+The function writes zero to `destination_length` before compression whenever
+that pointer is valid and writes the exact byte count only on status zero. If
+compression fails, it still calls `deflateEnd` after a successful init and
+returns the earlier compression status. The C boundary must:
 
 1. initialize zlib with level `Z_DEFAULT_COMPRESSION`, method `Z_DEFLATED`,
    window bits 15, memory level 8, and `Z_DEFAULT_STRATEGY`;
@@ -82,10 +112,10 @@ built from the pinned official zlib-ng source. Its C boundary must:
    input/output buffers;
 3. drive `deflate(..., Z_FINISH)` with at most 16,384 output bytes per call
    until `Z_STREAM_END`;
-4. return an explicit non-zero status for initialization, capacity, deflate,
-   or teardown failure;
-5. reject byte lengths that cannot be represented safely by the exported
-   32-bit WebAssembly ABI;
+4. return the fixed status above for argument, capacity, initialization,
+   deflate, or teardown failure;
+5. rely only on caller-provided lengths already validated as unsigned 32-bit
+   integers, and reject pointer arithmetic or bounds that overflow `uint32_t`;
 6. keep allocation ownership explicit so every per-call allocation is freed on
    success and failure.
 
@@ -96,14 +126,65 @@ input into WASM memory, copy the exact returned output into a fresh
 load, export, length, allocation, or zlib errors. It must not fall back to
 `CompressionStream`, pako, a CDN, or a Node shim.
 
-The repository must contain the wrapper source, the pinned zlib-ng license and
-provenance, the generated WASM asset, and a reproducible developer-only build
-command pinned to zlib-ng 2.3.3 commit
-`12731092979c6d07f42da27da673a9f6c7b13586` and Emscripten 6.0.9. The
-developer-only command must verify the zlib-ng checkout commit before building
-and write only the committed WASM artifact; it must not silently select another
-source or toolchain. Ordinary `npm ci`, browser builds, and tests consume the
-committed asset and must not download or compile native code.
+The cached promise owns one non-threaded WASM instance. Concurrent callers may
+await the same promise. After that await, allocation, the exported deflate call,
+output copying, and cleanup form one synchronous run-to-completion section with
+no intervening `await`; JavaScript task semantics therefore serialize access to
+the shared memory. The C wrapper creates and ends a new stack-local `z_stream`
+for every call and retains no compression state. Threads and shared WASM memory
+must remain disabled. A later implementation that introduces an asynchronous
+step inside that section or shared native state must add explicit serialization
+before it can be accepted.
+
+Use these repository paths:
+
+- `vendor/zlib-ng/fileshape-zlib-wrapper.c`: the reviewed ABI wrapper;
+- `vendor/zlib-ng/build-wasm.sh`: the developer-only build command;
+- `vendor/zlib-ng/LICENSE`: the upstream license;
+- `vendor/zlib-ng/README.md`: source, toolchain, flags, and artifact provenance;
+- `web/vendor/fileshape-zlib-ng-2.3.3.wasm`: the committed runtime asset.
+
+The build inputs are pinned to zlib-ng 2.3.3 commit
+`12731092979c6d07f42da27da673a9f6c7b13586`, the official emsdk 6.0.9 tag at
+commit `5eb0bde7585670252e8ba05e9d361627bffd08b5`, and the corresponding
+Emscripten 6.0.9 source tag at commit
+`4e4223852a0835923411059a3929907d7df1232e`. The build script accepts explicit
+zlib-ng and emsdk checkout paths, verifies both Git commits, activates only that
+emsdk toolchain, and rejects any `emcc` version other than 6.0.9.
+
+Configure zlib-ng through `emcmake cmake` with these fixed cache values:
+
+```text
+ZLIB_COMPAT=ON
+BUILD_SHARED_LIBS=OFF
+BUILD_TESTING=OFF
+WITH_GTEST=OFF
+WITH_OPTIM=OFF
+WITH_NATIVE_INSTRUCTIONS=OFF
+WITH_RUNTIME_CPU_DETECTION=OFF
+WITH_NEW_STRATEGIES=ON
+WITH_REDUCED_MEM=OFF
+CMAKE_BUILD_TYPE=Release
+```
+
+Link the wrapper and static compatibility library with these fixed Emscripten
+settings: `-O3`, `--no-entry`, `-sSTANDALONE_WASM=1`,
+`-sALLOW_MEMORY_GROWTH=1`, `-sFILESYSTEM=0`, `-sMALLOC=emmalloc`,
+`-sASSERTIONS=0`, `-sERROR_ON_UNDEFINED_SYMBOLS=1`, and an
+`EXPORTED_FUNCTIONS` list containing only `_malloc`, `_free`,
+`_fileshape_zlib_bound`, and `_fileshape_zlib_deflate`. Do not enable pthreads,
+shared memory, SIMD, native instructions, or runtime CPU dispatch.
+
+The provenance README records the full SHA-256 of the wrapper source and
+generated WASM after implementation. `npm test` must recompute both hashes,
+reject drift, instantiate the artifact, validate the exact export set needed by
+the adapter, and run the byte-parity fixtures. Rebuilding with the pinned inputs
+must reproduce the recorded WASM hash; the build command exits non-zero on a
+hash mismatch when an accepted hash is already recorded. The build writes only
+the committed WASM artifact and must not silently select another source,
+toolchain, configuration, or output path. Ordinary `npm ci`, browser builds,
+and tests consume the committed asset and must not download or compile native
+code.
 
 Keep the environment-neutral WASM ABI/instance adapter under `src/`, with no
 Node import or browser-global dependency. Keep asset URL resolution and fetch
