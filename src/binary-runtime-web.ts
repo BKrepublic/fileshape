@@ -16,9 +16,10 @@ export const webBinaryRuntime: BinaryRuntime = Object.freeze({
   },
 
   deflateZlib(bytes: Uint8Array): Uint8Array {
-    // Pako 3.x can emit Node.js-compatible zlib streams. Keep this explicit:
-    // PNG content hashes are part of EPUB identity, so merely equivalent
-    // decompressed bytes are insufficient for browser/Node byte parity.
-    return deflate(Uint8Array.from(bytes), { legacyHash: false });
+    // FileShape's accepted Node provider delegates to the host node:zlib.
+    // Arch/CachyOS Node is built against the shared stock zlib rather than
+    // Node's patched bundled zlib. Pako's legacyHash=true selects the stock
+    // zlib hash/deflate path, preserving the accepted Node PNG bitstream.
+    return deflate(Uint8Array.from(bytes), { legacyHash: true });
   },
 });
