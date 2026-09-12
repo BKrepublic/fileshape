@@ -21,6 +21,12 @@ type PrivateResult = {
   peakBrowserRssDeltaKiB: number;
 };
 
+type StoredZipEntry = {
+  path: string;
+  data: Buffer;
+  uncompressedSize: number;
+};
+
 async function listPdfs(): Promise<string[]> {
   const entries = await readdir(corpusDirectory, { withFileTypes: true });
   return entries
@@ -31,6 +37,93 @@ async function listPdfs(): Promise<string[]> {
 
 function pdfId(bytes: Uint8Array): string {
   return `sha256:${createHash("sha256").update(bytes).digest("hex").slice(0, 16)}`;
+}
+
+function hashPrefix(bytes: Uint8Array): string {
+  return createHash("sha256").update(bytes).digest("hex").slice(0, 16);
+}
+
+function storedZipEntries(bytes: Buffer): StoredZipEntry[] {
+  const entries: StoredZipEntry[] = [];
+  let offset = 0;
+  while (offset + 4 <= bytes.length && bytes.readUInt32LE(offset) === 0x04034b50) {
+    if (offset + 30 > bytes.length) throw new Error("truncated EPUB local ZIP header");
+    const method = bytes.readUInt16LE(offset + 8);
+    if (method !== 0) throw new Error(`unexpected compressed EPUB entry at byte ${offset}`);
+    const compressedSize = bytes.readUInt32LE(offset + 18);
+    const uncompressedSize = bytes.readUInt32LE(offset + 22);
+    const nameLength = bytes.readUInt16LE(offset + 26);
+    const extraLength = bytes.readUInt16LE(offset + 28);
+    const nameStart = offset + 30;
+    const nameEnd = nameStart + nameLength;
+    const dataStart = nameEnd + extraLength;
+    const dataEnd = dataStart + compressedSize;
+    if (dataEnd > bytes.length) throw new Error("truncated EPUB local ZIP entry");
+    entries.push({
+      path: bytes.toString("utf8", nameStart, nameEnd),
+      data: bytes.subarray(dataStart, dataEnd),
+      uncompressedSize,
+    });
+    offset = dataEnd;
+  }
+  return entries;
+}
+
+function firstDifferentByte(left: Uint8Array, right: Uint8Array): number {
+  const sharedLength = Math.min(left.length, right.length);
+  for (let index = 0; index < sharedLength; index += 1) {
+    if (left[index] !== right[index]) return index;
+  }
+  return left.length === right.length ? -1 : sharedLength;
+}
+
+function epubDifferenceSummary(nodeBytes: Buffer, browserBytes: Buffer): Record<string, unknown> {
+  const nodeEntries = storedZipEntries(nodeBytes);
+  const browserEntries = storedZipEntries(browserBytes);
+  const sharedEntries = Math.min(nodeEntries.length, browserEntries.length);
+  for (let index = 0; index < sharedEntries; index += 1) {
+    const node = nodeEntries[index]!;
+    const browser = browserEntries[index]!;
+    if (node.path !== browser.path) {
+      return {
+        kind: "entry-path",
+        entryIndex: index,
+        nodePath: node.path,
+        browserPath: browser.path,
+        nodeEntryCount: nodeEntries.length,
+        browserEntryCount: browserEntries.length,
+      };
+    }
+    if (Buffer.compare(node.data, browser.data) !== 0) {
+      return {
+        kind: "entry-data",
+        entryIndex: index,
+        entryPath: node.path,
+        nodeBytes: node.data.length,
+        browserBytes: browser.data.length,
+        nodeUncompressedSize: node.uncompressedSize,
+        browserUncompressedSize: browser.uncompressedSize,
+        firstDifferingByte: firstDifferentByte(node.data, browser.data),
+        nodeSha256: hashPrefix(node.data),
+        browserSha256: hashPrefix(browser.data),
+      };
+    }
+  }
+  if (nodeEntries.length !== browserEntries.length) {
+    return {
+      kind: "entry-count",
+      nodeEntryCount: nodeEntries.length,
+      browserEntryCount: browserEntries.length,
+    };
+  }
+  return {
+    kind: "archive-structure",
+    nodeBytes: nodeBytes.length,
+    browserBytes: browserBytes.length,
+    firstDifferingByte: firstDifferentByte(nodeBytes, browserBytes),
+    nodeSha256: hashPrefix(nodeBytes),
+    browserSha256: hashPrefix(browserBytes),
+  };
 }
 
 async function expectRuntimeSupported(page: Page): Promise<void> {
@@ -147,7 +240,18 @@ test("private corpus browser output matches the accepted Node byte API and recor
       rubyMode: "on",
     });
     const measured = await measureBrowserConversion(page, cdp, sourcePath, sourceBytes);
-    expect(Buffer.compare(measured.bytes, Buffer.from(expected.bytes)), `${id} browser EPUB differs from Node bytes`).toBe(0);
+    const comparison = Buffer.compare(measured.bytes, Buffer.from(expected.bytes));
+    if (comparison !== 0) {
+      console.log(`PRIVATE_BROWSER_DIFF=${JSON.stringify({
+        pdfId: id,
+        nodePageCount: expected.pageCount,
+        nodeUnresolvedAnnotationCount: expected.unresolvedAnnotationCount,
+        nodeEpubBytes: expected.byteLength,
+        browserEpubBytes: measured.bytes.length,
+        difference: epubDifferenceSummary(Buffer.from(expected.bytes), measured.bytes),
+      })}`);
+    }
+    expect(comparison, `${id} browser EPUB differs from Node bytes`).toBe(0);
 
     const result: PrivateResult = {
       pdfId: id,
