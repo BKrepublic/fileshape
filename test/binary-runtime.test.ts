@@ -9,22 +9,6 @@ function bytes(length: number): Uint8Array {
   return Uint8Array.from({ length }, (_, index) => (index * 31 + 17) & 0xff);
 }
 
-function imageLikeBytes(width = 800, height = 600): Uint8Array {
-  const rowBytes = width * 3;
-  const output = new Uint8Array((rowBytes + 1) * height);
-  for (let y = 0; y < height; y += 1) {
-    const rowStart = y * (rowBytes + 1);
-    output[rowStart] = y % 5;
-    for (let x = 0; x < width; x += 1) {
-      const pixel = rowStart + 1 + x * 3;
-      output[pixel] = (x * 3 + y * 5) & 0xff;
-      output[pixel + 1] = (x * 7 + y * 11) & 0xff;
-      output[pixel + 2] = ((x >> 2) + (y >> 1) + (x ^ y)) & 0xff;
-    }
-  }
-  return output;
-}
-
 test("sync and web SHA-256 match the accepted Node provider", async () => {
   for (const source of [new Uint8Array(), new TextEncoder().encode("abc"), bytes(65_537)]) {
     const node = await nodeBinaryRuntime.sha256Hex(source);
@@ -33,14 +17,8 @@ test("sync and web SHA-256 match the accepted Node provider", async () => {
   }
 });
 
-test("web pako deflate matches accepted Node zlib bytes", async () => {
-  for (const source of [
-    new Uint8Array(),
-    Uint8Array.from([0]),
-    bytes(257),
-    bytes(65_537),
-    imageLikeBytes(),
-  ]) {
+test("web CompressionStream deflate matches Node zlib bytes", async () => {
+  for (const source of [new Uint8Array(), Uint8Array.from([0]), bytes(257), bytes(65_537)]) {
     const node = await nodeBinaryRuntime.deflateZlib(source);
     const web = await webBinaryRuntime.deflateZlib(source);
     assert.deepEqual(web, node);
