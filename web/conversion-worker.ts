@@ -134,10 +134,10 @@ async function handleStart(value: unknown): Promise<void> {
     // Give a queued cancel message one task turn before publishing success.
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
     throwIfCancelled(request);
-    const epub = result.bytes.buffer.slice(
-      result.bytes.byteOffset,
-      result.bytes.byteOffset + result.bytes.byteLength,
-    );
+    // Copy into a fresh ordinary ArrayBuffer. TypedArray.buffer is ArrayBufferLike
+    // and can be SharedArrayBuffer; the browser contract deliberately transfers
+    // only a detachable ArrayBuffer.
+    const epub = Uint8Array.from(result.bytes).buffer;
     post({
       kind: "succeeded",
       requestId: start.requestId,
