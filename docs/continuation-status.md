@@ -36,58 +36,34 @@ Stage 2: 9/9 PDFs; 5141 pages; semantic output 5141/5141;
          font-pair semantic match 223/223
 ```
 
-## Accepted checkpoints after Stage 12
+## Ruby evidence checkpoints
 
-### Stage 13a: outline destination -> source evidence
-
-All 250 outline entries in six PDFs were analyzed without title/body matching. Results were `page-only: 250`, with zero source-backed body anchors. Task 1 body heading/section mapping remains on hold; Stage 12a page-level outline navigation is the accepted fallback.
-
-### Stage 14: reading-system CSS/resources
-
-Deterministic packaged CSS, reflow-safe vertical/horizontal rules, ruby/note styling, explicit page progression and reader fixture are implemented. Task 2 still needs manual real-reader acceptance.
-
-### Stages 15–20: images and cover
-
-Source-backed image extraction, typed resource/occurrence provenance, geometry-backed placement, XHTML/OPF/ZIP packaging, limits, fail-closed unsupported effects, full-package image accounting and explicit cover designation are accepted. No automatic cover inference exists.
-
-### Stage 21: ruby refinement inventory
-
-Stage 21 classifies the complete current ruby-candidate population without changing production thresholds.
+Stage 21 classified all 23,097 current candidates without changing production rules:
 
 ```text
-PDFS=9
-PAGES=5141
-RUBY_CANDIDATES=23097
 EXACT_CANDIDATES=16710
 UNRESOLVED_CANDIDATES=6387
 UNRESOLVED_REASON_COUNTS={"no-base":5004,"ambiguous-base":577,"noncontiguous-base":792,"missing-glyph-geometry":14}
-ORIENTATION_COUNTS={"vertical":23079,"horizontal":18}
-ROTATION_COUNTS={"0":23045,"90":52}
-ANNOTATION_EVIDENCE_COUNTS={"all-exact-with-geometry":23083,"has-unmapped-glyph-mapping":14}
 SOURCE_INTEGRITY_ISSUES=0
 UNKNOWN_REASON_COUNT=0
 ```
 
-### Stage 22: ruby near-miss geometry evidence
-
-Stage 22 is read-only and measures why unresolved candidates fail coarse production geometry gates.
+Stage 22 measured coarse geometry near misses. Exact controls all pass the coarse gate model:
 
 ```text
 EXACT_ACTUAL_BASE_ELIGIBILITY={"all-actual-base-eligible":16710}
-NO_BASE_TOTAL=5004
-NO_BASE_COARSE_ELIGIBLE=1204
-NO_BASE_CROSS_DISTANCE_GE_2_BODY_WIDTHS=3662
 ```
 
-The exact control is clean. Most `no-base` candidates are far outside current geometry and do not justify any blanket threshold widening. A residual 1,204 pass every coarse entry-level gate yet still end as `no-base`, proving that their rejection happens later in glyph-cell selection / annotation coverage / source-contiguity / choice logic.
+For `no-base`, most candidates are far outside supported geometry. 3,662 have the nearest body entry at least two body widths away on the side axis. A residual 1,204 candidates pass every coarse entry-level gate but still end as `no-base`.
 
-`ambiguous-base` 577 and `noncontiguous-base` 792 are also coarse-eligible, as expected, and are controls for the next replay diagnostic. `missing-glyph-geometry` remains isolated at 14.
+**Conclusion:** do not widen production thresholds. The 1,204 residual failures occur after coarse entry filtering, so the next read-only checkpoint must replay glyph-cell selection, annotation coverage, source continuity and line/choice construction. `ambiguous-base` 577 and `noncontiguous-base` 792 are controls for that replay. No production ruby rule changed in Stages 21–22.
 
-**Decision:** do not change production thresholds from Stage 22 evidence.
+## Other accepted/held scope
 
-### marked content / 「特殊効果」
-
-The complete private corpus contains zero marked-content occurrences. Do not invent special-tag conversion rules for this corpus. Future presentation-only wrappers may be unwrapped only when child content is preserved; content-bearing/interactive/ambiguous behavior must not be silently deleted.
+- Stage 13a body heading mapping remains on hold: all 250 outline entries are page-level only. Page-level navigation is accepted fallback.
+- Stage 14 reading-system implementation exists; manual real-reader acceptance remains.
+- Stages 15–20 image preservation and explicit source-backed cover are accepted. No automatic cover inference.
+- Complete private corpus has zero marked-content occurrences; do not invent special-tag rules for this corpus.
 
 ## Current pipeline
 
@@ -125,10 +101,8 @@ Relevant options include unresolved-ruby policy, page progression, `--ruby on|of
 
 ## Next work
 
-1. **Task 4B glyph-selection evidence**: replay the production post-gate selection stage read-only. Classify the 1,204 coarse-eligible `no-base` candidates into exact later-failure mechanisms: no glyph selected, boundary/overhang uncertainty, non-contiguity, or competing choices. The diagnostic must reproduce current production reason/status for all 23,097 candidates as a consistency control.
-2. Only if that evidence exposes a generic structural defect should production `ruby-spans.ts` change. Add positive + adversarial negative fixtures first, then compare stable candidate IDs before/after over the full private corpus.
-3. Task 2 real-reader acceptance remains manual/environment-dependent and does not block independent Task 4 work.
+1. **Task 4B glyph-selection evidence**: replay production post-gate selection read-only and classify the 1,204 coarse-eligible `no-base` candidates by exact later failure. The diagnostic must reproduce current production status/reason for all 23,097 candidates.
+2. Only if that evidence exposes a generic structural defect should `ruby-spans.ts` change. Add positive + adversarial negative fixtures first, then compare stable candidate IDs before/after over the full private corpus.
+3. Task 2 real-reader acceptance remains manual/environment-dependent.
 4. Task 5 CLI final acceptance follows accepted Task 4 scope and real-reader conclusions.
 5. Browser/Android follows CLI acceptance.
-
-Task 1 body heading/section mapping remains on hold until genuinely new PDF-native source evidence appears.
