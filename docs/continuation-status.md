@@ -1,10 +1,10 @@
 # FileShape continuation status
 
-Updated 2026-09-12 after Stage 22 private-corpus ruby near-miss acceptance.
+Updated 2026-09-12 after Stage 23 private-corpus glyph-selection acceptance.
 
 ## Current GitHub baseline
 
-Stages 19–20 image preservation / explicit cover are accepted and merged. Stage 21 Task 4A ruby inventory is accepted and merged to `main` through PR #13. Stage 22 Task 4B near-miss geometry evidence is accepted on `stage22-ruby-near-miss-evidence`; merge this evidence checkpoint before any production ruby-rule change.
+Stages 19–20 image preservation / explicit cover are accepted and merged. Stage 21 Task 4A ruby inventory and Stage 22 coarse geometry evidence are accepted and merged. Stage 23 post-gate glyph-selection replay is accepted on `stage23-ruby-glyph-selection-evidence`; merge this checkpoint before any production ruby-rule change.
 
 The 9 private corpus PDFs are not committed; their full-corpus checks remain local-only.
 
@@ -43,15 +43,31 @@ SOURCE_INTEGRITY_ISSUES=0
 UNKNOWN_REASON_COUNT=0
 ```
 
-Stage 22 measured coarse geometry near misses. Exact controls all pass the coarse gate model:
+Stage 22 measured coarse geometry near misses. Exact controls all pass the coarse gate model. For `no-base`, 3,662 nearest body entries are at least two body widths away on the side axis. A residual 1,204 pass every coarse entry-level gate.
+
+Stage 23 exactly replayed production post-gate line/glyph selection for all 23,097 candidates and returned:
 
 ```text
-EXACT_ACTUAL_BASE_ELIGIBILITY={"all-actual-base-eligible":16710}
+REPLAY_MISMATCHES=0
+NO_BASE_STAGE_COUNTS={"no-eligible-line":3800,"no-glyph-selected":1204}
+NO_BASE_ELIGIBLE_LINE_COUNT=1204
+NO_BASE_NO_SELECTION_RELATION_COUNTS={"not-applicable":3800,"partial-overlap-at-most-half":1130,"after-all-glyphs":28,"before-all-glyphs":12,"between-glyphs":34}
+NO_BASE_MAX_OVERLAP_BUCKETS={"0":74,"none":3800,">0.25-0.50":1126,">0.10-0.25":4}
 ```
 
-For `no-base`, most candidates are far outside supported geometry. 3,662 have the nearest body entry at least two body widths away on the side axis. A residual 1,204 candidates pass every coarse entry-level gate but still end as `no-base`.
+All 1,204 coarse-gate-eligible `no-base` candidates select zero base glyphs and form zero choices. 1,130 merely overlap a glyph cell by at most 50%; the rest fall before, after, or between glyph cells. **Conclusion: do not relax no-base thresholds or the >50% glyph-overlap rule.** The current 5,004 `no-base` cases remain intentionally unresolved.
 
-**Conclusion:** do not widen production thresholds. The 1,204 residual failures occur after coarse entry filtering, so the next read-only checkpoint must replay glyph-cell selection, annotation coverage, source continuity and line/choice construction. `ambiguous-base` 577 and `noncontiguous-base` 792 are controls for that replay. No production ruby rule changed in Stages 21–22.
+The remaining evidence targets are `noncontiguous-base` 792 and `ambiguous-base` 577. Stage 23 stage counts are:
+
+```text
+boundary-uncertainty=541
+noncontiguous-selection=798
+annotation-overhang=28
+line-glyph-unmapped=2
+missing-annotation-geometry=14
+```
+
+These must be decomposed structurally before any production change. No production ruby rule changed in Stages 21–23.
 
 ## Other accepted/held scope
 
@@ -72,8 +88,8 @@ For `no-base`, most candidates are far outside supported geometry. 3,662 have th
 
 ## Next work
 
-1. **Task 4B glyph-selection evidence**: replay production post-gate selection read-only and classify the 1,204 coarse-eligible `no-base` candidates by exact later failure. The diagnostic must reproduce current production status/reason for all 23,097 candidates.
-2. Only if that evidence exposes a generic structural defect should `ruby-spans.ts` change. Add positive + adversarial negative fixtures first, then compare stable candidate IDs before/after over the full private corpus.
+1. **Task 4B unresolved post-selection evidence**: classify `noncontiguous-base` and `ambiguous-base` by normalized internal glyph gap, source continuity, boundary margin and overhang magnitude. Keep it read-only first.
+2. Only if a generic structural defect cleanly separates from existing exact candidates should `ruby-spans.ts` change. Add positive + adversarial negative fixtures first, then compare stable candidate IDs before/after over the full private corpus.
 3. Task 2 real-reader acceptance remains manual/environment-dependent.
 4. Task 5 CLI final acceptance follows accepted Task 4 scope and real-reader conclusions.
 5. Browser/Android follows CLI acceptance.
