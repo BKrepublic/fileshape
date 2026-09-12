@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 
 const root = path.resolve("dist/browser");
@@ -8,6 +8,17 @@ const requireMatch = (value: string, pattern: RegExp, message: string): void => 
   if (!pattern.test(value)) throw new Error(message);
 };
 const requireFile = async (relative: string): Promise<Buffer> => readFile(path.join(root, relative));
+
+async function listFiles(directory: string, prefix = ""): Promise<string[]> {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const files: string[] = [];
+  for (const entry of entries) {
+    const relative = prefix.length === 0 ? entry.name : `${prefix}/${entry.name}`;
+    if (entry.isDirectory()) files.push(...await listFiles(path.join(directory, entry.name), relative));
+    else if (entry.isFile()) files.push(relative);
+  }
+  return files;
+}
 
 function pngDimensions(bytes: Buffer): { width: number; height: number } {
   const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
@@ -47,23 +58,26 @@ async function main(): Promise<void> {
     if (resource.byteLength === 0) throw new Error(`PDF.js browser resource is empty: ${relative}`);
   }
 
-  const assetNames = (html.match(/\.\/assets\/[^"']+\.js/g) ?? []).map((name) => name.replace(/^\.\/assets\//, ""));
-  if (assetNames.length === 0) throw new Error("no emitted JavaScript assets found");
-  const javascript = await Promise.all(assetNames.map((name) => text(`assets/${name}`)));
+  const allBuiltFiles = await listFiles(root);
+  const javascriptFiles = allBuiltFiles.filter((file) => file.endsWith(".js"));
+  if (javascriptFiles.length < 3) throw new Error("browser build did not emit the application and worker JavaScript assets");
+  const javascript = await Promise.all(javascriptFiles.map((file) => text(file)));
   const emitted = javascript.join("\n");
   if (/(?:\bfrom\s*|\bimport\s*\(|\brequire\s*\()\s*["']node:/.test(emitted) || /__vite-browser-external/.test(emitted)) {
-    throw new Error("browser bundle contains a Node import or browser shim");
+    throw new Error("browser application/worker bundle contains a Node import or browser shim");
   }
   const browserSources = (await Promise.all([
     "web/main.ts",
     "web/pdfjs-runtime-probe.ts",
     "web/binary-runtime-probe.ts",
     "web/pdfjs-resource-config.ts",
+    "web/conversion-worker.ts",
   ].map(sourceText))).join("\n");
   if (/https?:\/\//.test(browserSources)) throw new Error("browser application source contains an HTTP(S) runtime URL");
-  if (/pdf-inspector-core|pdf-to-epub-core/.test(emitted)) throw new Error("browser entry graph imports accepted conversion cores before the dedicated worker is connected");
-  requireMatch(emitted, /PDFWorker/, "PDF.js browser probe was not emitted");
+  requireMatch(emitted, /PDFWorker/, "PDF.js browser worker code was not emitted");
   requireMatch(emitted, /CompressionStream/, "browser binary runtime was not emitted");
+  requireMatch(emitted, /PDF input must not be empty/, "dedicated conversion worker did not include the accepted conversion core");
+  requireMatch(emitted, /serializing-epub/, "dedicated conversion worker did not include conversion progress phases");
   const cssAsset = (html.match(/\.\/assets\/[^"']+\.css/) ?? [""])[0].replace(/^\.\/assets\//, "");
   if (cssAsset.length === 0) throw new Error("no emitted CSS asset found");
   const css = await text(`assets/${cssAsset}`);
