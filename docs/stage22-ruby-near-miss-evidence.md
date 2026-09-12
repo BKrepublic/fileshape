@@ -68,15 +68,15 @@ NO_BASE_INLINE_GAP_BUCKETS:
 
 This splits the population decisively. Most `no-base` candidates are not near a single threshold; 3,662 have the nearest coarse body entry at least two body widths away on the side axis, and large groups also fail axis and inline proximity. These are **not** candidates for a blanket threshold widening.
 
-However, 1,204 `no-base` candidates have a nearest body entry that passes every coarse entry-level gate. This is the important Stage 22 finding. Their failure must occur later in production selection, at glyph-cell overlap / source-contiguity / uniqueness logic, not at the coarse entry gate. The two duplicate-like large-PDF pairs account for most of this population, but it also appears in the two small 26-candidate PDFs.
+However, 1,204 `no-base` candidates have a nearest body entry that passes every coarse entry-level gate. Their failure must occur later in production selection, at glyph-cell overlap / annotation coverage / source-contiguity / line-choice logic, not at the coarse entry gate.
 
-`ambiguous-base` (577) and `noncontiguous-base` (792) both show a coarse nearest `eligible` entry for every candidate, as expected: their rejection happens after coarse entry filtering. `missing-glyph-geometry` remains isolated at 14 candidates with no usable annotation geometry.
+`ambiguous-base` (577) and `noncontiguous-base` (792) both show a coarse nearest `eligible` entry for every candidate, as expected. `missing-glyph-geometry` remains isolated at 14 candidates with no usable annotation geometry.
 
 ## Decision
 
 **Do not widen any production geometry threshold based on Stage 22.** The evidence does not support it.
 
-The next checkpoint must replay the glyph-selection stage read-only and classify the 1,204 coarse-eligible `no-base` cases by the exact later failure: no glyph cell selected, boundary uncertainty, annotation overhang, non-contiguous source, or competing line/choice. Production rules stay unchanged until that distribution is known.
+The next checkpoint must replay the glyph-selection stage read-only and classify the 1,204 coarse-eligible `no-base` cases by the exact later failure: no glyph cell selected, boundary uncertainty, annotation overhang, non-contiguous source, or competing line/choice. The replay must reproduce the current production status/reason for all candidates as a consistency control.
 
 ## Privacy / invariants
 
