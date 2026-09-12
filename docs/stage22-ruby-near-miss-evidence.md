@@ -23,14 +23,6 @@ A residual 1,204 `no-base` candidates have a nearest body entry that passes ever
 
 The next checkpoint must replay the glyph-selection stage read-only and classify the 1,204 coarse-eligible `no-base` cases by exact later-failure mechanism. The replay must reproduce current production status/reason for all candidates as a consistency control.
 
-## Privacy / invariants
-
-- no source text or private filename is written to the report;
-- no OCR, dictionary, filename, font-name, metadata, or character-specific rule;
-- no production thresholds change in Stage 22;
-- candidate identity remains source-range based;
-- private reports stay outside Git.
-
 ## Status
 
-**Accepted.** Public CI passed and the complete private corpus reconciled with Stage 21 counts. Stage 22 makes no claim that any unresolved candidate should be promoted.
+**Accepted.** Public CI and complete private corpus evidence both pass. No production ruby rule changed.
