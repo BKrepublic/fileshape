@@ -6,3 +6,5 @@ dist/
 local-samples/
 .cache/epubcheck/
 local-reports/
+test-results/
+playwright-report/

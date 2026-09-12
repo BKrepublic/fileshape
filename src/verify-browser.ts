@@ -1,0 +1,62 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+
+const root = path.resolve("dist/browser");
+const text = async (relative: string): Promise<string> => readFile(path.join(root, relative), "utf8");
+const sourceText = async (relative: string): Promise<string> => readFile(path.resolve(relative), "utf8");
+const requireMatch = (value: string, pattern: RegExp, message: string): void => {
+  if (!pattern.test(value)) throw new Error(message);
+};
+const requireFile = async (relative: string): Promise<Buffer> => readFile(path.join(root, relative));
+
+function pngDimensions(bytes: Buffer): { width: number; height: number } {
+  const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+  if (!bytes.subarray(0, 8).equals(signature) || bytes.toString("ascii", 12, 16) !== "IHDR") throw new Error("icon is not a PNG");
+  return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
+}
+
+async function main(): Promise<void> {
+  const html = await text("index.html");
+  const manifest = JSON.parse(await text("app.webmanifest")) as Record<string, unknown>;
+  const serviceWorker = await text("service-worker.js");
+  requireMatch(html, /rel="manifest" href="\.\/app\.webmanifest"/, "built HTML must link a relative manifest");
+  requireMatch(html, /<script\b[^>]*\btype="module"[^>]*\bsrc="\.\/assets\//, "built HTML must link a relative module asset");
+  requireMatch(html, /Content-Security-Policy/, "built HTML must contain CSP");
+  if (manifest.id !== "./" || manifest.start_url !== "." || manifest.scope !== "." || manifest.display !== "standalone") throw new Error("manifest identity/scope/display is invalid");
+  if (!Array.isArray(manifest.icons) || manifest.icons.length !== 2) throw new Error("manifest must contain two icons");
+  const iconSizes = ["192x192", "512x512"];
+  for (const [index, expectedSize] of iconSizes.entries()) {
+    const icon = manifest.icons[index] as Record<string, unknown> | undefined;
+    if (!icon || icon.sizes !== expectedSize || icon.type !== "image/png") throw new Error(`manifest icon ${expectedSize} is invalid`);
+    const relative = String(icon.src).replace(/^\.\//, "");
+    const dimensions = pngDimensions(await requireFile(relative));
+    if (`${dimensions.width}x${dimensions.height}` !== expectedSize) throw new Error(`icon ${relative} dimensions are invalid`);
+  }
+  requireMatch(serviceWorker, /fileshape-shell-v1/, "service worker cache version is missing");
+  requireMatch(serviceWorker, /request\.mode === "navigate"/, "service worker must provide navigation fallback");
+  requireMatch(serviceWorker, /url\.origin !== self\.location\.origin/, "service worker must restrict cache requests to same origin");
+  requireMatch(serviceWorker, /self\.registration\.scope/, "service worker must use application scope");
+
+  const assetNames = (html.match(/\.\/assets\/[^"']+\.js/g) ?? []).map((name) => name.replace(/^\.\/assets\//, ""));
+  if (assetNames.length === 0) throw new Error("no emitted JavaScript assets found");
+  const javascript = await Promise.all(assetNames.map((name) => text(`assets/${name}`)));
+  const emitted = javascript.join("\n");
+  if (/(?:\bfrom\s*|\bimport\s*\(|\brequire\s*\()\s*["']node:/.test(emitted) || /__vite-browser-external/.test(emitted)) {
+    throw new Error("browser bundle contains a Node import or browser shim");
+  }
+  const browserSources = `${await sourceText("web/main.ts")}\n${await sourceText("web/pdfjs-runtime-probe.ts")}`;
+  if (/https?:\/\//.test(browserSources)) throw new Error("browser application source contains an HTTP(S) runtime URL");
+  if (/pdf-inspector-core|pdf-to-epub-core/.test(emitted)) throw new Error("browser entry graph imports accepted conversion cores");
+  requireMatch(emitted, /PDFWorker/, "PDF.js browser probe was not emitted");
+  const cssAsset = (html.match(/\.\/assets\/[^"']+\.css/) ?? [""])[0].replace(/^\.\/assets\//, "");
+  if (cssAsset.length === 0) throw new Error("no emitted CSS asset found");
+  const css = await text(`assets/${cssAsset}`);
+  requireMatch(css, /min-width:\s*600px/, "CSS must define the 600px layout transition");
+  requireMatch(css, /min-height:\s*48px/, "CSS must define 48px interactive controls");
+  requireMatch(css, /prefers-reduced-motion/, "CSS must honor reduced motion");
+  requireMatch(css, /prefers-color-scheme:\s*dark/, "CSS must include dark system tokens");
+  requireMatch(css, /:focus-visible/, "CSS must include visible keyboard focus");
+  console.log("FILESHAPE BROWSER STATIC RESULT: PASS");
+}
+
+await main();

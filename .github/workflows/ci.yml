@@ -15,6 +15,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -27,6 +29,15 @@ jobs:
 
       - name: Unit tests and typecheck
         run: npm test
+
+      - name: Runtime dependency inventory
+        run: npm run verify:runtime-deps
+
+      - name: Install pinned Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser PWA verification
+        run: npm run verify:browser
 
       - name: Setup Java for EPUBCheck
         uses: actions/setup-java@v4
@@ -51,3 +62,6 @@ jobs:
           else
             echo "local-samples is not present on this runner; corpus regressions are local-only."
           fi
+
+      - name: Diff whitespace check
+        run: git diff --check HEAD^ HEAD
