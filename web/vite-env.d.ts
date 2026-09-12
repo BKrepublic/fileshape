@@ -19,15 +19,18 @@ declare module "pdfjs-dist/build/pdf.mjs" {
     getTextContent(): Promise<{ items: Array<{ str?: string }> }>;
   };
   export class PDFWorker {
-    constructor(options?: { name?: string });
+    constructor(options?: { name?: string; port?: Worker });
     readonly promise: Promise<void>;
     readonly port: Worker;
     destroy(): void;
   }
-  export const GlobalWorkerOptions: { workerSrc: string };
+  export const GlobalWorkerOptions: {
+    workerSrc: string;
+    workerPort: Worker | null;
+  };
   export function getDocument(options: {
     data: Uint8Array;
-    worker: PDFWorker;
+    worker?: PDFWorker;
     useSystemFonts: boolean;
     disableFontFace: boolean;
   }): PDFDocumentLoadingTask;
