@@ -4,9 +4,7 @@ Stage 22 is a read-only Task 4B evidence checkpoint. It does **not** change prod
 
 ## Why this exists
 
-Stage 21 reconciled all 23,097 ruby candidates and showed that 6,387 remain unresolved. The dominant group is 5,004 `no-base` candidates, of which 4,960 are vertical, rotation 0, exact annotation glyph geometry, zero retained base alternatives, and no page glyph issues.
-
-That does not prove the current thresholds are wrong. Many small text runs may simply not be ruby. Before touching `ruby-spans.ts`, Stage 22 measures the nearest body geometry and records which current production gate would reject it.
+Stage 21 reconciled all 23,097 ruby candidates and showed that 6,387 remain unresolved. The dominant group is 5,004 `no-base` candidates. Before touching `ruby-spans.ts`, Stage 22 measures the nearest body geometry and records which coarse production gate would reject it.
 
 ## Command
 
@@ -22,7 +20,7 @@ The report is local-only and contains no source text.
 
 ## Measured gates
 
-For each candidate with usable annotation glyph geometry, body text entries are evaluated against the same structural boundaries used by the production association logic:
+For each candidate with usable annotation glyph geometry, body text entries are evaluated against the same coarse structural boundaries used by production association logic:
 
 - axis alignment;
 - body skew;
@@ -30,35 +28,55 @@ For each candidate with usable annotation glyph geometry, body text entries are 
 - signed side distance (`0.45 <= distance/body-size <= 1.35`);
 - inline proximity (gap no greater than half a body-size).
 
-The tool records the nearest body entry by normalized gate-violation score. This is diagnostic evidence only. A nearest entry is **not** declared to be the linguistic base.
+The nearest entry is diagnostic evidence only. It is **not** declared to be the linguistic base.
 
-For exact candidates, the tool also records whether the already-selected source-backed base entries satisfy these coarse entry-level gates. This is a control population for detecting a broken diagnostic model.
+For exact candidates, the tool records whether the already-selected source-backed base entries satisfy these coarse entry-level gates. This is a control population for detecting a broken diagnostic model.
 
-## Aggregate output
+## Accepted private corpus result
 
-The report and stdout summarize:
+Stage 22 ran over all 9 PDFs / 5,141 pages and reconciled the same 23,097 candidates and 6,387 unresolved candidates.
 
-- exact/unresolved and reason counts;
-- nearest gate signatures for unresolved candidates;
-- separate nearest gate signatures for `no-base`;
-- `no-base` font-ratio buckets;
-- `no-base` side-distance buckets;
-- `no-base` inline-gap buckets;
-- exact-candidate actual-base eligibility controls.
+```text
+UNRESOLVED_REASON_COUNTS={"no-base":5004,"ambiguous-base":577,"noncontiguous-base":792,"missing-glyph-geometry":14}
+EXACT_ACTUAL_BASE_ELIGIBILITY={"all-actual-base-eligible":16710}
+```
 
-## Decision rule
+The exact control is clean: all 16,710 accepted exact candidates have their actual base entries inside the coarse gate model.
 
-Do not widen a threshold merely because many candidates sit close to it.
+For the 5,004 `no-base` candidates:
 
-A production rule change requires all of the following:
+```text
+NO_BASE_NEAREST_GATE_COUNTS:
+  eligible                                      1204
+  axis-mismatch+side-too-far                    1449
+  inline-too-far+side-too-far                   1010
+  axis-mismatch+inline-too-far+side-too-far      711
+  side-too-far                                   501
+  remaining signatures                           129
 
-1. a reproducible structural population whose current rejection is explained by one bounded gate;
-2. positive fixtures that represent that geometry;
-3. adversarial negative fixtures showing unrelated small text remains unresolved;
-4. source-stable before/after comparison across the full private corpus;
-5. no regression in existing exact ruby, source ownership, ruby verifier, Stage 2, EPUB output, or EPUBCheck.
+NO_BASE_CROSS_DISTANCE_BUCKETS:
+  0.45-1.35  1207
+  >=2.00     3662
+  other        135
 
-If the dominant `no-base` candidates are geometrically far from any plausible body entry, or resemble unrelated small text, leaving them unresolved is the correct result.
+NO_BASE_INLINE_GAP_BUCKETS:
+  overlap       2795
+  >0-0.50        394
+  >0.50-1.00     725
+  >1.00         1090
+```
+
+This splits the population decisively. Most `no-base` candidates are not near a single threshold; 3,662 have the nearest coarse body entry at least two body widths away on the side axis, and large groups also fail axis and inline proximity. These are **not** candidates for a blanket threshold widening.
+
+However, 1,204 `no-base` candidates have a nearest body entry that passes every coarse entry-level gate. This is the important Stage 22 finding. Their failure must occur later in production selection, at glyph-cell overlap / source-contiguity / uniqueness logic, not at the coarse entry gate. The two duplicate-like large-PDF pairs account for most of this population, but it also appears in the two small 26-candidate PDFs.
+
+`ambiguous-base` (577) and `noncontiguous-base` (792) both show a coarse nearest `eligible` entry for every candidate, as expected: their rejection happens after coarse entry filtering. `missing-glyph-geometry` remains isolated at 14 candidates with no usable annotation geometry.
+
+## Decision
+
+**Do not widen any production geometry threshold based on Stage 22.** The evidence does not support it.
+
+The next checkpoint must replay the glyph-selection stage read-only and classify the 1,204 coarse-eligible `no-base` cases by the exact later failure: no glyph cell selected, boundary uncertainty, annotation overhang, non-contiguous source, or competing line/choice. Production rules stay unchanged until that distribution is known.
 
 ## Privacy / invariants
 
@@ -67,3 +85,7 @@ If the dominant `no-base` candidates are geometrically far from any plausible bo
 - no production thresholds change in Stage 22;
 - candidate identity remains source-range based via the accepted Stage 21 inventory contract;
 - private reports stay outside Git.
+
+## Status
+
+**Accepted.** Public CI passed and the complete private corpus reconciled with the accepted Stage 21 counts. Stage 22 is evidence only; it makes no claim that any unresolved candidate should be promoted.
