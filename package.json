@@ -36,14 +36,21 @@
     "diagnose:orientation": "tsx src/diagnose-unresolved-orientation.ts",
     "convert:epub": "tsx src/pdf-to-epub.ts",
     "typecheck": "tsc --noEmit",
-    "test": "tsx src/test-runner.ts"
+    "test": "tsx src/test-runner.ts",
+    "dev:browser": "vite --config vite.config.ts",
+    "build:browser": "tsc -p tsconfig.browser.json && vite build --config vite.config.ts",
+    "preview:browser": "vite preview --config vite.config.ts",
+    "verify:browser-static": "node --import tsx src/verify-browser.ts",
+    "verify:browser": "npm run build:browser && npm run verify:browser-static && playwright test --config playwright.config.ts"
   },
   "dependencies": {
     "pdfjs-dist": "6.3.289"
   },
   "devDependencies": {
+    "@playwright/test": "1.55.0",
     "@types/node": "^22.20.2",
     "tsx": "^4.23.13",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vite": "7.1.5"
   }
 }

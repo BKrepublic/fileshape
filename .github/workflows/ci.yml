@@ -28,6 +28,12 @@ jobs:
       - name: Unit tests and typecheck
         run: npm test
 
+      - name: Install pinned Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser PWA verification
+        run: npm run verify:browser
+
       - name: Setup Java for EPUBCheck
         uses: actions/setup-java@v4
         with:
