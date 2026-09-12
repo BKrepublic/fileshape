@@ -36,6 +36,11 @@ test("browser options remain assignable to the accepted CLI option shape", () =>
   }).title, "Title");
 });
 
+test("canonical second-precision modified timestamps survive runtime validation", () => {
+  const valid = validateStartMessage(start("modified", { modified: "2026-09-12T10:20:30Z" }));
+  assert.equal(valid.options.modified, "2026-09-12T10:20:30Z");
+});
+
 test("start validation rejects unsafe labels, unknown options and invalid values", () => {
   assert.equal(validateStartMessage(start()).sourceName, "sample.pdf");
   assert.throws(() => validateStartMessage(start("bad/id")), BrowserContractError);
