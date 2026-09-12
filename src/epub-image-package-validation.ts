@@ -16,6 +16,7 @@ export type EpubImagePackageValidation = {
   occurrenceCount: number;
   resourceCount: number;
   resourceHashes: string[];
+  coverImageHashes: string[];
 };
 
 function localEntries(bytes: Uint8Array): ArchiveEntry[] {
@@ -66,6 +67,7 @@ export function validateEpubImagePackage(bytes: Uint8Array): EpubImagePackageVal
       occurrenceCount: 0,
       resourceCount: 0,
       resourceHashes: [],
+      coverImageHashes: [],
     };
   }
 
@@ -107,6 +109,7 @@ export function validateEpubImagePackage(bytes: Uint8Array): EpubImagePackageVal
   }
 
   const manifestHashes = new Set<string>();
+  const coverImageHashes = new Set<string>();
   const opf = byPath.get("OEBPS/package.opf");
   if (!opf) {
     issues.push("missing OEBPS/package.opf for image validation");
@@ -132,7 +135,12 @@ export function validateEpubImagePackage(bytes: Uint8Array): EpubImagePackageVal
       if (id !== `image-${hash}`) issues.push(`image manifest id does not match href hash: ${id ?? "<missing>"}`);
       if (manifestHashes.has(hash)) issues.push(`duplicate image manifest resource ${hash}`);
       manifestHashes.add(hash);
+      const properties = (attrs.get("properties") ?? "").split(/\s+/).filter(Boolean);
+      if (properties.includes("cover-image")) coverImageHashes.add(hash);
     }
+  }
+  if (coverImageHashes.size > 1) {
+    issues.push(`EPUB package has ${coverImageHashes.size} cover-image resources; expected at most one`);
   }
 
   const archiveHashes = new Set<string>();
@@ -159,5 +167,6 @@ export function validateEpubImagePackage(bytes: Uint8Array): EpubImagePackageVal
     occurrenceCount,
     resourceCount: archiveHashes.size,
     resourceHashes: [...archiveHashes].sort(),
+    coverImageHashes: [...coverImageHashes].sort(),
   };
 }
