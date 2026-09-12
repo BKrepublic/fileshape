@@ -72,23 +72,18 @@ UNKNOWN_REASON_COUNT=0
 
 Stage 22 is read-only and measures why unresolved candidates fail coarse production geometry gates.
 
-Exact control:
-
 ```text
 EXACT_ACTUAL_BASE_ELIGIBILITY={"all-actual-base-eligible":16710}
+NO_BASE_TOTAL=5004
+NO_BASE_COARSE_ELIGIBLE=1204
+NO_BASE_CROSS_DISTANCE_GE_2_BODY_WIDTHS=3662
 ```
 
-For `no-base` (5,004 total), 3,662 nearest body entries are at least two body widths away on the side axis and large additional groups fail axis/inline proximity. Therefore **blanket threshold widening is rejected**.
+The exact control is clean. Most `no-base` candidates are far outside current geometry and do not justify any blanket threshold widening. A residual 1,204 pass every coarse entry-level gate yet still end as `no-base`, proving that their rejection happens later in glyph-cell selection / annotation coverage / source-contiguity / choice logic.
 
-The significant residual group is:
+`ambiguous-base` 577 and `noncontiguous-base` 792 are also coarse-eligible, as expected, and are controls for the next replay diagnostic. `missing-glyph-geometry` remains isolated at 14.
 
-```text
-NO_BASE_NEAREST_GATE_COUNTS eligible=1204
-```
-
-These 1,204 candidates pass all coarse entry-level gates yet production still returns `no-base`. Their rejection therefore occurs later, in glyph-cell selection / annotation coverage / source-contiguity / line-choice logic. `ambiguous-base` 577 and `noncontiguous-base` 792 are also coarse-eligible as expected and serve as controls for that next diagnostic.
-
-No production ruby rule changed in Stages 21–22.
+**Decision:** do not change production thresholds from Stage 22 evidence.
 
 ### marked content / 「特殊効果」
 
