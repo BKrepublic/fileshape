@@ -2,7 +2,7 @@
 
 ## 現在地
 
-Task 4まで受け入れ済み。Stage 25でCLIの最終受け入れに入っています。
+**自動受け入れは完了済みです。** Stage 25 private acceptance は branch HEAD `fcc4dff39e5ce6e1c10e5cf2568be8afbe6fafbd` で全項目PASSしました。
 
 今回のproduction変更はCLI境界だけです。
 
@@ -12,11 +12,11 @@ Task 4まで受け入れ済み。Stage 25でCLIの最終受け入れに入って
 - parserをpublic contract testから検証可能にする。
 - 既存のatomic output replacementを維持する。
 
-PDF抽出、ruby association、画像配置、navigation、EPUB serializationの判定規則は変更しません。
+PDF抽出、ruby association、画像配置、navigation、EPUB serializationの判定規則は変更していません。
 
-## 5A：受け入れ対象を固定する
+## 5A：受け入れ対象
 
-CLIの完成範囲は以下です。
+CLIの完成範囲:
 
 - PDF -> EPUB変換。
 - source-backedな本文、exact ruby、unresolved annotation保存。
@@ -33,16 +33,30 @@ CLIの完成範囲は以下です。
 - browser/Android UI。
 - 未実施のThorium/calibre確認を自動PASS扱いすること。
 
-## 5B：CLI境界と実コマンドを検証する
+## 5B：CLI境界と実コマンド
 
-Public testでは次を固定します。
+Public testで全実装オプション、unknown/missing/invalid option、usage、source PDF自身をoutputに指定した場合の拒否を固定済みです。
 
-- 全実装オプションのparse。
-- unknown/missing/invalid optionの拒否。
-- usageの完全性。
-- source PDF自身をoutputに指定した場合の拒否。
+Private real-CLI acceptance:
 
-Private corpusでは `npm run verify:cli` を使います。
+```text
+CLI_ACCEPTANCE=PASS
+PDFS=9
+SELECTED_PDF_ID=sha256:c498e2c0069aabd2
+SELECTED_PAGES=46
+SELECTED_UNRESOLVED=3
+DEFAULT_BYTES=128957
+DETERMINISTIC_BYTES=yes
+STRICT_REJECTED=yes
+FAILED_OUTPUT_PRESERVED=yes
+INVALID_OPTION_REJECTED=yes
+MISSING_INPUT_REJECTED=yes
+HELP_SUCCEEDED=yes
+DOCUMENTED_OPTIONS_SUCCEEDED=yes
+ELAPSED_MS=25509
+```
+
+再現コマンド:
 
 ```sh
 mkdir -p local-reports
@@ -51,50 +65,40 @@ npm run verify:cli -- local-samples \
   --expect-pdf-count 9
 ```
 
-このverifierはprivate本文やfilenameをreportへ書かず、実CLIを以下の経路で実行します。
-
-1. unresolved rubyを含むPDFを構造的に選ぶ。
-2. default conversionを固定`--modified`で2回実行し、byte-identicalか確認する。
-3. `--unresolved-ruby error`が非0終了し、新規outputを残さないことを確認する。
-4. strict failureが既存outputを変更しないことを確認する。
-5. unknown optionを拒否し、outputを残さないことを確認する。
-6. missing inputでusageを返すことを確認する。
-7. `--help`が成功することを確認する。
-8. metadata、ruby off、explicit unresolved policy、rtl page progression等のdocumented option surfaceを実CLIで成功させる。
-9. scratch EPUBを終了時に削除する。
-
-coverはStage 20の `npm run verify:cover` でsource occurrence -> cover-image marker -> body occurrence preservation -> EPUBCheckまで別途検証します。
-
 ## 5C：統合private regression
 
-Stage 25の同一HEADで最低限以下を実行します。
-
-```sh
-npm run verify:cli -- local-samples --report local-reports/cli-NEW.json --expect-pdf-count 9
-npm run verify:ruby
-npm run verify:stage2
-npm run verify:cover
-npm run verify:epub -- --epubcheck --report-dir local-reports/epub-NEW
-```
-
-継承する必須値:
+同一HEADで以下をPASS済みです。
 
 ```text
+RUBY_EXIT=0
+STAGE2_EXIT=0
+COVER_EXIT=0
+VERIFY_EPUB_EXIT=0
 PDFs: 9/9
 EPUBs: 9/9
 Pages: 5141/5141
 Unresolved annotations preserved: 6387
-Outline entries: 250/250
-Image occurrences: 4/4
-Unique PNG content resources: 1/1
+Total EPUB bytes: 17959256
+Outline entries: 250/250; outline PDFs: 6/6; unresolved outline entries: 0
+Image occurrences: 4/4; unique PNG content resources: 1/1; XHTML/OPF/ZIP references: consistent
 EPUBCheck 5.3.0: 9/9 passed (0 errors, 0 warnings)
 ```
 
-Stage 25でproduction文書変換規則は変えていないため、これらの値が説明なく変わった場合は受け入れず原因を調べます。
+cover smokeも同一コードでPASS:
+
+```text
+COVER_SMOKE=PASS
+BODY_IMAGE_OCCURRENCES=1
+PNG_RESOURCES=1
+COVER_MARKERS=1
+BODY_OCCURRENCES_PRESERVED=yes
+PNG_RESOURCES_UNCHANGED=yes
+EPUBCheck 5.3.0: pass (0 errors, 0 warnings)
+```
 
 ## 5D：利用者向け契約
 
-READMEには以下を実装どおり記載します。
+READMEには以下を実装どおり記載済みです。
 
 - `npm ci` と基本変換コマンド。
 - 全実装オプション。
@@ -109,20 +113,20 @@ READMEには以下を実装どおり記載します。
 
 ## manual reader acceptance
 
-Thorium/calibreの実reader確認は環境依存の別項目です。未実施なら「未実施」と記録し、EPUBCheck greenから表示合格を推定しません。
+Thorium/calibreの実reader確認は環境依存の別項目です。**現時点では未実施**です。
 
-CLI自動受け入れとmanual reader受け入れは証拠を分離します。manual reader未実施を理由にproduction regressionの結果を曖昧にもしません。
+CLI自動受け入れとmanual reader受け入れは証拠を分離します。EPUBCheck greenをmanual reader PASSとして扱いません。
 
 ## 完了判定
 
-| 必須項目 | 受け入れ条件 |
+| 必須項目 | 結果 |
 | --- | --- |
-| CLI | default / strict / options / invalid input / help / determinismが実コマンドで期待どおり |
-| 保存性 | 9冊・5,141ページ、6,387 unresolved、outline、画像資源の既存baselineを維持 |
-| 規格 | EPUBCheck 5.3.0が9/9、error/warning 0 |
-| 安全性 | source path破壊なし。失敗時に既存outputを変更しない |
-| 利用方法 | READMEとactual CLI option surfaceが一致 |
-| 公開 | 対象SHAのpublic CI成功、private acceptance記録、noreply commit |
-| 読書 | Thorium/calibre未実施なら未実施と明記。実施した場合のみ合格記録を付ける |
+| CLI | PASS。default / strict / options / invalid input / help / determinismを実コマンドで検証済み |
+| 保存性 | PASS。9冊・5,141ページ、6,387 unresolved、outline、画像資源baseline維持 |
+| 規格 | PASS。EPUBCheck 5.3.0が9/9、error/warning 0 |
+| 安全性 | PASS。source path破壊なし。失敗時に既存outputを変更しない |
+| 利用方法 | PASS。READMEとactual CLI option surface一致 |
+| 公開 | Stage 25 branch CI green。merge後にmain SHA/CIを最終記録する |
+| 読書 | 未実施。Thorium/calibreは別項目として残す |
 
-完了後はCLI checkpointを固定し、[工程6：browser/Android](06-browser-android.md)へ進みます。
+自動CLI checkpointは完了です。merge後はmainを固定し、manual reader確認を必要に応じて実施したうえで [工程6：browser/Android](06-browser-android.md) へ進みます。
