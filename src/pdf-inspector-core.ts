@@ -1,4 +1,5 @@
 import { getDocument, OPS } from "pdfjs-dist/legacy/build/pdf.mjs";
+import type { BinaryRuntime } from "./binary-runtime.js";
 import { itemDisplayGeometry } from "./display-geometry.js";
 import { fullTextRef } from "./source-text.js";
 import { bindGlyphSources, extractOperatorGlyphs } from "./pdfjs-glyph-adapter.js";
@@ -65,6 +66,7 @@ export async function inspectPdfBytes(
   sourceName: string,
   options: PdfInspectionOptions,
   resources: PdfJsResourceConfig,
+  binaryRuntime: BinaryRuntime,
 ): Promise<InspectResult> {
   validateSourceName(sourceName);
   if (sourceBytes.byteLength === 0) throw new Error("PDF input must not be empty");
@@ -126,11 +128,12 @@ export async function inspectPdfBytes(
         : undefined;
       if (extracted) bindGlyphSources(textItems, extracted.glyphs, pageNumber);
       const productionImages = options.includeImages
-        ? extractProductionPageImages(
+        ? await extractProductionPageImages(
           pageNumber,
           { fnArray: operatorList.fnArray, argsArray: operatorList.argsArray },
           [...viewport.transform],
           (page as unknown as { objs: { get(id: string): unknown } }).objs,
+          binaryRuntime,
         )
         : undefined;
       for (const resource of productionImages?.resources ?? []) {
