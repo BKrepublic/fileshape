@@ -35,43 +35,56 @@ Each PDF is inspected once with glyph extraction enabled. The report stores no s
 
 Candidate identity deliberately excludes the current status/reason so a later Task 4 rule can compare the same annotation source before and after refinement.
 
-## Aggregate reconciliation
+## Private corpus acceptance
 
-The corpus report reconciles:
+Accepted on 2026-09-12 at `f30cdcb4dba9f178be9209600f77afb757922aa3`:
 
-- candidate / exact / unresolved totals;
-- all current reason counts;
-- unresolved reason counts;
-- orientation and rotation counts;
-- annotation geometry/glyph-mapping evidence counts;
-- base-alternative buckets `0`, `1`, `2+`;
-- structural feature buckets combining reason/orientation/rotation/evidence/alternatives/page glyph issues;
-- source-integrity issues;
-- unknown reason count.
+```text
+PDFS=9
+PAGES=5141
+RUBY_CANDIDATES=23097
+EXACT_CANDIDATES=16710
+UNRESOLVED_CANDIDATES=6387
+UNRESOLVED_REASON_COUNTS={"no-base":5004,"ambiguous-base":577,"noncontiguous-base":792,"missing-glyph-geometry":14}
+ORIENTATION_COUNTS={"vertical":23079,"horizontal":18}
+ROTATION_COUNTS={"0":23045,"90":52}
+ANNOTATION_EVIDENCE_COUNTS={"all-exact-with-geometry":23083,"has-unmapped-glyph-mapping":14}
+ALTERNATIVE_BUCKET_COUNTS={"0":6197,"1":16900}
+PAGE_GLYPH_ISSUE_CANDIDATES=0
+SOURCE_INTEGRITY_ISSUES=0
+UNKNOWN_REASON_COUNT=0
+```
 
-Every annotation/base/alternative source range is checked against the inspected source text-item boundaries. A source-integrity issue or unknown reason makes the command fail instead of silently dropping that candidate.
+The dominant unresolved feature is `no-base|vertical|rot0|all-exact-with-geometry|alts:0|page-glyph-clean` with 4,960 candidates. That prevalence is evidence for where to investigate, not evidence that the current threshold is wrong or that those candidates are ruby.
+
+Two large PDF pairs show almost identical structural counts, which makes them useful reproducibility controls, but filename/source-specific branching remains forbidden.
+
+## Interpretation
+
+The inventory rules out several tempting but unsupported shortcuts:
+
+- 6,373/6,387 unresolved candidates already have exact annotation glyph geometry, so blindly improving glyph extraction cannot solve the dominant problem;
+- only 14 candidates are `missing-glyph-geometry`, all tied to unmapped glyph mapping;
+- no page-level glyph issue is implicated in the dominant unresolved groups;
+- most unresolved candidates have zero retained base alternative, so simply choosing among alternatives cannot resolve them;
+- the 792 `noncontiguous-base` and 577 `ambiguous-base` candidates must remain separate from the 5,004 `no-base` candidates.
+
+Task 4B therefore starts with a **read-only geometric near-miss analysis** around unresolved annotation groups. It must measure why plausible body candidates fail the current side-distance, inline-overlap, continuity, and uniqueness gates before any production threshold changes are considered.
 
 ## Non-goals
 
 - no OCR or language meaning is used;
 - no filename, font name, character appearance, website or metadata rule is added;
-- no unresolved candidate is promoted to exact;
+- no unresolved candidate is promoted to exact in Stage 21;
 - no thresholds in `ruby-spans.ts` change in this checkpoint;
 - no private text, PDF, generated EPUB or local JSON report is committed.
 
 ## Public validation
 
-Focused tests cover exact, ambiguous, missing-glyph, stable candidate identity, source-range integrity and aggregate reconciliation. Standard repository `npm test` must remain green.
+GitHub Actions CI for the accepted Stage 21 head passed typecheck/unit tests and real EPUBCheck integration.
 
-## Private acceptance
+## Status
 
-Stage 21 is accepted only after the complete private corpus produces:
+**Stage 21 / Task 4A is accepted.**
 
-- 9 PDFs;
-- 5,141 pages scanned exactly once each;
-- exactly 6,387 unresolved candidates, matching the accepted EPUB preservation count;
-- zero source-integrity issues;
-- zero unknown reasons;
-- a complete reason/feature distribution whose counts reconcile to the candidate totals.
-
-After that evidence is recorded, select the first Task 4B improvement target by prevalence and structural reproducibility. Do not choose a rule merely because it reduces the unresolved count the most.
+Next checkpoint: geometry-only near-miss diagnostics for unresolved groups, with particular attention to `no-base` while retaining `ambiguous-base`, `noncontiguous-base`, and `missing-glyph-geometry` as separate control populations. Production association rules must not change until that evidence establishes a generic, source-backed improvement with positive and negative fixtures.
