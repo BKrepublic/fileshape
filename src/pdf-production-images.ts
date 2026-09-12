@@ -1,3 +1,4 @@
+import { OPS } from "pdfjs-dist/legacy/build/pdf.mjs";
 import type {
   DisplayRect,
   ImageClipCoverage,
@@ -5,7 +6,7 @@ import type {
 } from "./pdf-image-adapter.js";
 import { extractImagePaintEvidence } from "./pdf-image-adapter.js";
 import {
-  resolvePdfImageResource,
+  extractPdfImageResource,
   type PdfImagePixelKind,
 } from "./pdf-image-resource-adapter.js";
 
@@ -108,6 +109,15 @@ export function validateProductionImageLimits(
 type OperatorList = { fnArray: number[]; argsArray: unknown[][] };
 type PdfObjects = { get(id: string): unknown };
 
+type CompositingState = {
+  fillAlpha: number;
+  blendMode: string;
+  softMask: boolean;
+  transferMap: boolean;
+  transparencyGroupDepth: number;
+  unknownReason?: string;
+};
+
 function occurrenceLabel(page: number, operatorIndex: number, occurrenceIndex: number): string {
   return `page ${page} image operator ${operatorIndex} occurrence ${occurrenceIndex}`;
 }
@@ -122,10 +132,121 @@ function validBounds(bounds: DisplayRect): boolean {
     bounds.right > bounds.left && bounds.bottom > bounds.top;
 }
 
+function opCode(name: string): number | undefined {
+  const value = (OPS as Record<string, unknown>)[name];
+  return typeof value === "number" ? value : undefined;
+}
+
+function cloneCompositingState(state: CompositingState): CompositingState {
+  return { ...state };
+}
+
+function applyGState(state: CompositingState, args: unknown[], operatorIndex: number): void {
+  const entries = args[0];
+  if (!Array.isArray(entries)) {
+    state.unknownReason = `operator ${operatorIndex} has invalid setGState payload`;
+    return;
+  }
+  for (const entry of entries) {
+    if (!Array.isArray(entry) || typeof entry[0] !== "string") {
+      state.unknownReason = `operator ${operatorIndex} has invalid setGState entry`;
+      continue;
+    }
+    const key = entry[0];
+    const value = entry[1];
+    if (key === "ca") {
+      if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1) {
+        state.unknownReason = `operator ${operatorIndex} has invalid fill alpha`;
+      } else state.fillAlpha = value;
+    } else if (key === "BM") {
+      if (typeof value !== "string") state.unknownReason = `operator ${operatorIndex} has invalid blend mode`;
+      else state.blendMode = value;
+    } else if (key === "SMask") {
+      state.softMask = Boolean(value);
+    } else if (key === "TR") {
+      state.transferMap = value !== null && value !== undefined && value !== "none";
+    }
+  }
+}
+
+function imageOperator(fn: number): boolean {
+  return fn === opCode("paintImageXObject") || fn === opCode("paintImageXObjectRepeat") ||
+    fn === opCode("paintInlineImageXObject") || fn === opCode("paintInlineImageXObjectGroup") ||
+    fn === opCode("paintImageMaskXObject") || fn === opCode("paintImageMaskXObjectRepeat") ||
+    fn === opCode("paintImageMaskXObjectGroup") || fn === opCode("paintSolidColorImageMask");
+}
+
+function compositingAtImageOperators(operators: OperatorList): Map<number, CompositingState> {
+  let state: CompositingState = {
+    fillAlpha: 1,
+    blendMode: "source-over",
+    softMask: false,
+    transferMap: false,
+    transparencyGroupDepth: 0,
+  };
+  const stack: CompositingState[] = [];
+  const result = new Map<number, CompositingState>();
+  for (let index = 0; index < operators.fnArray.length; index += 1) {
+    const fn = operators.fnArray[index]!;
+    const args = operators.argsArray[index] ?? [];
+    if (imageOperator(fn)) result.set(index, cloneCompositingState(state));
+    if (fn === opCode("save") || fn === opCode("paintFormXObjectBegin")) {
+      stack.push(cloneCompositingState(state));
+    } else if (fn === opCode("restore") || fn === opCode("paintFormXObjectEnd")) {
+      const previous = stack.pop();
+      if (previous) state = previous;
+      else state.unknownReason = `operator ${index} has compositing restore underflow`;
+    } else if (fn === opCode("setGState")) {
+      applyGState(state, args, index);
+    } else if (fn === opCode("beginGroup")) {
+      state.transparencyGroupDepth += 1;
+    } else if (fn === opCode("endGroup")) {
+      if (state.transparencyGroupDepth <= 0) state.unknownReason = `operator ${index} has transparency group underflow`;
+      else state.transparencyGroupDepth -= 1;
+    }
+  }
+  return result;
+}
+
+function requireDefaultCompositing(label: string, state: CompositingState | undefined): void {
+  if (!state) throw new Error(`${label} has missing compositing evidence`);
+  if (state.unknownReason) throw new Error(`${label} has unsupported compositing state: ${state.unknownReason}`);
+  if (Math.abs(state.fillAlpha - 1) > 1e-7) throw new Error(`${label} has unsupported fill alpha ${state.fillAlpha}`);
+  if (state.blendMode !== "source-over") throw new Error(`${label} has unsupported blend mode ${state.blendMode}`);
+  if (state.softMask) throw new Error(`${label} has unsupported soft mask`);
+  if (state.transferMap) throw new Error(`${label} has unsupported transfer map`);
+  if (state.transparencyGroupDepth > 0) throw new Error(`${label} is inside unsupported transparency group`);
+}
+
+function byteLength(value: unknown): number | undefined {
+  if (value instanceof Uint8Array) return value.byteLength;
+  if (ArrayBuffer.isView(value)) return value.byteLength;
+  return undefined;
+}
+
+function preflightRawImageResource(value: unknown, occurrence: ImageOccurrenceLocation): void {
+  if (typeof value !== "object" || value === null) return;
+  const image = value as { width?: unknown; height?: unknown; kind?: unknown; data?: unknown };
+  if (!Number.isInteger(image.width) || !Number.isInteger(image.height) ||
+      (image.width as number) <= 0 || (image.height as number) <= 0 || typeof image.kind !== "number") return;
+  const width = image.width as number;
+  const height = image.height as number;
+  if (width > PRODUCTION_IMAGE_LIMITS.maxWidth) throw limitError("width", width, PRODUCTION_IMAGE_LIMITS.maxWidth, occurrence);
+  if (height > PRODUCTION_IMAGE_LIMITS.maxHeight) throw limitError("height", height, PRODUCTION_IMAGE_LIMITS.maxHeight, occurrence);
+  const pixels = width * height;
+  if (!Number.isSafeInteger(pixels) || pixels > PRODUCTION_IMAGE_LIMITS.maxPixelsPerResource) {
+    throw limitError("pixels/resource", pixels, PRODUCTION_IMAGE_LIMITS.maxPixelsPerResource, occurrence);
+  }
+  const decoded = byteLength(image.data);
+  if (decoded !== undefined && decoded > PRODUCTION_IMAGE_LIMITS.maxDecodedBytes) {
+    throw limitError("decoded bytes/resource preflight", decoded, PRODUCTION_IMAGE_LIMITS.maxDecodedBytes, occurrence);
+  }
+}
+
 /**
  * Convert pinned PDF.js image paint evidence into the production transport
- * boundary. Only decoded XObjects whose visible unit square is not cropped are
- * accepted here. Every other schema stays explicit and fail-closed.
+ * boundary. Only decoded XObjects whose visible unit square is not cropped and
+ * whose PDF compositing state is proven to be the default are accepted here.
  */
 export function extractProductionPageImages(
   page: number,
@@ -137,6 +258,8 @@ export function extractProductionPageImages(
   if (evidence.issues.length > 0) {
     throw new Error(`page ${page} image operator replay failed: ${evidence.issues.join(", ")}`);
   }
+  if (evidence.paints.length === 0) return { resources: [], occurrences: [] };
+  const compositing = compositingAtImageOperators(operators);
 
   const resourcesBySourceId = new Map<string, { resource: InspectedImageResource; interpolate: boolean }>();
   const resourcesByContentId = new Map<string, InspectedImageResource>();
@@ -150,6 +273,7 @@ export function extractProductionPageImages(
     if ((paint.kind !== "xobject" && paint.kind !== "xobject-repeat") || paint.resourceId === undefined) {
       throw new Error(`${label} uses unsupported production image kind: ${paint.kind}`);
     }
+    requireDefaultCompositing(label, compositing.get(paint.operatorIndex));
     if (!acceptedClip(paint.clipStatus, paint.clipCoverage)) {
       throw new Error(`${label} has unsupported clip: ${paint.clipStatus}/${paint.clipCoverage}`);
     }
@@ -159,7 +283,18 @@ export function extractProductionPageImages(
 
     let sourceResource = resourcesBySourceId.get(paint.resourceId);
     if (!sourceResource) {
-      const extracted = resolvePdfImageResource(store, paint.resourceId);
+      let raw: unknown;
+      try {
+        raw = store.get(paint.resourceId);
+      } catch (error) {
+        throw new Error(`${label} resource extraction failed: unresolved-image-object:${error instanceof Error ? error.message : String(error)}`);
+      }
+      preflightRawImageResource(raw, {
+        sourcePage: page,
+        operatorIndex: paint.operatorIndex,
+        occurrenceIndex: paint.occurrenceIndex,
+      });
+      const extracted = extractPdfImageResource(paint.resourceId, raw);
       if ("status" in extracted) {
         throw new Error(`${label} resource extraction failed: ${extracted.reason}`);
       }
