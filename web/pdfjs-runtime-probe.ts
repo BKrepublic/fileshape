@@ -65,10 +65,17 @@ export async function probePdfJsRuntime(): Promise<PdfJsProbeResult> {
     if (text !== "FileShape browser probe") return unsupported("PDF.js fixture text was unexpected.", true);
     return { state: "supported", message: "PDF.js の実ワーカーと1ページfixtureを確認しました。", pageCount: 1, text, realWorkerPort: true };
   } catch {
-    return unsupported("PDF.js のブラウザ実行環境を確認できませんでした.");
+    return unsupported("PDF.js のブラウザ実行環境を確認できませんでした。");
   } finally {
-    if (loadingTask) await loadingTask.destroy().catch(() => undefined);
-    if (document) await document.destroy().catch(() => undefined);
-    worker?.destroy();
+    // Tear down through exactly one owning PDF.js layer. Calling loadingTask,
+    // document and worker destruction back-to-back can race the same worker
+    // shutdown and leave the probe promise pending in a real browser.
+    if (document) {
+      await document.destroy().catch(() => undefined);
+    } else if (loadingTask) {
+      await loadingTask.destroy().catch(() => undefined);
+    } else {
+      worker?.destroy();
+    }
   }
 }
