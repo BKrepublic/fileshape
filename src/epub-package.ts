@@ -29,6 +29,8 @@ export type EpubPackageOptions = Omit<EpubXhtmlOptions, "stylesheetHref"> & {
   modified?: string;
   /** Explicit publication progression only. Omitted means reading-system default; never inferred from page majority. */
   pageProgressionDirection?: EpubPageProgressionDirection;
+  /** Exact existing image resource selected by an upstream source-backed policy. Never inferred here. */
+  coverImageResourceId?: string;
 };
 
 export type EpubPackageFile = {
@@ -97,14 +99,14 @@ function packageOpf(options: {
   modified: string;
   pageProgressionDirection?: EpubPageProgressionDirection;
   pages: Array<{ sourcePage: number; href: string; mediaType: string }>;
-  images: Array<{ id: string; href: string; mediaType: string }>;
+  images: Array<{ id: string; href: string; mediaType: string; isCover: boolean }>;
 }): string {
   const creator = options.creator === undefined
     ? ""
     : `\n    <dc:creator>${xmlText(requireNonEmpty(options.creator, "creator"))}</dc:creator>`;
   const pageManifest = [
     ...options.pages.map((page, index) => `    <item id="page-${index + 1}" href="${xmlAttr(page.href)}" media-type="${xmlAttr(page.mediaType)}"/>`),
-    ...options.images.map((image) => `    <item id="${xmlAttr(image.id)}" href="${xmlAttr(image.href)}" media-type="${xmlAttr(image.mediaType)}"/>`),
+    ...options.images.map((image) => `    <item id="${xmlAttr(image.id)}" href="${xmlAttr(image.href)}" media-type="${xmlAttr(image.mediaType)}"${image.isCover ? ' properties="cover-image"' : ""}/>`),
   ].join("\n");
   const spine = options.pages
     .map((_, index) => `    <itemref idref="page-${index + 1}"/>`)
@@ -260,6 +262,14 @@ export function serializeEpubPackage(
     }
   }
 
+  const coverImageResourceId = options.coverImageResourceId;
+  if (coverImageResourceId !== undefined) {
+    requireNonEmpty(coverImageResourceId, "coverImageResourceId");
+    if (!imageById.has(coverImageResourceId)) {
+      throw new Error(`cover image resource does not exist in document: ${coverImageResourceId}`);
+    }
+  }
+
   const xhtml = serializeEpubXhtml(document, {
     language,
     titlePrefix: options.titlePrefix ?? title,
@@ -290,6 +300,7 @@ export function serializeEpubPackage(
         id: resource.id,
         href: imageHref(resource.contentHash),
         mediaType: resource.mediaType,
+        isCover: resource.id === coverImageResourceId,
       })),
     })),
     textFile(STYLES_PATH, "text/css", defaultEpubStyles()),
