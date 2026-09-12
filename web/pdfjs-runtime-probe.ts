@@ -9,6 +9,34 @@ export type PdfJsProbeResult = {
   realWorkerPort: boolean;
 };
 
+class ProbeTimeoutError extends Error {
+  constructor(readonly stage: string) {
+    super(`PDF.js probe timed out during ${stage}.`);
+    this.name = "ProbeTimeoutError";
+  }
+}
+
+async function within<T>(promise: Promise<T>, stage: string, timeoutMs = 8_000): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new ProbeTimeoutError(stage)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
+async function settleCleanup(promise: Promise<unknown>): Promise<void> {
+  await Promise.race([
+    promise.catch(() => undefined),
+    new Promise<void>((resolve) => setTimeout(resolve, 1_000)),
+  ]);
+}
+
 function fixturePdf(): Uint8Array {
   const encoder = new TextEncoder();
   const stream = "BT /F1 14 Tf 72 100 Td (FileShape browser probe) Tj ET";
@@ -44,38 +72,41 @@ export async function probePdfJsRuntime(): Promise<PdfJsProbeResult> {
   }
 
   pdfjsLib.GlobalWorkerOptions.workerSrc = workerLocation.href;
+  let workerPort: Worker | undefined;
   let worker: pdfjsLib.PDFWorker | undefined;
   let loadingTask: pdfjsLib.PDFDocumentLoadingTask | undefined;
   let document: pdfjsLib.PDFDocumentProxy | undefined;
   try {
-    worker = new pdfjsLib.PDFWorker({ name: "fileshape-probe" });
-    await worker.promise;
-    if (!(worker.port instanceof Worker)) return unsupported("PDF.js did not create a real module worker.");
+    workerPort = new Worker(workerLocation, { type: "module", name: "fileshape-pdfjs-probe" });
+    worker = new pdfjsLib.PDFWorker({ name: "fileshape-probe", port: workerPort });
+    await within(worker.promise, "worker startup");
+    if (worker.port !== workerPort) return unsupported("PDF.js did not retain the explicit real worker port.");
 
     const data = fixturePdf().slice();
     loadingTask = pdfjsLib.getDocument({ data, worker, useSystemFonts: false, disableFontFace: true });
-    document = await loadingTask.promise;
+    document = await within(loadingTask.promise, "document load");
     if (document.numPages !== 1) return unsupported("PDF.js fixture page count was unexpected.", true);
-    const page = await document.getPage(1);
-    const content = await page.getTextContent();
+    const page = await within(document.getPage(1), "page load");
+    const content = await within(page.getTextContent(), "text extraction");
     const text = content.items
       .map((item: { str?: string }) => item.str ?? "")
       .join("")
       .trim();
     if (text !== "FileShape browser probe") return unsupported("PDF.js fixture text was unexpected.", true);
     return { state: "supported", message: "PDF.js の実ワーカーと1ページfixtureを確認しました。", pageCount: 1, text, realWorkerPort: true };
-  } catch {
-    return unsupported("PDF.js のブラウザ実行環境を確認できませんでした。");
+  } catch (error) {
+    const message = error instanceof ProbeTimeoutError
+      ? error.message
+      : "PDF.js のブラウザ実行環境を確認できませんでした。";
+    return unsupported(message, workerPort !== undefined);
   } finally {
-    // Tear down through exactly one owning PDF.js layer. Calling loadingTask,
-    // document and worker destruction back-to-back can race the same worker
-    // shutdown and leave the probe promise pending in a real browser.
     if (document) {
-      await document.destroy().catch(() => undefined);
+      await settleCleanup(document.destroy());
     } else if (loadingTask) {
-      await loadingTask.destroy().catch(() => undefined);
+      await settleCleanup(loadingTask.destroy());
     } else {
       worker?.destroy();
     }
+    workerPort?.terminate();
   }
 }
