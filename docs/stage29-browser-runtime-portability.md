@@ -2,6 +2,8 @@
 
 Status: **implementation complete enough for local acceptance; not yet accepted**.
 
+Current Codex/session handoff: [stage29-codex-handoff.md](stage29-codex-handoff.md).
+
 GitHub Actions is disabled by project policy. All verification below is local-only. See [local-verification-policy.md](local-verification-policy.md).
 
 ## Implemented
