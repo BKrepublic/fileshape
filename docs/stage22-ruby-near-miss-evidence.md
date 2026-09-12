@@ -11,45 +11,26 @@ UNRESOLVED_REASON_COUNTS={"no-base":5004,"ambiguous-base":577,"noncontiguous-bas
 EXACT_ACTUAL_BASE_ELIGIBILITY={"all-actual-base-eligible":16710}
 ```
 
-For the 5,004 `no-base` candidates:
+For the 5,004 `no-base` candidates, 3,662 have the nearest body entry at least two body widths away on the side axis. Large additional groups fail axis and inline proximity. Blanket threshold widening is therefore rejected.
 
-```text
-NO_BASE_NEAREST_GATE_COUNTS:
-  eligible                                      1204
-  axis-mismatch+side-too-far                    1449
-  inline-too-far+side-too-far                   1010
-  axis-mismatch+inline-too-far+side-too-far      711
-  side-too-far                                   501
-  remaining signatures                           129
+A residual 1,204 `no-base` candidates have a nearest body entry that passes every coarse entry-level gate. Their rejection occurs later in production selection, at glyph-cell overlap / annotation coverage / source-contiguity / line-choice logic.
 
-NO_BASE_CROSS_DISTANCE_BUCKETS:
-  0.45-1.35  1207
-  >=2.00     3662
-  other        135
-```
-
-The exact control is clean: all 16,710 accepted exact candidates have their actual base entries inside the coarse gate model.
-
-Most `no-base` candidates are not near a single threshold. 3,662 have the nearest coarse body entry at least two body widths away on the side axis, with large additional groups failing axis and inline proximity. These are not candidates for a blanket threshold widening.
-
-The important residual group is 1,204 `no-base` candidates whose nearest body entry passes every coarse entry-level gate. Their rejection must occur later in production selection, at glyph-cell overlap / annotation coverage / source-contiguity / line-choice logic.
-
-`ambiguous-base` (577) and `noncontiguous-base` (792) both show a coarse nearest `eligible` entry for every candidate, as expected. `missing-glyph-geometry` remains isolated at 14 candidates with no usable annotation geometry.
+`ambiguous-base` (577) and `noncontiguous-base` (792) are also coarse-eligible as expected and serve as controls. `missing-glyph-geometry` remains isolated at 14 candidates.
 
 ## Decision
 
-**Do not widen any production geometry threshold based on Stage 22.** The evidence does not support it.
+**Do not widen any production geometry threshold based on Stage 22.**
 
-The next checkpoint must replay the glyph-selection stage read-only and classify the 1,204 coarse-eligible `no-base` cases by the exact later failure: no glyph cell selected, boundary uncertainty, annotation overhang, non-contiguous source, or competing line/choice. The replay must reproduce current production status/reason for all candidates as a consistency control.
+The next checkpoint must replay the glyph-selection stage read-only and classify the 1,204 coarse-eligible `no-base` cases by exact later-failure mechanism. The replay must reproduce current production status/reason for all candidates as a consistency control.
 
 ## Privacy / invariants
 
 - no source text or private filename is written to the report;
 - no OCR, dictionary, filename, font-name, metadata, or character-specific rule;
 - no production thresholds change in Stage 22;
-- candidate identity remains source-range based via the accepted Stage 21 inventory contract;
+- candidate identity remains source-range based;
 - private reports stay outside Git.
 
 ## Status
 
-**Accepted.** Public CI passed and the complete private corpus reconciled with the accepted Stage 21 counts. Stage 22 is evidence only; it makes no claim that any unresolved candidate should be promoted.
+**Accepted.** Public CI passed and the complete private corpus reconciled with Stage 21 counts. Stage 22 makes no claim that any unresolved candidate should be promoted.
