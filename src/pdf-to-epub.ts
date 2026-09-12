@@ -4,6 +4,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { UnresolvedRubyPolicy } from "./content-policy.js";
 import {
+  parseCoverOccurrenceSelector,
+  resolveCoverImageResourceId,
+  type CoverOccurrenceSelector,
+} from "./cover-policy.js";
+import {
   serializeEpubPackage,
   type EpubPackageOptions,
   type EpubPageProgressionDirection,
@@ -13,9 +18,11 @@ import { inspectPdf } from "./pdf-inspector.js";
 import type { EpubNavigationSummary } from "./epub-navigation.js";
 import type { EpubRubyMode } from "./epub-xhtml.js";
 
-export type PdfToEpubOptions = Omit<EpubPackageOptions, "title" | "identifier"> & {
+export type PdfToEpubOptions = Omit<EpubPackageOptions, "title" | "identifier" | "coverImageResourceId"> & {
   title?: string;
   identifier?: string;
+  /** Exact source occurrence selected as cover. Omitted means no cover designation. */
+  coverOccurrence?: CoverOccurrenceSelector;
 };
 
 export type PdfToEpubResult = {
@@ -26,6 +33,7 @@ export type PdfToEpubResult = {
   unresolvedAnnotationCount: number;
   byteLength: number;
   navigation: EpubNavigationSummary;
+  coverImageResourceId?: string;
 };
 
 function defaultOutputPath(inputPath: string): string {
@@ -72,6 +80,9 @@ export async function convertPdfToEpub(
     0,
   );
   const effectiveUnresolvedPolicy = options.unresolvedRubyPolicy ?? "preserve-as-page-note";
+  const coverImageResourceId = options.coverOccurrence === undefined
+    ? undefined
+    : resolveCoverImageResourceId(document, options.coverOccurrence);
 
   const epub = serializeEpubPackage(document, {
     title: options.title ?? defaultTitle(absoluteInput),
@@ -84,6 +95,7 @@ export async function convertPdfToEpub(
     ...(options.pageProgressionDirection === undefined
       ? {}
       : { pageProgressionDirection: options.pageProgressionDirection }),
+    ...(coverImageResourceId === undefined ? {} : { coverImageResourceId }),
     unresolvedRubyPolicy: effectiveUnresolvedPolicy,
   });
 
@@ -106,6 +118,7 @@ export async function convertPdfToEpub(
     unresolvedAnnotationCount,
     byteLength: epub.bytes.byteLength,
     navigation: epub.navigation,
+    ...(coverImageResourceId === undefined ? {} : { coverImageResourceId }),
   };
 }
 
@@ -143,6 +156,7 @@ function parseCliArguments(argv: string[]): CliArguments {
       case "ruby": options.rubyMode = rubyMode(value); break;
       case "unresolved-ruby": options.unresolvedRubyPolicy = unresolvedRubyPolicy(value); break;
       case "page-progression-direction": options.pageProgressionDirection = pageProgressionDirection(value); break;
+      case "cover-occurrence": options.coverOccurrence = parseCoverOccurrenceSelector(value); break;
       default: throw new Error(`unknown option --${name}`);
     }
   }
@@ -150,7 +164,7 @@ function parseCliArguments(argv: string[]): CliArguments {
   const inputPath = positionals[0];
   if (!inputPath || positionals.length > 2) {
     throw new Error(
-      "usage: npm run convert:epub -- input.pdf [output.epub] [--title TITLE] [--creator NAME] [--language ja] [--ruby on|off] [--unresolved-ruby error|preserve-as-page-note] [--page-progression-direction ltr|rtl]",
+      "usage: npm run convert:epub -- input.pdf [output.epub] [--title TITLE] [--creator NAME] [--language ja] [--ruby on|off] [--unresolved-ruby error|preserve-as-page-note] [--page-progression-direction ltr|rtl] [--cover-occurrence PAGE:OPERATOR:OCCURRENCE]",
     );
   }
   const outputPath = positionals[1];
@@ -168,6 +182,9 @@ async function main(): Promise<void> {
   console.log(`NAVIGATION=${result.navigation.mode}`);
   console.log(`OUTLINE_ENTRIES=${result.navigation.outlineEntries}`);
   console.log(`UNRESOLVED_OUTLINE_ENTRIES=${result.navigation.unresolvedOutlineEntries}`);
+  if (result.coverImageResourceId !== undefined) {
+    console.log(`COVER_IMAGE_RESOURCE_ID=${result.coverImageResourceId}`);
+  }
 }
 
 const invokedPath = process.argv[1] ? path.resolve(process.argv[1]) : "";

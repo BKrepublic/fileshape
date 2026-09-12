@@ -4,15 +4,16 @@
 
 ## 現在地
 
-2026-09-12、Stage 19 production image integration は independent review の hardening と private 9-PDF acceptance まで完了し、**通常画像 preservation は accepted** になりました。
+2026-09-12、Stage 19 production image integration は independent review の hardening と private 9-PDF acceptance まで完了し、**通常画像 preservation は accepted** です。Stage 20 explicit cover policy もpublic CI、private default full regression、private explicit-cover smokeまで完了し、**accepted** になりました。
 
-最終 private acceptance:
+Accepted private baseline:
 
 ```text
 PDFs: 9/9
 EPUBs: 9/9
 Pages: 5141/5141
 Unresolved annotations preserved: 6387
+Total EPUB bytes: 17959256
 Outline entries: 250/250
 Image occurrences: 4/4
 Unique PNG content resources: 1/1
@@ -21,20 +22,32 @@ XHTML/OPF/ZIP references: consistent
 EPUBCheck 5.3.0: 9/9 passed (0 errors, 0 warnings)
 ```
 
+Stage 20 explicit-cover smoke:
+
+```text
+COVER_SMOKE=PASS
+BODY_IMAGE_OCCURRENCES=1
+PNG_RESOURCES=1
+COVER_MARKERS=1
+BODY_OCCURRENCES_PRESERVED=yes
+PNG_RESOURCES_UNCHANGED=yes
+EPUBCheck 5.3.0: pass (0 errors, 0 warnings)
+```
+
 ## 完成までの工程
 
 | 順序 | 指示書 | 残っている内容 | 現在 |
 | --- | --- | --- | --- |
 | 1 | [本文見出し・章構造](01-headings-and-sections.md) | 新しいPDF-native evidenceが得られた場合だけ再開 | **保留**。Stage 13aで source-backed body anchor 0。page-level navigationをaccepted fallbackとする |
 | 2 | [縦書き・ルビの表示互換性](02-reading-systems.md) | 実readerでの互換性確認 | **実装済み・manual acceptance待ち** |
-| 3 | [表紙・挿絵](03-images-and-cover.md) | explicit/source-backed cover policy | **通常画像 accepted。次はcover** |
-| 4 | [未解決ルビの改善](04-ruby-refinement.md) | unresolved 6387件の分類・改善・保存性確認 | **未完了** |
+| 3 | [表紙・挿絵](03-images-and-cover.md) | なし。将来source-native cover metadataが得られた場合のみ拡張 | **accepted**。通常画像 + explicit/source-backed cover policy 完了 |
+| 4 | [未解決ルビの改善](04-ruby-refinement.md) | unresolved 6387件の分類・改善・保存性確認 | **次の実装工程** |
 | 5 | [CLI版の最終受け入れ](05-cli-acceptance.md) | accepted scope統合、CLI/既知制限の凍結、最終validation | **未着手** |
 | 後続 | [ブラウザー／Android](06-browser-android.md) | UI/環境adapter/実機 | **CLI完了後** |
 
-Task 1 のように source evidence が存在しない機能は推測で埋めません。独立して進められる Task 2〜4 を止めないでください。
+Task 1 のように source evidence が存在しない機能は推測で埋めません。Task 2のmanual reader確認を待っている間も、独立して進められるTask 4を進めます。
 
-## Task 3 の現在の契約
+## Task 3 accepted contract
 
 Stage 15〜17 の evidence:
 
@@ -48,7 +61,7 @@ all clips: exact-rect / contains-image
 marked-content occurrences: 0
 ```
 
-Stage 18/19 で以下が accepted です。
+Stage 18/19でaccepted:
 
 - resource bytes と occurrence provenance を分離して保持;
 - content hashでPNG bytesだけをdedupeし、occurrenceを消さない;
@@ -59,16 +72,17 @@ Stage 18/19 で以下が accepted です。
 - production limitsのpreflight/final validation;
 - full verifierによる XHTML occurrence / OPF image item / PNG ZIP entry / reference整合確認。
 
-次は **cover selectionを別checkpointとして追加**します。
+Stage 20でaccepted:
 
-Cover rules:
-
-- 既定で自動推測しない;
+- 既定でcoverを自動推測しない;
+- CLIは `--cover-occurrence PAGE:OPERATOR:OCCURRENCE`;
 - page number、画像寸法、位置、filename、appearance、contentから表紙を推測しない;
-- source-backed cover metadataが無い入力はcover未指定のまま成功してよい;
-- user指定を追加するなら exact source occurrence を指定し、存在しない/曖昧な指定はfail closed;
+- exact source occurrenceだけを指定し、存在しない/曖昧な指定はfail closed;
+- user指定が無い入力はcover未指定のまま成功;
 - cover指定しても元の本文image occurrenceを削除しない;
-- EPUB `cover-image` metadata/manifest propertyだけを付ける方針を優先し、必要性が証明されないsynthetic cover pageを勝手に追加しない。
+- selected existing manifest itemだけに EPUB `properties="cover-image"` を付ける;
+- synthetic cover XHTML/spine itemは追加しない;
+- shared image resourceはcover指定後もdedupeを維持する。
 
 ## Ruby
 
@@ -77,6 +91,8 @@ Cover rules:
 - `off`はexact annotation markupだけを外し、base text/provenanceを保持;
 - unresolved rubyは別policyで、`off`でも捨てない;
 - private full corpusのunresolved countは6387。
+
+Task 4では、まずこの6387件をprivacy-safeな集計で分類し、どの失敗理由・geometry patternに改善余地があるかを確認します。**件数を減らすために推測でbase/annotationを結び付けません。** 一意なsource-backed evidenceが得られた候補だけをexactへ昇格させ、曖昧なものはunresolvedのまま保持します。
 
 ## Heading/navigation
 
@@ -130,6 +146,12 @@ private full acceptance:
 
 ```sh
 npm run verify:epub -- --epubcheck --report-dir <NEW_LOCAL_REPORT_DIR>
+```
+
+Stage 20 explicit-cover smoke:
+
+```sh
+npm run verify:cover
 ```
 
 ## 工程を閉じる条件
