@@ -78,7 +78,7 @@ export async function probePdfJsRuntime(): Promise<PdfJsProbeResult> {
   let document: pdfjsLib.PDFDocumentProxy | undefined;
   try {
     workerPort = new Worker(workerLocation, { type: "module", name: "fileshape-pdfjs-probe" });
-    worker = new pdfjsLib.PDFWorker({ name: "fileshape-probe", port: workerPort });
+    worker = pdfjsLib.PDFWorker.create({ name: "fileshape-probe", port: workerPort });
     await within(worker.promise, "worker startup");
     if (worker.port !== workerPort) return unsupported("PDF.js did not retain the explicit real worker port.");
 
