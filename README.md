@@ -19,7 +19,9 @@ XHTML/OPF/ZIP image references: consistent
 EPUBCheck 5.3.0: 9/9 passed (0 errors, 0 warnings)
 ```
 
-Stages 15–20 add production image preservation and explicit source-backed cover designation. Stages 21–24 audited all 23,097 ruby candidates; 16,710 are exact and 6,387 remain intentionally unresolved because no generic source-backed rule can safely promote them. The default EPUB preserves those unresolved annotations as page notes. Task 5 CLI final acceptance is the current checkpoint.
+Stages 15–20 add production image preservation and explicit source-backed cover designation. Stages 21–24 audited all 23,097 ruby candidates; 16,710 are exact and 6,387 remain intentionally unresolved because no generic source-backed rule can safely promote them. The default EPUB preserves those unresolved annotations as page notes.
+
+Stage 25 automated CLI acceptance also passes: fixed-metadata output is byte-deterministic, strict unresolved-ruby mode rejects as designed, failed conversions preserve an existing output, invalid/missing CLI input is rejected, help works, and the documented option surface succeeds through the real CLI. Manual Thorium/calibre validation remains a separate unperformed item and is not implied by EPUBCheck success.
 
 See [continuation status](docs/continuation-status.md) for the current evidence and [the remaining-work runbook](docs/remaining-work/README.md) for ordered acceptance work.
 
@@ -130,7 +132,7 @@ The private corpus is intentionally not committed. When `local-samples/` is avai
 npm run verify:epub -- --epubcheck
 ```
 
-Task 5 also provides a real-CLI acceptance verifier. It checks fixed-metadata determinism, default conversion, strict unresolved-ruby rejection, failure preservation of an existing output, invalid-option handling, help output, and the documented option surface without writing private source text into its report:
+The real-CLI acceptance verifier checks fixed-metadata determinism, default conversion, strict unresolved-ruby rejection, failure preservation of an existing output, invalid-option handling, help output, and the documented option surface without writing private source text into its report:
 
 ```sh
 mkdir -p local-reports
@@ -154,7 +156,7 @@ npm run verify:cover
 - automatic cover inference is intentionally not implemented.
 - unresolved ruby is preserved, not guessed. The accepted corpus currently contains 6,387 unresolved annotations.
 - EPUBCheck success is automated. Manual real-reader validation in Thorium/calibre remains a separate environment-dependent acceptance item and must not be reported as complete until actually performed.
-- browser/Android adapters are downstream work and are not part of the CLI acceptance checkpoint.
+- browser/Android adapters are downstream work and are not part of the automated CLI checkpoint.
 
 ## Design rules
 
