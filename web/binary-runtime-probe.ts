@@ -23,9 +23,9 @@ export async function probeBinaryRuntime(): Promise<BinaryRuntimeProbeResult> {
     }
     const compressed = await webBinaryRuntime.deflateZlib(FIXTURE);
     if (hex(compressed) !== EXPECTED_DEFLATE) {
-      return { state: "unsupported", message: "CompressionStream deflate が受理済みzlibバイト列と一致しません。" };
+      return { state: "unsupported", message: "ブラウザzlib実装が受理済みNodeバイト列と一致しません。" };
     }
-    return { state: "supported", message: "Web Crypto SHA-256 と CompressionStream deflate を確認しました。" };
+    return { state: "supported", message: "Web Crypto SHA-256 とNode互換zlib deflateを確認しました。" };
   } catch (error) {
     return {
       state: "unsupported",
