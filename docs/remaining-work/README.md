@@ -4,7 +4,7 @@
 
 ## 現在地
 
-2026-09-12、Stage 19 production image integration は independent review の hardening と private 9-PDF acceptance まで完了し、**通常画像 preservation は accepted** です。Stage 20 explicit cover policy もpublic CI、private default full regression、private explicit-cover smokeまで完了し、**accepted** になりました。
+Stages 19–20 の通常画像 preservation / explicit cover policy は accepted。Stage 21 で全23,097 ruby候補を分類し、Stage 22 で unresolved 6,387件の coarse geometry near-miss evidence を取得しました。
 
 Accepted private baseline:
 
@@ -17,21 +17,19 @@ Total EPUB bytes: 17959256
 Outline entries: 250/250
 Image occurrences: 4/4
 Unique PNG content resources: 1/1
-Interpolated image occurrences: 0
 XHTML/OPF/ZIP references: consistent
 EPUBCheck 5.3.0: 9/9 passed (0 errors, 0 warnings)
 ```
 
-Stage 20 explicit-cover smoke:
+Ruby evidence baseline:
 
 ```text
-COVER_SMOKE=PASS
-BODY_IMAGE_OCCURRENCES=1
-PNG_RESOURCES=1
-COVER_MARKERS=1
-BODY_OCCURRENCES_PRESERVED=yes
-PNG_RESOURCES_UNCHANGED=yes
-EPUBCheck 5.3.0: pass (0 errors, 0 warnings)
+RUBY_CANDIDATES=23097
+EXACT_CANDIDATES=16710
+UNRESOLVED_CANDIDATES=6387
+UNRESOLVED_REASON_COUNTS={"no-base":5004,"ambiguous-base":577,"noncontiguous-base":792,"missing-glyph-geometry":14}
+NO_BASE_COARSE_ELIGIBLE=1204
+NO_BASE_CROSS_DISTANCE_GE_2_BODY_WIDTHS=3662
 ```
 
 ## 完成までの工程
@@ -40,59 +38,21 @@ EPUBCheck 5.3.0: pass (0 errors, 0 warnings)
 | --- | --- | --- | --- |
 | 1 | [本文見出し・章構造](01-headings-and-sections.md) | 新しいPDF-native evidenceが得られた場合だけ再開 | **保留**。Stage 13aで source-backed body anchor 0。page-level navigationをaccepted fallbackとする |
 | 2 | [縦書き・ルビの表示互換性](02-reading-systems.md) | 実readerでの互換性確認 | **実装済み・manual acceptance待ち** |
-| 3 | [表紙・挿絵](03-images-and-cover.md) | なし。将来source-native cover metadataが得られた場合のみ拡張 | **accepted**。通常画像 + explicit/source-backed cover policy 完了 |
-| 4 | [未解決ルビの改善](04-ruby-refinement.md) | unresolved 6387件の分類・改善・保存性確認 | **次の実装工程** |
+| 3 | [表紙・挿絵](03-images-and-cover.md) | なし。将来source-native cover metadataが得られた場合のみ拡張 | **accepted** |
+| 4 | [未解決ルビの改善](04-ruby-refinement.md) | post-gate glyph-selection evidence → 必要なら限定修正 → source単位差分検証 | **実装中**。Stage 21/22 evidence accepted |
 | 5 | [CLI版の最終受け入れ](05-cli-acceptance.md) | accepted scope統合、CLI/既知制限の凍結、最終validation | **未着手** |
 | 後続 | [ブラウザー／Android](06-browser-android.md) | UI/環境adapter/実機 | **CLI完了後** |
 
-Task 1 のように source evidence が存在しない機能は推測で埋めません。Task 2のmanual reader確認を待っている間も、独立して進められるTask 4を進めます。
-
-## Task 3 accepted contract
-
-Stage 15〜17 の evidence:
-
-```text
-9 PDFs / 5141 pages
-4 XObject image occurrences
-4 decoded resources across source PDFs
-1 unique PNG content resource
-800x600 RGB24
-all clips: exact-rect / contains-image
-marked-content occurrences: 0
-```
-
-Stage 18/19でaccepted:
-
-- resource bytes と occurrence provenance を分離して保持;
-- content hashでPNG bytesだけをdedupeし、occurrenceを消さない;
-- geometry-backed text/image placement;
-- image-only page と blank page の区別;
-- deterministic XHTML/OPF/ZIP resource/reference;
-- non-uniform scaling、unsupported compositing、layered overlap、invalid clip/transform、unsupported interpolationをfail closed;
-- production limitsのpreflight/final validation;
-- full verifierによる XHTML occurrence / OPF image item / PNG ZIP entry / reference整合確認。
-
-Stage 20でaccepted:
-
-- 既定でcoverを自動推測しない;
-- CLIは `--cover-occurrence PAGE:OPERATOR:OCCURRENCE`;
-- page number、画像寸法、位置、filename、appearance、contentから表紙を推測しない;
-- exact source occurrenceだけを指定し、存在しない/曖昧な指定はfail closed;
-- user指定が無い入力はcover未指定のまま成功;
-- cover指定しても元の本文image occurrenceを削除しない;
-- selected existing manifest itemだけに EPUB `properties="cover-image"` を付ける;
-- synthetic cover XHTML/spine itemは追加しない;
-- shared image resourceはcover指定後もdedupeを維持する。
-
-## Ruby
+## Ruby方針
 
 - exact rubyはsource-backed;
 - `--ruby on|off` 実装済み、既定`on`;
 - `off`はexact annotation markupだけを外し、base text/provenanceを保持;
 - unresolved rubyは別policyで、`off`でも捨てない;
-- private full corpusのunresolved countは6387。
+- private full corpusのunresolved countは6387;
+- 件数を減らすこと自体は目的にしない。
 
-Task 4では、まずこの6387件をprivacy-safeな集計で分類し、どの失敗理由・geometry patternに改善余地があるかを確認します。**件数を減らすために推測でbase/annotationを結び付けません。** 一意なsource-backed evidenceが得られた候補だけをexactへ昇格させ、曖昧なものはunresolvedのまま保持します。
+Stage 22の結論として、`no-base`全体の閾値緩和はしません。5,004件中3,662件はnearest body entryがside axisで2 body widths以上離れています。一方1,204件はcoarse entry gateを全部通るため、次はproductionのglyph-cell選択、annotation coverage、source continuity、line/choice構築をread-onlyで再生します。
 
 ## Heading/navigation
 
@@ -137,7 +97,6 @@ npm run verify:epubcheck
 parser/model/source ownership変更時は追加:
 
 ```sh
-npm run verify:image-model -- local-samples --expect-pdf-count 9 --expect-page-count 5141 --expect-image-occurrence-count 4 --expect-unique-content-resource-count 1 --expect-interpolated-image-occurrence-count 0
 npm run verify:ruby
 npm run verify:stage2
 ```
@@ -148,26 +107,12 @@ private full acceptance:
 npm run verify:epub -- --epubcheck --report-dir <NEW_LOCAL_REPORT_DIR>
 ```
 
-Stage 20 explicit-cover smoke:
-
-```sh
-npm run verify:cover
-```
-
 ## 工程を閉じる条件
 
-各checkpointで以下を残します。
-
-- start SHA / end SHA;
-- 変更したcontractと変更していないcontract;
-- test / verifier とexit code;
-- private corpusはaggregateだけ記録;
-- 未実施、保留、既知制限;
-- GitHub Actions結果;
-- `docs/continuation-status.md` とこのstatus更新。
+各checkpointで start/end SHA、contract差分、test/verifier、private aggregate、未実施/保留/既知制限、GitHub Actions結果、continuation/status更新を残します。
 
 「fixtureがPASS」「production implementationが入った」「private corpus acceptance済み」は別状態として扱います。
 
 ## この手順書は完成までの道のりか
 
-**CLI版については Yes** です。Task 1〜5がCLI完成までの道筋で、Task 6はその後のbrowser/Android製品化です。現在地はこのREADME、`docs/continuation-status.md`、最新Stage/review文書を優先してください。
+**CLI版については Yes** です。Task 1〜5がCLI完成までの道筋で、Task 6はその後のbrowser/Android製品化です。
