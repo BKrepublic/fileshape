@@ -6,6 +6,7 @@ import {
   resolveCoverImageResourceId,
 } from "../src/cover-policy.js";
 import type { DocumentImageOccurrence, FileShapeDocument } from "../src/document-model.js";
+import { validateEpubImagePackage } from "../src/epub-image-package-validation.js";
 import { serializeEpubPackage } from "../src/epub-package.js";
 
 const decoder = new TextDecoder();
@@ -140,4 +141,25 @@ test("package layer rejects a cover resource not present in the document", () =>
     modified: "2026-09-12T00:00:00Z",
     coverImageResourceId: "image-does-not-exist",
   }), /cover image resource does not exist in document/);
+});
+
+test("archive image validation reports default and explicit cover designation", () => {
+  const document = documentFixture();
+  const defaultEpub = serializeEpubPackage(document, {
+    title: "Cover fixture",
+    modified: "2026-09-12T00:00:00Z",
+  });
+  const explicitEpub = serializeEpubPackage(document, {
+    title: "Cover fixture",
+    modified: "2026-09-12T00:00:00Z",
+    coverImageResourceId: resourceId,
+  });
+  const defaultValidation = validateEpubImagePackage(defaultEpub.bytes);
+  const explicitValidation = validateEpubImagePackage(explicitEpub.bytes);
+  assert.deepEqual(defaultValidation.issues, []);
+  assert.deepEqual(defaultValidation.coverImageHashes, []);
+  assert.deepEqual(explicitValidation.issues, []);
+  assert.deepEqual(explicitValidation.coverImageHashes, [imageHash]);
+  assert.equal(defaultValidation.occurrenceCount, explicitValidation.occurrenceCount);
+  assert.equal(defaultValidation.resourceCount, explicitValidation.resourceCount);
 });
