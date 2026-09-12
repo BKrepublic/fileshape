@@ -19,8 +19,8 @@ function assertPng(bytes: Uint8Array): void {
   assert.ok(bytes.byteLength > 30);
 }
 
-test("decoded RGB and RGBA PDF.js image objects become deterministic PNG resources", () => {
-  const rgb = extractPdfImageResource("img-rgb", {
+test("decoded RGB and RGBA PDF.js image objects become deterministic PNG resources", async () => {
+  const rgb = await extractPdfImageResource("img-rgb", {
     width: 2,
     height: 1,
     kind: 2,
@@ -36,7 +36,7 @@ test("decoded RGB and RGBA PDF.js image objects become deterministic PNG resourc
   assert.equal(rgb.mediaType, "image/png");
   assertPng(rgb.bytes);
 
-  const repeat = extractPdfImageResource("img-rgb", {
+  const repeat = await extractPdfImageResource("img-rgb", {
     width: 2,
     height: 1,
     kind: 2,
@@ -47,7 +47,7 @@ test("decoded RGB and RGBA PDF.js image objects become deterministic PNG resourc
   assert.equal(repeat.contentHash, rgb.contentHash);
   assert.deepEqual(repeat.bytes, rgb.bytes);
 
-  const rgba = extractPdfImageResource("img-rgba", {
+  const rgba = await extractPdfImageResource("img-rgba", {
     width: 1,
     height: 1,
     kind: 3,
@@ -59,8 +59,8 @@ test("decoded RGB and RGBA PDF.js image objects become deterministic PNG resourc
   assertPng(rgba.bytes);
 });
 
-test("1-bit grayscale remains packed and unsupported schemas fail closed", () => {
-  const gray = extractPdfImageResource("img-gray", {
+test("1-bit grayscale remains packed and unsupported schemas fail closed", async () => {
+  const gray = await extractPdfImageResource("img-gray", {
     width: 8,
     height: 1,
     kind: 1,
@@ -71,7 +71,7 @@ test("1-bit grayscale remains packed and unsupported schemas fail closed", () =>
   assert.equal(gray.decodedByteLength, 1);
   assertPng(gray.bytes);
 
-  const wrongLength = extractPdfImageResource("bad-length", {
+  const wrongLength = await extractPdfImageResource("bad-length", {
     width: 2,
     height: 2,
     kind: 3,
@@ -80,7 +80,7 @@ test("1-bit grayscale remains packed and unsupported schemas fail closed", () =>
   assert.ok("status" in wrongLength);
   assert.match(wrongLength.reason, /^decoded-length-mismatch:/);
 
-  const bitmapOnly = extractPdfImageResource("bitmap-only", {
+  const bitmapOnly = await extractPdfImageResource("bitmap-only", {
     width: 1,
     height: 1,
     kind: 3,
@@ -101,7 +101,7 @@ test("pinned PDF.js real XObject is retrievable through the page object store", 
     const resourceId = operators.argsArray[index]?.[0];
     assert.equal(typeof resourceId, "string");
     const store = (page as unknown as { objs: { get(id: string): unknown } }).objs;
-    const result = resolvePdfImageResource(store, resourceId as string);
+    const result = await resolvePdfImageResource(store, resourceId as string);
     assert.ok(!("status" in result), "real PDF image object should expose decoded data");
     assert.equal(result.width, 1);
     assert.equal(result.height, 1);
