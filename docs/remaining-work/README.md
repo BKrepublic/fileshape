@@ -2,7 +2,7 @@
 
 この手順書は、FileShape の **CLI版 PDF → EPUB を完成させるまでの正本ロードマップ**です。各個別文書が実装・検証・受け入れ条件の詳細を持ち、この README は順序・現在地・共通ルールを管理します。
 
-2026-09-12 時点の作業基準は `codex-next-20260912` の Stage 19 checkpoint です。次セッションは [Codex handoff](../codex-handoff-20260912.md) と [continuation status](../continuation-status.md) を先に読んでください。
+2026-09-12 時点の作業基準は `codex-next-20260912` の Stage 19 checkpoint と、その後の [Stage 19 review](../stage19-review.md) です。次セッションは [Codex handoff](../codex-handoff-20260912.md) と [continuation status](../continuation-status.md) を先に読んでください。
 
 ## 完成までの工程
 
@@ -10,7 +10,7 @@
 | --- | --- | --- | --- |
 | 1 | [本文見出し・章構造](01-headings-and-sections.md) | PDF-native evidence があれば本文見出し/章境界へ反映 | **保留**。Stage 12b/13a で使える source-backed body anchor が 0。Stage 12a page-level nav を accepted fallback とする |
 | 2 | [縦書き・ルビの表示互換性](02-reading-systems.md) | CSS、reading direction、実 reader での確認 | **検証中**。Stage 14 で packaged CSS / fixture / explicit page progression を実装済み。実 reader acceptance が未完了 |
-| 3 | [表紙・挿絵](03-images-and-cover.md) | 画像資源、出現位置、EPUB同梱、明示的 cover policy | **検証中**。Stage 19 で通常画像の placement と EPUB package を実装。次は9 PDF full EPUB acceptance、その後に explicit cover policy |
+| 3 | [表紙・挿絵](03-images-and-cover.md) | 画像資源、出現位置、EPUB同梱、明示的 cover policy | **実装レビュー中**。Stage 19 で通常画像の placement と EPUB package を実装済み。review blocker修正 → 9 PDF full acceptance → explicit cover policy の順 |
 | 4 | [未解決ルビの改善](04-ruby-refinement.md) | unresolved 6,387件の分類・改善・保存性確認 | **未完了**。Stage 17 の exact ruby on/off は追加済みだが、unresolved refinement とは別 |
 | 5 | [CLI版の最終受け入れ](05-cli-acceptance.md) | 1〜4の accepted scope を統合し、CLIと既知制限を確定 | **未着手** |
 | 後続 | [ブラウザー／Android](06-browser-android.md) | UI/環境依存adapter/実機 | **CLI完了後**。CLI完成条件には含めない |
@@ -84,14 +84,21 @@ MARKED_ISSUES=0
 
 ## 次の実装 checkpoint
 
-Stage 19 で **Task 3 production image integration** の実装まで完了しました。
+Stage 19 で **Task 3 production image integration** の実装までは完了していますが、独立レビューでgeneric production acceptance前のblockerが見つかりました。詳細は [Stage 19 review](../stage19-review.md) を参照してください。
 
-1. 次セッションの最初に `npm run verify:epub -- --epubcheck --report-dir <NEW_LOCAL_REPORT_DIR>` を実行する。
-2. 9/9 EPUB、5,141/5,141 source pages、既存ruby/navigation集計に加え、4 XHTML image occurrences と1 unique PNG archive resourceを確認する。
-3. reportを再読込して成功を確認した後、private generated EPUB/local reportを削除する。
-4. 問題がなければ通常 image preservation をacceptedとし、explicit cover policyを別checkpointで設計する。coverを自動推測しない。
+次の順序:
 
-詳細は [工程3](03-images-and-cover.md) と [Codex handoff](../codex-handoff-20260912.md) を参照。
+1. 非等方scale、外部graphics state、画像同士の重なり、model geometry/clip cross-checkをfocused fixture付きで修正する。
+2. production per-resource limitsをPNG構築前にも適用する。
+3. `verify:epub` にprivacy-safeな画像集計を追加し、4 XHTML image occurrences / 1 unique PNG / OPF / ZIP参照整合を検証できるようにする。
+4. interpolation evidenceの扱いをsafe mapping / fail-closed / explicit known limitationのどれにするか確定する。
+5. `npm test`、`npm run verify:epubcheck`、`npm run verify:image-model`、`npm run verify:ruby`、`npm run verify:stage2` を通す。
+6. その後に初めて `npm run verify:epub -- --epubcheck --report-dir <NEW_LOCAL_REPORT_DIR>` を実行する。
+7. 9/9 EPUB、5,141/5,141 source pages、6,387 unresolved annotations、250/250 outline entries、4 XHTML image occurrences、1 unique PNG archive resource、XHTML/OPF/ZIP参照整合、EPUBCheck 9/9 zero warning/errorを確認する。
+8. reportを再読込して成功を確認した後、private generated EPUB/local reportを削除する。
+9. 問題がなければStage 19通常 image preservationをacceptedとし、explicit cover policyを別checkpointで設計する。coverを自動推測しない。
+
+詳細は [工程3](03-images-and-cover.md)、[Stage 19 review](../stage19-review.md)、[Codex handoff](../codex-handoff-20260912.md) を参照。
 
 ## 共通準備
 
@@ -160,4 +167,4 @@ npm run verify:epub -- --epubcheck --report-dir <NEW_LOCAL_REPORT_DIR>
 
 **CLI版については Yes です。** Task 1〜5 が完成までの道筋で、Task 6 はその後の browser/Android 製品化工程です。
 
-ただし、この runbook は最初に Stage 12 時点で作られたため、個別 task の初期記述には古い現状説明が残る場合があります。現在地の正本は常にこの README、`docs/continuation-status.md`、最新 Stage 文書です。Task 文書の未実装手順・完了条件そのものは引き続き有効ですが、Stage 13〜17 で完了した evidence gathering を最初からやり直さないでください。
+ただし、この runbook は最初に Stage 12 時点で作られたため、個別 task の初期記述には古い現状説明が残る場合があります。現在地の正本は常にこの README、`docs/continuation-status.md`、最新 Stage / review 文書です。Task 文書の未実装手順・完了条件そのものは引き続き有効ですが、Stage 13〜19 で完了した evidence gathering / implementation を最初からやり直さないでください。
