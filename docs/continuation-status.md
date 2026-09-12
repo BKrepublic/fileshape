@@ -1,10 +1,10 @@
 # FileShape continuation status
 
-Updated 2026-09-12 after Stage 23 private-corpus glyph-selection acceptance.
+Updated 2026-09-12 after Stage 24 private-corpus unresolved-ruby structural acceptance.
 
 ## Current GitHub baseline
 
-Stages 19–20 image preservation / explicit cover are accepted and merged. Stage 21 Task 4A ruby inventory and Stage 22 coarse geometry evidence are accepted and merged. Stage 23 post-gate glyph-selection replay is accepted on `stage23-ruby-glyph-selection-evidence`; merge this checkpoint before any production ruby-rule change.
+Stages 19–20 image preservation / explicit cover are accepted and merged. Stages 21–24 complete Task 4 ruby refinement evidence. Production ruby association rules were not changed because the full-corpus evidence did not expose a safe generic improvement.
 
 The 9 private corpus PDFs are not committed; their full-corpus checks remain local-only.
 
@@ -31,11 +31,12 @@ ruby: 33 pages; mapped runs 880/880; exact candidates 373;
 Stage 2: 9/9 PDFs; 5141 pages; semantic output 5141/5141
 ```
 
-## Ruby evidence checkpoints
+## Task 4 accepted result
 
-Stage 21 classified all 23,097 current candidates without changing production rules:
+Stage 21 classified all current candidates:
 
 ```text
+RUBY_CANDIDATES=23097
 EXACT_CANDIDATES=16710
 UNRESOLVED_CANDIDATES=6387
 UNRESOLVED_REASON_COUNTS={"no-base":5004,"ambiguous-base":577,"noncontiguous-base":792,"missing-glyph-geometry":14}
@@ -43,36 +44,31 @@ SOURCE_INTEGRITY_ISSUES=0
 UNKNOWN_REASON_COUNT=0
 ```
 
-Stage 22 measured coarse geometry near misses. Exact controls all pass the coarse gate model. For `no-base`, 3,662 nearest body entries are at least two body widths away on the side axis. A residual 1,204 pass every coarse entry-level gate.
-
-Stage 23 exactly replayed production post-gate line/glyph selection for all 23,097 candidates and returned:
+Stages 22–24 then replayed the geometry and glyph-selection path without changing production rules. Stage 23 showed:
 
 ```text
 REPLAY_MISMATCHES=0
 NO_BASE_STAGE_COUNTS={"no-eligible-line":3800,"no-glyph-selected":1204}
-NO_BASE_ELIGIBLE_LINE_COUNT=1204
-NO_BASE_NO_SELECTION_RELATION_COUNTS={"not-applicable":3800,"partial-overlap-at-most-half":1130,"after-all-glyphs":28,"before-all-glyphs":12,"between-glyphs":34}
-NO_BASE_MAX_OVERLAP_BUCKETS={"0":74,"none":3800,">0.25-0.50":1126,">0.10-0.25":4}
 ```
 
-All 1,204 coarse-gate-eligible `no-base` candidates select zero base glyphs and form zero choices. 1,130 merely overlap a glyph cell by at most 50%; the rest fall before, after, or between glyph cells. **Conclusion: do not relax no-base thresholds or the >50% glyph-overlap rule.** The current 5,004 `no-base` cases remain intentionally unresolved.
+All 1,204 coarse-gate-eligible `no-base` candidates select zero glyphs and zero choices; 1,130 only partially overlap a glyph cell by 50% or less.
 
-The remaining evidence targets are `noncontiguous-base` 792 and `ambiguous-base` 577. Stage 23 stage counts are:
+Stage 24 decomposed the remaining populations:
 
 ```text
-boundary-uncertainty=541
-noncontiguous-selection=798
-annotation-overhang=28
-line-glyph-unmapped=2
-missing-annotation-geometry=14
+NONCONTIGUOUS_FAILURE_COUNTS={"same-item-source-gap":652,"same-item-source-gap+wide-gap":52,"wide-gap":88}
+AMBIGUOUS_BOUNDARY_DISTANCE_BUCKETS={"<=0.0025":485,">0.0025-0.005":6,">0.005-0.010":50}
+AMBIGUOUS_OVERHANG_BUCKETS={">0.50-0.75":18,">0.75-1.00":8,">1.00":2}
+EXACT_NEAREST_BOUNDARY_BUCKETS={">0.020":16676,">0.010-0.020":34}
+REPLAY_MISMATCHES=0
 ```
 
-These must be decomposed structurally before any production change. No production ruby rule changed in Stages 21–23.
+All 792 `noncontiguous-base` cases have real source or physical discontinuity. All 541 boundary-uncertain cases are at or inside the existing 1% margin, while all exact controls are outside it. The other ambiguous cases are overhang, noncontiguous, or unmapped glyph lines. **Conclusion: Task 4 is accepted with no production ruby-rule change.** The 6,387 unresolved candidates remain explicitly preserved by policy; reducing that number is not itself a quality goal.
 
 ## Other accepted/held scope
 
-- Stage 13a body heading mapping remains on hold; page-level navigation is accepted fallback.
-- Stage 14 reading-system implementation exists; manual real-reader acceptance remains.
+- Stage 13a body heading mapping remains on hold; page-level navigation is the accepted fallback for this corpus because no source-backed body anchors were found.
+- Stage 14 reading-system implementation exists; manual real-reader acceptance remains environment-dependent and is not silently marked complete.
 - Stages 15–20 image preservation and explicit source-backed cover are accepted. No automatic cover inference.
 - Complete private corpus has zero marked-content occurrences.
 
@@ -88,8 +84,6 @@ These must be decomposed structurally before any production change. No productio
 
 ## Next work
 
-1. **Task 4B unresolved post-selection evidence**: classify `noncontiguous-base` and `ambiguous-base` by normalized internal glyph gap, source continuity, boundary margin and overhang magnitude. Keep it read-only first.
-2. Only if a generic structural defect cleanly separates from existing exact candidates should `ruby-spans.ts` change. Add positive + adversarial negative fixtures first, then compare stable candidate IDs before/after over the full private corpus.
-3. Task 2 real-reader acceptance remains manual/environment-dependent.
-4. Task 5 CLI final acceptance follows accepted Task 4 scope and real-reader conclusions.
-5. Browser/Android follows CLI acceptance.
+1. **Task 5 CLI final acceptance**: freeze the accepted CLI scope, test default/strict/options/error paths/determinism, refresh user-facing README and run the integrated private-corpus acceptance.
+2. Task 2 manual real-reader checks remain a separate explicit acceptance item; do not fabricate a pass. The automated reader fixture already exists.
+3. Browser/Android work begins only after the CLI acceptance scope is recorded.
