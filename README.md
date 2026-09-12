@@ -23,6 +23,8 @@ Stages 15–20 add production image preservation and explicit source-backed cove
 
 Stage 25 automated CLI acceptance also passes: fixed-metadata output is byte-deterministic, strict unresolved-ruby mode rejects as designed, failed conversions preserve an existing output, invalid/missing CLI input is rejected, help works, and the documented option surface succeeds through the real CLI. Manual Thorium/calibre validation remains a separate unperformed item and is not implied by EPUBCheck success.
 
+Stage 26 starts Task 6A with byte-input inspection and conversion APIs. The Node CLI now reads the PDF once and delegates to the same byte conversion path; fixed-metadata public fixtures produce byte-identical EPUB output through both entry points. Browser runtime dependencies, workers, progress/cancellation, UI, and Android packaging remain later checkpoints.
+
 See [continuation status](docs/continuation-status.md) for the current evidence and [the remaining-work runbook](docs/remaining-work/README.md) for ordered acceptance work.
 
 ## Pipeline

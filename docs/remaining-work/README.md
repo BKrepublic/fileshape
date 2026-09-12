@@ -4,7 +4,7 @@
 
 ## 現在地
 
-Stages 19–20 の通常画像 preservation / explicit cover policy は accepted。Stage 21 で全23,097 ruby候補を分類し、Stage 22 で unresolved 6,387件の coarse geometry near-miss evidence を取得しました。
+Stages 19–20 の通常画像 preservation / explicit cover policy、Stages 21–24 のruby evidence、Stage 25 のCLI自動受け入れはacceptedです。Stage 26からTask 6Aの環境境界分離を開始しています。
 
 ```text
 RUBY_CANDIDATES=23097
@@ -22,9 +22,9 @@ NO_BASE_CROSS_DISTANCE_GE_2_BODY_WIDTHS=3662
 | 1 | [本文見出し・章構造](01-headings-and-sections.md) | 新しいPDF-native evidenceが得られた場合だけ再開 | **保留**。page-level navigationをaccepted fallbackとする |
 | 2 | [縦書き・ルビの表示互換性](02-reading-systems.md) | 実readerでの互換性確認 | **実装済み・manual acceptance待ち** |
 | 3 | [表紙・挿絵](03-images-and-cover.md) | なし | **accepted** |
-| 4 | [未解決ルビの改善](04-ruby-refinement.md) | post-gate glyph-selection evidence → 必要なら限定修正 → source単位差分検証 | **実装中**。Stage 21/22 evidence accepted |
-| 5 | [CLI版の最終受け入れ](05-cli-acceptance.md) | accepted scope統合、CLI/既知制限の凍結、最終validation | **未着手** |
-| 後続 | [ブラウザー／Android](06-browser-android.md) | UI/環境adapter/実機 | **CLI完了後** |
+| 4 | [未解決ルビの改善](04-ruby-refinement.md) | 新しいgeneric source-backed evidenceがある場合だけ再開 | **accepted**。production rule変更なし |
+| 5 | [CLI版の最終受け入れ](05-cli-acceptance.md) | なし | **accepted・merged** |
+| 後続 | [ブラウザー／Android](06-browser-android.md) | runtime境界、browser adapter/UI、Android方式、実機 | **Task 6A実装中**。Stage 26 byte boundary |
 
 ## Ruby方針
 
