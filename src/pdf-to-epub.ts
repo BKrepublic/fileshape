@@ -1,29 +1,23 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { readFile, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { UnresolvedRubyPolicy } from "./content-policy.js";
 import {
   parseCoverOccurrenceSelector,
-  resolveCoverImageResourceId,
-  type CoverOccurrenceSelector,
 } from "./cover-policy.js";
-import {
-  serializeEpubPackage,
-  type EpubPackageOptions,
-  type EpubPageProgressionDirection,
-} from "./epub-package.js";
-import { buildDocumentFromInspection } from "./pdf-document-pipeline.js";
-import { inspectPdfBytes, nodePdfJsResourceConfig } from "./pdf-inspector.js";
 import type { EpubNavigationSummary } from "./epub-navigation.js";
+import type { EpubPageProgressionDirection } from "./epub-package.js";
 import type { EpubRubyMode } from "./epub-xhtml.js";
+import { nodePdfJsResourceConfig } from "./pdf-inspector.js";
+import {
+  convertPdfBytesToEpubWithResources,
+  type PdfBytesToEpubResult,
+  type PdfToEpubOptions,
+} from "./pdf-to-epub-core.js";
 
-export type PdfToEpubOptions = Omit<EpubPackageOptions, "title" | "identifier" | "coverImageResourceId"> & {
-  title?: string;
-  identifier?: string;
-  /** Exact source occurrence selected as cover. Omitted means no cover designation. */
-  coverOccurrence?: CoverOccurrenceSelector;
-};
+export { convertPdfBytesToEpubWithResources } from "./pdf-to-epub-core.js";
+export type { PdfBytesToEpubResult, PdfToEpubOptions } from "./pdf-to-epub-core.js";
 
 export type PdfToEpubResult = {
   inputPath: string;
@@ -43,23 +37,6 @@ function defaultOutputPath(inputPath: string): string {
   return path.join(parsed.dir, `${parsed.name}.epub`);
 }
 
-function defaultTitle(inputPath: string): string {
-  const lastDot = inputPath.lastIndexOf(".");
-  return lastDot > 0 ? inputPath.slice(0, lastDot) : inputPath;
-}
-
-function sourceId(bytes: Uint8Array): string {
-  return `urn:sha256:${createHash("sha256").update(bytes).digest("hex")}`;
-}
-
-function validateSourceInput(sourceBytes: Uint8Array, sourceName: string): void {
-  if (sourceName.length === 0) throw new Error("sourceName must not be empty");
-  if (/[\\/\0]/.test(sourceName)) {
-    throw new Error("sourceName must not contain path separators or NUL");
-  }
-  if (sourceBytes.byteLength === 0) throw new Error("PDF input must not be empty");
-}
-
 function unresolvedRubyPolicy(value: string): UnresolvedRubyPolicy {
   if (value === "error" || value === "preserve-as-page-note") return value;
   throw new Error("--unresolved-ruby must be error or preserve-as-page-note");
@@ -75,66 +52,12 @@ function pageProgressionDirection(value: string): EpubPageProgressionDirection {
   throw new Error("--page-progression-direction must be ltr or rtl");
 }
 
-export type PdfBytesToEpubResult = {
-  sourceName: string;
-  bytes: Uint8Array;
-  documentId: string;
-  pageCount: number;
-  unresolvedAnnotationCount: number;
-  byteLength: number;
-  navigation: EpubNavigationSummary;
-  coverImageResourceId?: string;
-};
-
 export async function convertPdfBytesToEpub(
   sourceBytes: Uint8Array,
   sourceName: string,
   options: PdfToEpubOptions = {},
 ): Promise<PdfBytesToEpubResult> {
-  validateSourceInput(sourceBytes, sourceName);
-  const documentId = sourceId(sourceBytes);
-  const inspection = await inspectPdfBytes(
-    sourceBytes,
-    sourceName,
-    { includeGlyphs: true, includeImages: true },
-    nodePdfJsResourceConfig,
-  );
-  const { document } = buildDocumentFromInspection(inspection, documentId);
-  const unresolvedAnnotationCount = document.pages.reduce(
-    (count, page) => count + page.unresolvedRuby.length,
-    0,
-  );
-  const effectiveUnresolvedPolicy = options.unresolvedRubyPolicy ?? "preserve-as-page-note";
-  const coverImageResourceId = options.coverOccurrence === undefined
-    ? undefined
-    : resolveCoverImageResourceId(document, options.coverOccurrence);
-
-  const epub = serializeEpubPackage(document, {
-    title: options.title ?? defaultTitle(sourceName),
-    identifier: options.identifier ?? documentId,
-    ...(options.creator === undefined ? {} : { creator: options.creator }),
-    ...(options.language === undefined ? {} : { language: options.language }),
-    ...(options.modified === undefined ? {} : { modified: options.modified }),
-    ...(options.titlePrefix === undefined ? {} : { titlePrefix: options.titlePrefix }),
-    ...(options.rubyMode === undefined ? {} : { rubyMode: options.rubyMode }),
-    ...(options.pageProgressionDirection === undefined
-      ? {}
-      : { pageProgressionDirection: options.pageProgressionDirection }),
-    ...(coverImageResourceId === undefined ? {} : { coverImageResourceId }),
-    unresolvedRubyPolicy: effectiveUnresolvedPolicy,
-  });
-
-  const outputBytes = new Uint8Array(epub.bytes);
-  return {
-    sourceName,
-    bytes: outputBytes,
-    documentId,
-    pageCount: document.pages.length,
-    unresolvedAnnotationCount,
-    byteLength: outputBytes.byteLength,
-    navigation: epub.navigation,
-    ...(coverImageResourceId === undefined ? {} : { coverImageResourceId }),
-  };
+  return convertPdfBytesToEpubWithResources(sourceBytes, sourceName, options, nodePdfJsResourceConfig);
 }
 
 export async function convertPdfToEpub(

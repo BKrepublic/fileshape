@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "entrypoints": [
+    {
+      "path": "src/pdf-inspector-core.ts",
+      "directNodeBuiltins": [],
+      "transitiveNodeBuiltins": [
+        "node:crypto",
+        "node:zlib"
+      ],
+      "externalPackages": [
+        "pdfjs-dist"
+      ],
+      "reachableLocalModules": [
+        "src/display-geometry.ts",
+        "src/pdf-image-adapter.ts",
+        "src/pdf-image-resource-adapter.ts",
+        "src/pdf-inspector-core.ts",
+        "src/pdf-outline.ts",
+        "src/pdf-production-images.ts",
+        "src/pdfjs-glyph-adapter.ts",
+        "src/source-text.ts"
+      ]
+    },
+    {
+      "path": "src/pdf-to-epub-core.ts",
+      "directNodeBuiltins": [
+        "node:crypto"
+      ],
+      "transitiveNodeBuiltins": [
+        "node:crypto",
+        "node:zlib"
+      ],
+      "externalPackages": [
+        "pdfjs-dist"
+      ],
+      "reachableLocalModules": [
+        "src/content-policy.ts",
+        "src/cover-policy.ts",
+        "src/display-geometry.ts",
+        "src/document-model.ts",
+        "src/document-navigation.ts",
+        "src/document-orientation.ts",
+        "src/epub-navigation.ts",
+        "src/epub-package.ts",
+        "src/epub-styles.ts",
+        "src/epub-xhtml.ts",
+        "src/pdf-document-pipeline.ts",
+        "src/pdf-image-adapter.ts",
+        "src/pdf-image-resource-adapter.ts",
+        "src/pdf-inspector-core.ts",
+        "src/pdf-outline.ts",
+        "src/pdf-production-images.ts",
+        "src/pdf-to-epub-core.ts",
+        "src/pdfjs-glyph-adapter.ts",
+        "src/physical-layout.ts",
+        "src/production-image-placement.ts",
+        "src/ruby-spans.ts",
+        "src/semantic-blocks.ts",
+        "src/source-text.ts",
+        "src/text-flow.ts"
+      ]
+    }
+  ],
+  "nodeAdapterProviders": [
+    {
+      "path": "src/pdf-inspector.ts",
+      "exportName": "nodePdfJsResourceConfig",
+      "directNodeBuiltins": [
+        "node:fs/promises",
+        "node:path",
+        "node:url"
+      ],
+      "configKeys": [
+        "cMapPacked",
+        "cMapUrl",
+        "disableFontFace",
+        "standardFontDataUrl",
+        "useSystemFonts"
+      ]
+    }
+  ],
+  "unreachableValidationTooling": [
+    "src/epubcheck.ts",
+    "src/setup-epubcheck.ts"
+  ],
+  "absentBrowserContracts": [
+    "worker-ownership",
+    "progress",
+    "cancellation",
+    "diagnostics",
+    "file-size-memory-policy",
+    "download-save",
+    "resource-cleanup"
+  ]
+}

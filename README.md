@@ -25,6 +25,8 @@ Stage 25 automated CLI acceptance also passes: fixed-metadata output is byte-det
 
 Stage 26 starts Task 6A with byte-input inspection and conversion APIs. The Node CLI now reads the PDF once and delegates to the same byte conversion path; fixed-metadata public fixtures produce byte-identical EPUB output through both entry points. Browser runtime dependencies, workers, progress/cancellation, UI, and Android packaging remain later checkpoints.
 
+Stage 27 places those byte paths in explicit inspection/conversion core modules and commits a reproducible runtime dependency inventory. The inventory currently reports Node SHA-256 and zlib as conversion blockers and confirms that Java/EPUBCheck tooling is outside the conversion graph; the modules are not yet browser-ready.
+
 See [continuation status](docs/continuation-status.md) for the current evidence and [the remaining-work runbook](docs/remaining-work/README.md) for ordered acceptance work.
 
 ## Pipeline

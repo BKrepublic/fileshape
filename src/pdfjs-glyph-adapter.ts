@@ -2,7 +2,7 @@ import { OPS, normalizeUnicode, version } from "pdfjs-dist/legacy/build/pdf.mjs"
 import { geometry, IDENTITY, multiply, point, subtract, dot } from "./display-geometry.js";
 import type { TextGeometry } from "./display-geometry.js";
 import type { SourceGlyphRef, SourceTextRef } from "./source-text.js";
-import type { InspectTextItem } from "./pdf-inspector.js";
+import type { InspectTextItem } from "./pdf-inspection-model.js";
 
 /** Internal PDF.js operator glyph/font schema is isolated here and version-pinned.
  * Metrics describe advance cells, not ink outlines. Never divide run width.

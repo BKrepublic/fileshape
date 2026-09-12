@@ -1,4 +1,4 @@
-import type { InspectPage, InspectTextItem } from "./pdf-inspector.js";
+import type { InspectPage, InspectTextItem } from "./pdf-inspection-model.js";
 import type { ExtractedGlyph } from "./pdfjs-glyph-adapter.js";
 import { dot, subtract, type Point } from "./display-geometry.js";
 import { fullTextRef, mergeSourceRanges, type SourceGlyphRef, type SourceTextRef } from "./source-text.js";
