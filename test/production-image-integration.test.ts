@@ -36,9 +36,11 @@ function localEntries(bytes: Uint8Array): Map<string, Uint8Array> {
 }
 
 function occurrence(operatorIndex: number, bounds: DocumentImageOccurrence["displayBounds"]): DocumentImageOccurrence {
+  const width = bounds.right - bounds.left;
+  const height = bounds.bottom - bounds.top;
   return {
     kind: "image", sourcePage: 1, operatorIndex, occurrenceIndex: 0, placementIndex: 0,
-    resourceId: `image-${imageHash}`, displayTransform: [1, 0, 0, -1, bounds.left, bounds.bottom],
+    resourceId: `image-${imageHash}`, displayTransform: [width, 0, 0, -height, bounds.left, bounds.bottom],
     displayBounds: bounds, formDepth: 0, interpolate: false, clipStatus: "none", clipCoverage: "none",
   };
 }
