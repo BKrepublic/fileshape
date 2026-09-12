@@ -1,10 +1,10 @@
 # FileShape continuation status
 
-Updated 2026-09-12 after Stage 21 private-corpus ruby inventory acceptance.
+Updated 2026-09-12 after Stage 22 private-corpus ruby near-miss acceptance.
 
 ## Current GitHub baseline
 
-Stage 19 ordinary image preservation and Stage 20 explicit/source-backed cover selection are accepted. Stage 21 Task 4A ruby inventory is also accepted on `stage21-ruby-refinement-inventory`; merge this checkpoint before starting production ruby rule changes.
+Stages 19–20 image preservation / explicit cover are accepted and merged. Stage 21 Task 4A ruby inventory is accepted and merged to `main` through PR #13. Stage 22 Task 4B near-miss geometry evidence is accepted on `stage22-ruby-near-miss-evidence`; merge this evidence checkpoint before any production ruby-rule change.
 
 The 9 private corpus PDFs are not committed; their full-corpus checks remain local-only.
 
@@ -26,8 +26,6 @@ XHTML/OPF/ZIP image references: consistent
 EPUBCheck 5.3.0: 9/9 passed with 0 errors / 0 warnings
 ```
 
-Stage 20 explicit-cover smoke also passed with one cover marker, unchanged body image occurrence, unchanged PNG resource count, and clean EPUBCheck.
-
 Known parser/model regression baseline remains:
 
 ```text
@@ -42,29 +40,19 @@ Stage 2: 9/9 PDFs; 5141 pages; semantic output 5141/5141;
 
 ### Stage 13a: outline destination -> source evidence
 
-All 250 outline entries in six PDFs were analyzed without using titles for body matching. Results were `page-only: 250`, with zero source-backed body anchors. Task 1 body heading/section mapping is on hold. Stage 12a page-level outline navigation remains the accepted fallback. Do not add nearest-text, title/body string matching, outline-depth heading inference, filename, font-name, or appearance heuristics to manufacture headings.
+All 250 outline entries in six PDFs were analyzed without title/body matching. Results were `page-only: 250`, with zero source-backed body anchors. Task 1 body heading/section mapping remains on hold; Stage 12a page-level outline navigation is the accepted fallback.
 
 ### Stage 14: reading-system CSS/resources
 
-Implemented deterministic packaged CSS, manifest registration, XHTML stylesheet links, reflow-safe horizontal/vertical rules, ruby/note styling, explicit page progression direction, and a synthetic reading-system fixture. Task 2 still needs manual real-reader validation.
+Deterministic packaged CSS, reflow-safe vertical/horizontal rules, ruby/note styling, explicit page progression and reader fixture are implemented. Task 2 still needs manual real-reader acceptance.
 
 ### Stages 15–20: images and cover
 
-Stages 15–19 established and implemented source-backed image extraction, typed resource/occurrence provenance, geometry-backed placement, XHTML/OPF/ZIP packaging, production limits, package verification, and fail-closed handling of unsupported transforms/effects. The private corpus has four image occurrences that deduplicate to one PNG resource, and the final private regression passes 9/9 with EPUBCheck clean.
-
-Stage 20 adds explicit cover designation via:
-
-```text
---cover-occurrence PAGE:OPERATOR:OCCURRENCE
-```
-
-No automatic cover inference is performed. The selected existing image manifest item receives `properties="cover-image"`; its body occurrence remains; shared PNG bytes remain deduplicated. Stage 20 is accepted.
+Source-backed image extraction, typed resource/occurrence provenance, geometry-backed placement, XHTML/OPF/ZIP packaging, limits, fail-closed unsupported effects, full-package image accounting and explicit cover designation are accepted. No automatic cover inference exists.
 
 ### Stage 21: ruby refinement inventory
 
-Stage 21 performs Task 4A classification only. It does not change `ruby-spans.ts` thresholds or promote any unresolved candidate.
-
-Accepted private inventory:
+Stage 21 classifies the complete current ruby-candidate population without changing production thresholds.
 
 ```text
 PDFS=9
@@ -76,17 +64,35 @@ UNRESOLVED_REASON_COUNTS={"no-base":5004,"ambiguous-base":577,"noncontiguous-bas
 ORIENTATION_COUNTS={"vertical":23079,"horizontal":18}
 ROTATION_COUNTS={"0":23045,"90":52}
 ANNOTATION_EVIDENCE_COUNTS={"all-exact-with-geometry":23083,"has-unmapped-glyph-mapping":14}
-ALTERNATIVE_BUCKET_COUNTS={"0":6197,"1":16900}
-PAGE_GLYPH_ISSUE_CANDIDATES=0
 SOURCE_INTEGRITY_ISSUES=0
 UNKNOWN_REASON_COUNT=0
 ```
 
-Dominant unresolved feature: 4,960 candidates are `no-base|vertical|rot0|all-exact-with-geometry|alts:0|page-glyph-clean`. This is a diagnosis target, not a license to widen thresholds. The next checkpoint must measure geometric near misses before changing production association rules.
+### Stage 22: ruby near-miss geometry evidence
+
+Stage 22 is read-only and measures why unresolved candidates fail coarse production geometry gates.
+
+Exact control:
+
+```text
+EXACT_ACTUAL_BASE_ELIGIBILITY={"all-actual-base-eligible":16710}
+```
+
+For `no-base` (5,004 total), 3,662 nearest body entries are at least two body widths away on the side axis and large additional groups fail axis/inline proximity. Therefore **blanket threshold widening is rejected**.
+
+The significant residual group is:
+
+```text
+NO_BASE_NEAREST_GATE_COUNTS eligible=1204
+```
+
+These 1,204 candidates pass all coarse entry-level gates yet production still returns `no-base`. Their rejection therefore occurs later, in glyph-cell selection / annotation coverage / source-contiguity / line-choice logic. `ambiguous-base` 577 and `noncontiguous-base` 792 are also coarse-eligible as expected and serve as controls for that next diagnostic.
+
+No production ruby rule changed in Stages 21–22.
 
 ### marked content / 「特殊効果」
 
-The complete private corpus contains zero marked-content occurrences. Do not invent special-tag conversion rules for this corpus. Future unsupported presentation-only wrappers may be safely unwrapped only when child content is preserved; content-bearing/interactive/ambiguous behavior must not be silently deleted.
+The complete private corpus contains zero marked-content occurrences. Do not invent special-tag conversion rules for this corpus. Future presentation-only wrappers may be unwrapped only when child content is preserved; content-bearing/interactive/ambiguous behavior must not be silently deleted.
 
 ## Current pipeline
 
@@ -97,10 +103,10 @@ PDF
   -> physical layout
   -> semantic blocks
   -> exact/unresolved ruby association
-  -> typed FileShape Document Model + explicit outline navigation + image placement gaps
+  -> typed FileShape Document Model + outline navigation + image placement
   -> unresolved-content policy
-  -> ordered text/image EPUB XHTML + packaged CSS
-  -> OPF / nav / image resources / optional explicit cover marker / container / ZIP package
+  -> ordered text/image EPUB XHTML + CSS
+  -> OPF / nav / image resources / optional explicit cover marker / ZIP
   -> .epub
 ```
 
@@ -110,24 +116,24 @@ User-facing CLI:
 npm run convert:epub -- input.pdf [output.epub]
 ```
 
-Relevant options include unresolved-ruby policy, explicit page progression direction, `--ruby on|off`, and `--cover-occurrence PAGE:OPERATOR:OCCURRENCE`.
+Relevant options include unresolved-ruby policy, page progression, `--ruby on|off`, and `--cover-occurrence PAGE:OPERATOR:OCCURRENCE`.
 
 ## Important invariants
 
-- no website, filename, URL, Creator/Producer, generator, font-name, N-code, particular character appearance, or title matching heuristics;
-- parser/model decisions come from PDF structure, geometry, ordering and provenance;
+- no website, filename, URL, Creator/Producer, generator, font-name, N-code, character appearance, title or language-specific parser heuristics;
+- decisions come from PDF structure, geometry, ordering and provenance;
 - preserve original `TextItem.str` and source ownership;
-- never split ligatures or supplementary Unicode by guessed widths;
-- unresolved ruby must stay explicit unless a generic source-backed rule proves a unique base;
+- never split ligatures/supplementary Unicode by guessed widths;
+- unresolved ruby stays explicit unless a generic source-backed rule proves a unique base;
 - do not weaken verifiers or rewrite expectations merely to obtain green results;
-- do not commit private PDFs, extracted images, source text excerpts, generated private EPUBs, or local reports.
+- do not commit private PDFs, images, text excerpts, generated private EPUBs or local reports.
 
 ## Next work
 
-1. **Task 4B geometric near-miss analysis**: measure why unresolved groups fail current cross-distance, inline-overlap, continuity and uniqueness gates. Keep it read-only first. The 5,004 `no-base` group is the primary population; the other reasons are controls, not merged into it.
-2. If a generic structural pattern establishes a safe improvement, add positive and adversarial negative fixtures before changing `ruby-spans.ts`, then compare source-stable candidate IDs before/after across the full corpus.
-3. **Task 2 real-reader acceptance** remains manual/environment-dependent and does not block independent Task 4 work.
-4. **Task 5 CLI final acceptance** follows accepted Task 4 scope and real-reader conclusions.
+1. **Task 4B glyph-selection evidence**: replay the production post-gate selection stage read-only. Classify the 1,204 coarse-eligible `no-base` candidates into exact later-failure mechanisms: no glyph selected, boundary/overhang uncertainty, non-contiguity, or competing choices. The diagnostic must reproduce current production reason/status for all 23,097 candidates as a consistency control.
+2. Only if that evidence exposes a generic structural defect should production `ruby-spans.ts` change. Add positive + adversarial negative fixtures first, then compare stable candidate IDs before/after over the full private corpus.
+3. Task 2 real-reader acceptance remains manual/environment-dependent and does not block independent Task 4 work.
+4. Task 5 CLI final acceptance follows accepted Task 4 scope and real-reader conclusions.
 5. Browser/Android follows CLI acceptance.
 
 Task 1 body heading/section mapping remains on hold until genuinely new PDF-native source evidence appears.
