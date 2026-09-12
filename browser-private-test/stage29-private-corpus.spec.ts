@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { inflateSync } from "node:zlib";
 import { expect, test, type Browser, type CDPSession, type Page } from "@playwright/test";
 import { convertPdfBytesToEpub } from "../src/pdf-to-epub.js";
 
@@ -25,6 +26,18 @@ type StoredZipEntry = {
   path: string;
   data: Buffer;
   uncompressedSize: number;
+};
+
+type PngSummary = {
+  width: number;
+  height: number;
+  bitDepth: number;
+  colorType: number;
+  pngBytes: number;
+  idatBytes: number;
+  inflatedBytes: number;
+  pngSha256: string;
+  inflatedSha256: string;
 };
 
 async function listPdfs(): Promise<string[]> {
@@ -77,9 +90,88 @@ function firstDifferentByte(left: Uint8Array, right: Uint8Array): number {
   return left.length === right.length ? -1 : sharedLength;
 }
 
+function pngSummary(bytes: Buffer): PngSummary {
+  const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+  if (bytes.length < 33 || !bytes.subarray(0, 8).equals(signature)) {
+    throw new Error("image entry is not a valid PNG signature");
+  }
+  let offset = 8;
+  let width = -1;
+  let height = -1;
+  let bitDepth = -1;
+  let colorType = -1;
+  const idat: Buffer[] = [];
+  while (offset + 12 <= bytes.length) {
+    const length = bytes.readUInt32BE(offset);
+    const typeStart = offset + 4;
+    const dataStart = offset + 8;
+    const dataEnd = dataStart + length;
+    const next = dataEnd + 4;
+    if (next > bytes.length) throw new Error("truncated PNG chunk");
+    const type = bytes.toString("ascii", typeStart, typeStart + 4);
+    if (type === "IHDR") {
+      if (length !== 13) throw new Error("invalid PNG IHDR length");
+      width = bytes.readUInt32BE(dataStart);
+      height = bytes.readUInt32BE(dataStart + 4);
+      bitDepth = bytes[dataStart + 8]!;
+      colorType = bytes[dataStart + 9]!;
+    } else if (type === "IDAT") {
+      idat.push(bytes.subarray(dataStart, dataEnd));
+    } else if (type === "IEND") {
+      break;
+    }
+    offset = next;
+  }
+  if (width < 0 || height < 0 || idat.length === 0) throw new Error("PNG is missing IHDR or IDAT");
+  const compressed = Buffer.concat(idat);
+  const inflated = inflateSync(compressed);
+  return {
+    width,
+    height,
+    bitDepth,
+    colorType,
+    pngBytes: bytes.length,
+    idatBytes: compressed.length,
+    inflatedBytes: inflated.length,
+    pngSha256: hashPrefix(bytes),
+    inflatedSha256: hashPrefix(inflated),
+  };
+}
+
+function imageDifferenceSummary(nodeEntries: StoredZipEntry[], browserEntries: StoredZipEntry[]): Record<string, unknown> | undefined {
+  const nodeImages = nodeEntries.filter((entry) => entry.path.startsWith("OEBPS/images/") && entry.path.endsWith(".png"));
+  const browserImages = browserEntries.filter((entry) => entry.path.startsWith("OEBPS/images/") && entry.path.endsWith(".png"));
+  if (nodeImages.length === 0 && browserImages.length === 0) return undefined;
+  const count = Math.max(nodeImages.length, browserImages.length);
+  const images = [];
+  for (let index = 0; index < count; index += 1) {
+    const node = nodeImages[index];
+    const browser = browserImages[index];
+    const nodeSummary = node ? pngSummary(node.data) : undefined;
+    const browserSummary = browser ? pngSummary(browser.data) : undefined;
+    images.push({
+      index,
+      nodePathHash: node ? /OEBPS\/images\/([0-9a-f]+)\.png$/.exec(node.path)?.[1]?.slice(0, 16) : undefined,
+      browserPathHash: browser ? /OEBPS\/images\/([0-9a-f]+)\.png$/.exec(browser.path)?.[1]?.slice(0, 16) : undefined,
+      node: nodeSummary,
+      browser: browserSummary,
+      inflatedByteIdentical: nodeSummary !== undefined
+        && browserSummary !== undefined
+        && nodeSummary.inflatedBytes === browserSummary.inflatedBytes
+        && nodeSummary.inflatedSha256 === browserSummary.inflatedSha256,
+    });
+  }
+  return {
+    nodeImageCount: nodeImages.length,
+    browserImageCount: browserImages.length,
+    images,
+  };
+}
+
 function epubDifferenceSummary(nodeBytes: Buffer, browserBytes: Buffer): Record<string, unknown> {
   const nodeEntries = storedZipEntries(nodeBytes);
   const browserEntries = storedZipEntries(browserBytes);
+  const imageDifference = imageDifferenceSummary(nodeEntries, browserEntries);
   const sharedEntries = Math.min(nodeEntries.length, browserEntries.length);
   for (let index = 0; index < sharedEntries; index += 1) {
     const node = nodeEntries[index]!;
@@ -92,6 +184,7 @@ function epubDifferenceSummary(nodeBytes: Buffer, browserBytes: Buffer): Record<
         browserPath: browser.path,
         nodeEntryCount: nodeEntries.length,
         browserEntryCount: browserEntries.length,
+        ...(imageDifference === undefined ? {} : { imageDifference }),
       };
     }
     if (Buffer.compare(node.data, browser.data) !== 0) {
@@ -106,6 +199,7 @@ function epubDifferenceSummary(nodeBytes: Buffer, browserBytes: Buffer): Record<
         firstDifferingByte: firstDifferentByte(node.data, browser.data),
         nodeSha256: hashPrefix(node.data),
         browserSha256: hashPrefix(browser.data),
+        ...(imageDifference === undefined ? {} : { imageDifference }),
       };
     }
   }
@@ -114,6 +208,7 @@ function epubDifferenceSummary(nodeBytes: Buffer, browserBytes: Buffer): Record<
       kind: "entry-count",
       nodeEntryCount: nodeEntries.length,
       browserEntryCount: browserEntries.length,
+      ...(imageDifference === undefined ? {} : { imageDifference }),
     };
   }
   return {
@@ -123,6 +218,7 @@ function epubDifferenceSummary(nodeBytes: Buffer, browserBytes: Buffer): Record<
     firstDifferingByte: firstDifferentByte(nodeBytes, browserBytes),
     nodeSha256: hashPrefix(nodeBytes),
     browserSha256: hashPrefix(browserBytes),
+    ...(imageDifference === undefined ? {} : { imageDifference }),
   };
 }
 
