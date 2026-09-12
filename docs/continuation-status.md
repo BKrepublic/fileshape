@@ -1,29 +1,25 @@
 # FileShape continuation status
 
-Updated 2026-09-12 after Stage 19 acceptance and Stage 20 explicit-cover default-corpus regression.
+Updated 2026-09-12 after final Stage 20 explicit-cover acceptance.
 
 ## Current GitHub baseline
 
-Stage 19 ordinary image preservation is merged to `main` through PR #11. Stage 20 is under review on:
+Stage 19 ordinary image preservation is merged to `main` through PR #11. Stage 20 explicit/source-backed cover selection has completed public CI, private default full-corpus regression, and private explicit-cover smoke acceptance on PR #12.
 
-```text
-branch: stage20-explicit-cover-policy
-required Stage 19 merged ancestor: 82e318acf55ae9950f9459720ac3475d1a5f7d6c
-```
-
-Start Stage 20 follow-up from the latest `stage20-explicit-cover-policy` HEAD. Do not reset to an older implementation SHA; docs/tests/verifiers intentionally move the branch forward.
+After PR #12 is merged, new implementation work should start from the latest `main`.
 
 The 9 private corpus PDFs are not committed; their full-corpus checks remain local-only.
 
 ## Proven production baseline
 
-Stage 19 hardened ordinary image preservation is accepted over the complete private corpus:
+The hardened production PDF -> EPUB path has passed the complete private corpus with images enabled:
 
 ```text
 PDFs: 9/9
 EPUBs: 9/9
 Pages: 5141/5141
 Unresolved annotations preserved: 6387
+Total EPUB bytes: 17959256
 Outline entries: 250/250; outline PDFs: 6/6; unresolved 0
 Image occurrences: 4/4
 Unique PNG content resources: 1/1
@@ -32,7 +28,20 @@ XHTML/OPF/ZIP image references: consistent
 EPUBCheck 5.3.0: 9/9 passed with 0 errors / 0 warnings
 ```
 
-Stage 20 default conversion has independently rerun the same corpus and reproduced the same accepted aggregate, including total EPUB bytes 17,959,256. This proves that adding the explicit-cover option does not change default conversion output.
+Stage 20 default conversion independently reproduced the same aggregate, proving that merely adding explicit-cover support does not alter default output.
+
+The Stage 20 private explicit-cover smoke also passed:
+
+```text
+COVER_SMOKE=PASS
+PDFS=9
+BODY_IMAGE_OCCURRENCES=1
+PNG_RESOURCES=1
+COVER_MARKERS=1
+BODY_OCCURRENCES_PRESERVED=yes
+PNG_RESOURCES_UNCHANGED=yes
+EPUBCheck 5.3.0: pass (0 errors, 0 warnings)
+```
 
 Known parser/model regression baseline remains:
 
@@ -72,7 +81,9 @@ Stage 20 adds only explicit/source-backed cover designation. There is no cover i
 
 The selector resolves exact `DocumentImageOccurrence` provenance to an existing image resource. The selected manifest item receives `properties="cover-image"`; the original body occurrence remains in place; no synthetic cover XHTML/spine item is created; shared PNG bytes remain deduplicated. Missing, malformed or ambiguous selectors fail before output replacement.
 
-Public unit/typecheck/real EPUBCheck CI is green. The fresh private **default** 9-PDF full regression also passes with exactly the Stage 19 accepted aggregate. One private explicit-cover smoke remains: `npm run verify:cover`. It must prove one cover marker, unchanged body occurrence count, unchanged PNG resource set/count and EPUBCheck zero errors/warnings. Stage 20 is not accepted until that final smoke passes.
+Public unit/typecheck/real EPUBCheck CI is green. The fresh private default 9-PDF full regression reproduced the accepted Stage 19 aggregate, and the private explicit-cover smoke proved exactly one cover marker with unchanged body occurrence and PNG resource counts plus clean EPUBCheck.
+
+**Stage 20 is accepted.** Automatic cover inference remains intentionally absent.
 
 ### marked content / 「特殊効果」
 
@@ -111,7 +122,7 @@ The user-facing CLI remains:
 npm run convert:epub -- input.pdf [output.epub]
 ```
 
-Relevant current options include explicit unresolved-ruby policy, page-progression direction, `--ruby on|off`, and Stage 20 `--cover-occurrence PAGE:OPERATOR:OCCURRENCE`.
+Relevant current options include explicit unresolved-ruby policy, page-progression direction, `--ruby on|off`, and `--cover-occurrence PAGE:OPERATOR:OCCURRENCE`.
 
 ## Important invariants
 
@@ -137,12 +148,6 @@ npm run verify:epubcheck
 npm run verify:epub -- --epubcheck --report-dir <new-local-report-dir>
 ```
 
-For explicit cover private acceptance:
-
-```text
-npm run verify:cover
-```
-
 For parser/model/ruby/source-ownership changes, also run:
 
 ```text
@@ -154,10 +159,9 @@ npm run verify:stage2
 
 Current priority order:
 
-1. **Finish Stage 20 acceptance**: run `npm run verify:cover`; if clean, mark Stage 20 accepted and merge PR #12.
-2. **Task 2 real-reader acceptance**: Stage 14 implementation exists, but selected real readers still need explicit compatibility validation. Re-run affected display checks after image/cover integration.
-3. **Task 4 unresolved ruby refinement**: 6,387 unresolved annotations remain a separate improvement area. Stage 17 ruby on/off control does not complete this task.
-4. **Task 5 CLI final acceptance**: integrate completed/accepted scope, run the full validation matrix, document known limits, and freeze the supported CLI contract.
-5. **Browser/Android adapter** follows CLI acceptance and is not part of the CLI completion condition.
+1. **Task 4 unresolved-ruby refinement**: 6,387 unresolved annotations remain. Start with a privacy-safe full-corpus classification/inventory checkpoint before changing association rules. Any promoted exact ruby must be source-backed; ambiguous cases remain explicit.
+2. **Task 2 real-reader acceptance**: Stage 14/19/20 implementation exists, but selected real readers still need manual compatibility validation for vertical text, ruby, unresolved notes, images and cover metadata. This environment-dependent task does not block independent Task 4 work.
+3. **Task 5 CLI final acceptance**: integrate completed/accepted scope, run the full validation matrix, document known limits, and freeze the supported CLI contract.
+4. **Browser/Android adapter** follows CLI acceptance and is not part of the CLI completion condition.
 
 Task 1 body heading/section mapping remains on hold until genuinely new PDF-native source evidence appears. Do not block independent Tasks 2/4/5 on an evidence source the current corpus does not contain.
