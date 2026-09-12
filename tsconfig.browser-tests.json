@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": [
+    "browser-test/**/*.ts",
+    "browser-private-test/**/*.ts"
+  ]
+}
