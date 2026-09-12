@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { sha256HexSync } from "./binary-runtime.js";
 import type { FileShapeDocument } from "./document-model.js";
 import { serializeEpubNavigation, type EpubNavigationSummary } from "./epub-navigation.js";
 import {
@@ -248,7 +248,7 @@ export function serializeEpubPackage(
     const expectedId = `image-${resource.contentHash}`;
     const href = imageHref(resource.contentHash);
     if (resource.id !== expectedId) throw new Error(`image resource id does not match content hash: ${resource.id}`);
-    if (createHash("sha256").update(resource.bytes).digest("hex") !== resource.contentHash) {
+    if (sha256HexSync(resource.bytes) !== resource.contentHash) {
       throw new Error(`image resource bytes do not match content hash: ${resource.id}`);
     }
     if (imageById.has(resource.id)) throw new Error(`duplicate image manifest id: ${resource.id}`);
