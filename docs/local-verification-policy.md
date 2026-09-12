@@ -12,6 +12,12 @@ GitHub Actions is intentionally disabled for this repository.
 
 ## Local verification
 
+Playwright browser binaries are local prerequisites and are not downloaded implicitly by verification commands. After installing/updating dependencies, install the pinned Chromium once with:
+
+```sh
+npm run setup:browser
+```
+
 The normal public verification sequence is:
 
 ```sh
@@ -22,6 +28,8 @@ npm run setup:epubcheck
 npm run verify:epubcheck
 git diff --check
 ```
+
+If `verify:browser` reports a missing Playwright executable, run `npm run setup:browser` locally and retry. Do not replace that prerequisite with hosted CI.
 
 Private-corpus checks remain local-only and must never commit private PDFs, generated private EPUBs, or local reports.
 
