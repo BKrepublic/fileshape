@@ -9,6 +9,7 @@ type Expectations = {
   pages?: number;
   occurrences?: number;
   uniqueResources?: number;
+  interpolatedOccurrences?: number;
 };
 
 function nonNegativeInteger(value: string | undefined, flag: string): number {
@@ -21,7 +22,7 @@ function nonNegativeInteger(value: string | undefined, flag: string): number {
 function parseArguments(argv: string[]): { input: string; expected: Expectations } {
   const input = argv.shift();
   if (!input || input.startsWith("--")) {
-    throw new Error("usage: npm run verify:image-model -- PDF_OR_DIRECTORY [--expect-pdf-count N] [--expect-page-count N] [--expect-image-occurrence-count N] [--expect-unique-content-resource-count N]");
+    throw new Error("usage: npm run verify:image-model -- PDF_OR_DIRECTORY [--expect-pdf-count N] [--expect-page-count N] [--expect-image-occurrence-count N] [--expect-unique-content-resource-count N] [--expect-interpolated-image-occurrence-count N]");
   }
   const expected: Expectations = {};
   while (argv.length > 0) {
@@ -31,6 +32,7 @@ function parseArguments(argv: string[]): { input: string; expected: Expectations
     else if (flag === "--expect-page-count") expected.pages = nonNegativeInteger(value, flag);
     else if (flag === "--expect-image-occurrence-count") expected.occurrences = nonNegativeInteger(value, flag);
     else if (flag === "--expect-unique-content-resource-count") expected.uniqueResources = nonNegativeInteger(value, flag);
+    else if (flag === "--expect-interpolated-image-occurrence-count") expected.interpolatedOccurrences = nonNegativeInteger(value, flag);
     else throw new Error(`unknown option ${flag}`);
   }
   return { input, expected };
@@ -59,6 +61,7 @@ async function main(): Promise<void> {
   let pages = 0;
   let resources = 0;
   let occurrences = 0;
+  let interpolatedOccurrences = 0;
   const contentHashes = new Set<string>();
 
   for (const [index, file] of files.entries()) {
@@ -67,7 +70,10 @@ async function main(): Promise<void> {
     const { document } = buildDocumentFromInspection(inspection, `local:image-model:${index + 1}`);
     pages += document.pages.length;
     resources += document.imageResources.length;
-    occurrences += document.pages.reduce((sum, page) => sum + page.imageOccurrences.length, 0);
+    for (const page of document.pages) {
+      occurrences += page.imageOccurrences.length;
+      interpolatedOccurrences += page.imageOccurrences.filter((occurrence) => occurrence.interpolate).length;
+    }
     for (const resource of document.imageResources) contentHashes.add(resource.contentHash);
   }
 
@@ -75,12 +81,14 @@ async function main(): Promise<void> {
   expectEqual(pages, expected.pages, "page count");
   expectEqual(occurrences, expected.occurrences, "image occurrence count");
   expectEqual(contentHashes.size, expected.uniqueResources, "unique content resource count");
+  expectEqual(interpolatedOccurrences, expected.interpolatedOccurrences, "interpolated image occurrence count");
 
   console.log(`PDFS=${files.length}`);
   console.log(`PAGES=${pages}`);
   console.log(`MODEL_IMAGE_RESOURCES=${resources}`);
   console.log(`IMAGE_OCCURRENCES=${occurrences}`);
   console.log(`UNIQUE_CONTENT_RESOURCES=${contentHashes.size}`);
+  console.log(`INTERPOLATED_IMAGE_OCCURRENCES=${interpolatedOccurrences}`);
 }
 
 const invokedPath = process.argv[1] ? path.resolve(process.argv[1]) : "";
