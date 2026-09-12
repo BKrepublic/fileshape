@@ -1,4 +1,5 @@
 import "./styles.css";
+import { probeBinaryRuntime, type BinaryRuntimeProbeResult } from "./binary-runtime-probe.js";
 import { probePdfJsRuntime, type PdfJsProbeResult } from "./pdfjs-runtime-probe.js";
 
 const app = document.querySelector<HTMLDivElement>("#app");
@@ -36,9 +37,10 @@ app.innerHTML = `
     <section class="surface runtime-surface" aria-labelledby="runtime-title">
       <div class="section-heading"><div><h2 id="runtime-title">実行環境</h2><p>変換前にブラウザの準備状態を確認します。</p></div><span id="runtime-badge" class="state-badge" data-state="checking">確認中</span></div>
       <div class="runtime-row"><span>PDF.js 実ワーカー</span><strong id="pdfjs-status" aria-live="polite">確認中…</strong></div>
+      <div class="runtime-row"><span>SHA-256 / zlib deflate</span><strong id="binary-runtime-status" aria-live="polite">確認中…</strong></div>
       <div class="runtime-row"><span>PWA オフラインshell</span><strong id="pwa-status" aria-live="polite">確認中…</strong></div>
       <p id="runtime-message" class="runtime-message" aria-live="polite">ブラウザ機能を確認しています。</p>
-      <div class="blocker-box"><strong>残っている準備</strong><ul><li>ブラウザ向けSHA-256とPNG deflateの接続</li><li>PDF.jsのCMap・標準フォント・WASM resource package</li><li>専用workerへの実変換接続と取消・保存</li></ul></div>
+      <div class="blocker-box"><strong>残っている準備</strong><ul><li>PDF.jsのCMap・標準フォント・WASM resource package</li><li>専用workerへの実変換接続と取消・保存</li><li>端末メモリ上限と失敗時cleanupの実装</li></ul></div>
     </section>
     <section class="action-area" aria-labelledby="action-title">
       <h2 id="action-title" class="visually-hidden">変換</h2>
@@ -52,10 +54,16 @@ const input = document.querySelector<HTMLInputElement>("#pdf-input");
 const selectedFile = document.querySelector<HTMLParagraphElement>("#selected-file");
 const resetButton = document.querySelector<HTMLButtonElement>("#reset-file");
 const pdfjsStatus = document.querySelector<HTMLElement>("#pdfjs-status");
+const binaryRuntimeStatus = document.querySelector<HTMLElement>("#binary-runtime-status");
 const pwaStatus = document.querySelector<HTMLElement>("#pwa-status");
 const runtimeMessage = document.querySelector<HTMLElement>("#runtime-message");
 const runtimeBadge = document.querySelector<HTMLElement>("#runtime-badge");
 const formatBytes = (bytes: number): string => `${bytes.toLocaleString("ja-JP")} bytes`;
+
+let pdfJsReady: boolean | undefined;
+let binaryRuntimeReady: boolean | undefined;
+let pdfJsMessage = "PDF.js 実ワーカーを確認中です。";
+let binaryRuntimeMessage = "SHA-256 / zlib deflate を確認中です。";
 
 function showFile(file: File | undefined): void {
   if (!selectedFile || !resetButton) return;
@@ -98,20 +106,50 @@ async function registerOfflineShell(): Promise<void> {
   }
 }
 
-function showProbe(result: PdfJsProbeResult): void {
-  if (!pdfjsStatus || !runtimeMessage || !runtimeBadge) return;
-  const supported = result.state === "supported" && result.realWorkerPort;
-  pdfjsStatus.textContent = supported ? "確認済み" : "要確認";
+function renderRuntimeReadiness(): void {
+  if (!runtimeMessage || !runtimeBadge) return;
+  if (pdfJsReady === undefined || binaryRuntimeReady === undefined) {
+    runtimeBadge.dataset.state = "checking";
+    runtimeBadge.textContent = "確認中";
+    runtimeMessage.textContent = [pdfJsMessage, binaryRuntimeMessage].join(" ");
+    return;
+  }
+  const supported = pdfJsReady && binaryRuntimeReady;
   runtimeBadge.dataset.state = supported ? "supported" : "unsupported";
   runtimeBadge.textContent = supported ? "利用可能" : "要確認";
-  runtimeMessage.textContent = result.message;
+  runtimeMessage.textContent = supported
+    ? "PDF.js 実ワーカー、Web Crypto SHA-256、CompressionStream deflate を確認しました。"
+    : [pdfJsReady ? "" : pdfJsMessage, binaryRuntimeReady ? "" : binaryRuntimeMessage].filter(Boolean).join(" ");
 }
 
+function showPdfProbe(result: PdfJsProbeResult): void {
+  if (!pdfjsStatus) return;
+  pdfJsReady = result.state === "supported" && result.realWorkerPort;
+  pdfJsMessage = result.message;
+  pdfjsStatus.textContent = pdfJsReady ? "確認済み" : "要確認";
+  renderRuntimeReadiness();
+}
+
+function showBinaryProbe(result: BinaryRuntimeProbeResult): void {
+  if (!binaryRuntimeStatus) return;
+  binaryRuntimeReady = result.state === "supported";
+  binaryRuntimeMessage = result.message;
+  binaryRuntimeStatus.textContent = binaryRuntimeReady ? "確認済み" : "要確認";
+  renderRuntimeReadiness();
+}
+
+renderRuntimeReadiness();
 void registerOfflineShell();
-void probePdfJsRuntime().then(showProbe, () => {
-  showProbe({
+void probePdfJsRuntime().then(showPdfProbe, () => {
+  showPdfProbe({
     state: "unsupported",
     message: "PDF.js のブラウザ実行環境を確認できませんでした。",
     realWorkerPort: false,
+  });
+});
+void probeBinaryRuntime().then(showBinaryProbe, () => {
+  showBinaryProbe({
+    state: "unsupported",
+    message: "ブラウザ向けbinary runtimeを確認できませんでした。",
   });
 });
