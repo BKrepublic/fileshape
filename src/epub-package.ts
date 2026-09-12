@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { FileShapeDocument } from "./document-model.js";
 import { serializeEpubNavigation, type EpubNavigationSummary } from "./epub-navigation.js";
 import {
@@ -45,6 +46,19 @@ export type EpubPackageResult = {
 
 const encoder = new TextEncoder();
 
+function imageHref(contentHash: string): string {
+  return `images/${contentHash}.png`;
+}
+
+function compareAscii(left: string, right: string): number {
+  const length = Math.min(left.length, right.length);
+  for (let index = 0; index < length; index += 1) {
+    const difference = left.charCodeAt(index) - right.charCodeAt(index);
+    if (difference !== 0) return difference;
+  }
+  return left.length - right.length;
+}
+
 function xmlText(value: string): string {
   return value
     .replaceAll("&", "&amp;")
@@ -83,13 +97,15 @@ function packageOpf(options: {
   modified: string;
   pageProgressionDirection?: EpubPageProgressionDirection;
   pages: Array<{ sourcePage: number; href: string; mediaType: string }>;
+  images: Array<{ id: string; href: string; mediaType: string }>;
 }): string {
   const creator = options.creator === undefined
     ? ""
     : `\n    <dc:creator>${xmlText(requireNonEmpty(options.creator, "creator"))}</dc:creator>`;
-  const pageManifest = options.pages
-    .map((page, index) => `    <item id="page-${index + 1}" href="${xmlAttr(page.href)}" media-type="${xmlAttr(page.mediaType)}"/>`)
-    .join("\n");
+  const pageManifest = [
+    ...options.pages.map((page, index) => `    <item id="page-${index + 1}" href="${xmlAttr(page.href)}" media-type="${xmlAttr(page.mediaType)}"/>`),
+    ...options.images.map((image) => `    <item id="${xmlAttr(image.id)}" href="${xmlAttr(image.href)}" media-type="${xmlAttr(image.mediaType)}"/>`),
+  ].join("\n");
   const spine = options.pages
     .map((_, index) => `    <itemref idref="page-${index + 1}"/>`)
     .join("\n");
@@ -223,6 +239,26 @@ export function serializeEpubPackage(
   const language = requireNonEmpty(options.language ?? "ja", "language");
   const identifier = requireNonEmpty(options.identifier ?? document.id, "identifier");
   const modified = normalizeModified(options.modified);
+  const imageResources = [...document.imageResources].sort((left, right) => compareAscii(left.contentHash, right.contentHash));
+  const imageById = new Map<string, typeof imageResources[number]>();
+  const imageHrefs = new Set<string>();
+  for (const resource of imageResources) {
+    const expectedId = `image-${resource.contentHash}`;
+    const href = imageHref(resource.contentHash);
+    if (resource.id !== expectedId) throw new Error(`image resource id does not match content hash: ${resource.id}`);
+    if (createHash("sha256").update(resource.bytes).digest("hex") !== resource.contentHash) {
+      throw new Error(`image resource bytes do not match content hash: ${resource.id}`);
+    }
+    if (imageById.has(resource.id)) throw new Error(`duplicate image manifest id: ${resource.id}`);
+    if (imageHrefs.has(href)) throw new Error(`duplicate image manifest href: ${href}`);
+    imageById.set(resource.id, resource);
+    imageHrefs.add(href);
+  }
+  for (const page of document.pages) for (const occurrence of page.imageOccurrences) {
+    if (!imageById.has(occurrence.resourceId)) {
+      throw new Error(`image occurrence references missing archive resource: ${occurrence.resourceId}`);
+    }
+  }
 
   const xhtml = serializeEpubXhtml(document, {
     language,
@@ -250,9 +286,19 @@ export function serializeEpubPackage(
         ? {}
         : { pageProgressionDirection: options.pageProgressionDirection }),
       pages: xhtml.pages,
+      images: imageResources.map((resource) => ({
+        id: resource.id,
+        href: imageHref(resource.contentHash),
+        mediaType: resource.mediaType,
+      })),
     })),
     textFile(STYLES_PATH, "text/css", defaultEpubStyles()),
     textFile(NAV_PATH, "application/xhtml+xml", navigation.xhtml),
+    ...imageResources.map((resource) => ({
+      path: `OEBPS/${imageHref(resource.contentHash)}`,
+      mediaType: resource.mediaType,
+      data: resource.bytes,
+    })),
     ...xhtml.pages.map((page) => textFile(`OEBPS/${page.href}`, page.mediaType, page.xhtml)),
   ];
 

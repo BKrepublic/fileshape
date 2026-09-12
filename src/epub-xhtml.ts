@@ -5,6 +5,8 @@ import {
 } from "./content-policy.js";
 import type {
   DocumentPage,
+  DocumentImageOccurrence,
+  DocumentImageResource,
   DocumentTextBlock,
   FileShapeDocument,
   InlineNode,
@@ -66,6 +68,18 @@ function renderBlock(block: DocumentTextBlock, rubyMode: EpubRubyMode): string {
   return `    <p class="fileshape-block" data-source-page="${block.sourcePage}" data-semantic-block="${block.semanticBlockIndex}" xml:space="preserve">${body}</p>`;
 }
 
+function renderImage(
+  occurrence: DocumentImageOccurrence,
+  resource: DocumentImageResource,
+): string {
+  if (occurrence.interpolate) {
+    throw new Error(`page ${occurrence.sourcePage} image operator ${occurrence.operatorIndex} occurrence ${occurrence.occurrenceIndex} requests unsupported PDF image interpolation`);
+  }
+  const alt = `Source image from page ${occurrence.sourcePage}`;
+  const src = `../images/${resource.contentHash}.png`;
+  return `    <figure class="fileshape-image" data-source-page="${occurrence.sourcePage}" data-operator-index="${occurrence.operatorIndex}" data-occurrence-index="${occurrence.occurrenceIndex}"><img src="${escapeXmlAttribute(src)}" width="${resource.width}" height="${resource.height}" alt="${escapeXmlAttribute(alt)}" /></figure>`;
+}
+
 function renderPreservedNote(note: PreservedUnresolvedAnnotation, index: number): string {
   return `      <aside class="fileshape-unresolved-annotation" data-fileshape-note="${index + 1}" data-fileshape-reason="${escapeXmlAttribute(note.reason)}"><p xml:space="preserve">${escapeXmlText(note.text)}</p></aside>`;
 }
@@ -77,13 +91,19 @@ function renderPreservedNotes(notes: PreservedUnresolvedAnnotation[]): string {
 }
 
 function orientationAttributes(page: DocumentPage): string {
+  const classes = ["fileshape-page"];
+  if (page.imageOccurrences.length > 0) classes.push("fileshape-page-has-images");
+  if (page.blocks.length === 0 && page.imageOccurrences.length === 0) classes.push("fileshape-page-blank");
   switch (page.orientation) {
     case "vertical":
-      return 'class="fileshape-page fileshape-vertical" style="writing-mode: vertical-rl;"';
+      classes.push("fileshape-vertical");
+      return `class="${classes.join(" ")}" style="writing-mode: vertical-rl;"`;
     case "horizontal":
-      return 'class="fileshape-page fileshape-horizontal" style="writing-mode: horizontal-tb;"';
+      classes.push("fileshape-horizontal");
+      return `class="${classes.join(" ")}" style="writing-mode: horizontal-tb;"`;
     case "unknown":
-      return 'class="fileshape-page fileshape-orientation-unknown"';
+      classes.push("fileshape-orientation-unknown");
+      return `class="${classes.join(" ")}"`;
   }
 }
 
@@ -92,6 +112,7 @@ function pageHref(page: number): string {
 }
 
 function serializePageXhtml(
+  document: FileShapeDocument,
   page: DocumentPage,
   notes: PreservedUnresolvedAnnotation[],
   options: EpubXhtmlOptions,
@@ -103,9 +124,34 @@ function serializePageXhtml(
   const stylesheet = options.stylesheetHref === undefined
     ? ""
     : `\n    <link rel="stylesheet" type="text/css" href="${escapeXmlAttribute(requireNonEmpty(options.stylesheetHref, "stylesheetHref"))}" />`;
-  const blocks = page.blocks.map((block) => renderBlock(block, rubyMode));
+  const resources = new Map(document.imageResources.map((resource) => [resource.id, resource]));
+  const imagesByGap = new Map<number, DocumentImageOccurrence[]>();
+  for (const occurrence of page.imageOccurrences) {
+    const resource = resources.get(occurrence.resourceId);
+    if (!resource) throw new Error(`page ${page.sourcePage} image references missing resource ${occurrence.resourceId}`);
+    const images = imagesByGap.get(occurrence.placementIndex) ?? [];
+    images.push(occurrence);
+    imagesByGap.set(occurrence.placementIndex, images);
+  }
+  for (const images of imagesByGap.values()) images.sort((left, right) =>
+    (page.orientation === "unknown"
+      ? 0
+      : page.orientation === "vertical"
+      ? right.displayBounds.right - left.displayBounds.right || left.displayBounds.top - right.displayBounds.top
+      : left.displayBounds.top - right.displayBounds.top || left.displayBounds.left - right.displayBounds.left) ||
+    left.operatorIndex - right.operatorIndex || left.occurrenceIndex - right.occurrenceIndex);
+  const bodyItems: string[] = [];
+  for (let gap = 0; gap <= page.blocks.length; gap += 1) {
+    for (const occurrence of imagesByGap.get(gap) ?? []) {
+      const resource = resources.get(occurrence.resourceId);
+      if (!resource) throw new Error(`page ${page.sourcePage} image references missing resource ${occurrence.resourceId}`);
+      bodyItems.push(renderImage(occurrence, resource));
+    }
+    const block = page.blocks[gap];
+    if (block) bodyItems.push(renderBlock(block, rubyMode));
+  }
   const preservedNotes = renderPreservedNotes(notes);
-  const bodyItems = preservedNotes.length === 0 ? blocks : [...blocks, preservedNotes];
+  if (preservedNotes.length > 0) bodyItems.push(preservedNotes);
   const body = bodyItems.length === 0 ? "" : `\n${bodyItems.join("\n")}\n  `;
 
   return `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE html>\n<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="${escapeXmlAttribute(language)}" lang="${escapeXmlAttribute(language)}">\n  <head>\n    <meta charset="utf-8" />\n    <title>${escapeXmlText(title)}</title>${stylesheet}\n  </head>\n  <body ${orientationAttributes(page)}>${body}</body>\n</html>\n`;
@@ -129,7 +175,7 @@ export function serializeEpubXhtml(
       sourcePage: page.sourcePage,
       href: pageHref(page.sourcePage),
       mediaType: "application/xhtml+xml" as const,
-      xhtml: serializePageXhtml(page, notesByPage.get(page.sourcePage) ?? [], options),
+      xhtml: serializePageXhtml(document, page, notesByPage.get(page.sourcePage) ?? [], options),
     })),
   };
 }

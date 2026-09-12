@@ -50,6 +50,7 @@ export function readingSystemFixtureDocument(): FileShapeDocument {
   return {
     kind: "document",
     id: DOCUMENT_ID,
+    imageResources: [],
     source: {
       documentId: DOCUMENT_ID,
       outline,
@@ -76,6 +77,7 @@ export function readingSystemFixtureDocument(): FileShapeDocument {
     pages: [
       {
         kind: "page",
+        imageOccurrences: [],
         sourcePage: 1,
         rotation: 0,
         orientation: "horizontal",
@@ -121,6 +123,7 @@ export function readingSystemFixtureDocument(): FileShapeDocument {
       },
       {
         kind: "page",
+        imageOccurrences: [],
         sourcePage: 2,
         rotation: 90,
         orientation: "vertical",
@@ -138,6 +141,7 @@ export function readingSystemFixtureDocument(): FileShapeDocument {
       },
       {
         kind: "page",
+        imageOccurrences: [],
         sourcePage: 3,
         rotation: 0,
         orientation: "horizontal",
@@ -155,6 +159,7 @@ export function readingSystemFixtureDocument(): FileShapeDocument {
       },
       {
         kind: "page",
+        imageOccurrences: [],
         sourcePage: 4,
         rotation: 0,
         orientation: "unknown",

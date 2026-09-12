@@ -1,106 +1,88 @@
 # Codex handoff — 2026-09-12
 
-この文書は、FileShape の次セッションを GitHub だけから再開するための短い入口です。実装詳細は `docs/remaining-work/README.md` と各 Stage 文書を参照してください。
+FileShape の次セッションを GitHub だけから再開するための入口です。
 
-## 開始点
+## Stage 19 status
 
-この handoff 作成前の production `main` は次です。
-
-```text
-de07e5c2beda42ad8f2da296a36e637491589016
-```
-
-Stage 17 は `main` に merge 済みで、GitHub Actions の push CI も成功しています。作業開始時は必ず最新 `main` を取得し、`docs/continuation-status.md` の現在値と照合してください。
-
-## 現在わかっていること
-
-### ルビ
-
-- exact ruby は `FileShapeDocument` の source provenance を保持したまま EPUB へ出力できる。
-- `--ruby on|off` が実装済み。既定は `on`。
-- `off` は exact ruby の `<rt>` を出さず、source-backed base text のみを出す。
-- unresolved ruby は別系統。`--ruby off` でも黙って削除しない。
-- unresolved annotation は既定では page note として保持し、strict error policy も残している。
-
-### 画像
-
-Stage 15〜17 で、9 PDF / 5,141 pages の private corpus を全件調査済み。
+Stage 18/19 production image integration と independent-review hardening は完了し、private 9-PDF acceptance も PASS しました。
 
 ```text
-IMAGE_PAINTS=4
-IMAGE_RESOURCES=4 extracted / 0 unsupported
-UNIQUE_CONTENT_RESOURCES=1
-all resources: 800x600 RGB24
-all four deterministic PNG contents are identical
-CLIP_STATUS_COUNTS={"exact-rect":4}
-CLIP_COVERAGE_COUNTS={"contains-image":4}
-IMAGE_ISSUES=0
+PDFs: 9/9
+EPUBs: 9/9
+Pages: 5141/5141
+Unresolved annotations preserved: 6387
+Outline entries: 250/250
+Image occurrences: 4/4
+Unique PNG content resources: 1/1
+Interpolated image occurrences: 0
+XHTML/OPF/ZIP references: consistent
+EPUBCheck 5.3.0: 9/9 passed (0 errors, 0 warnings)
 ```
 
-4 occurrence はすべて XObject。clip rectangle と transformed image bounds が一致し、実際の crop はありません。したがって、この corpus については pixel cropping を挟まず通常の EPUB image placement へ進めます。ただし generic implementation では cropped / complex / unknown clip を安全に扱う fixture と fail-closed policy を残してください。
+Stage 19 is therefore **accepted** for the currently supported ordinary-image subset. Unsupported compositing/layering/crop/interpolation remains fail-closed rather than approximated.
 
-### marked content / 「特殊効果」
+See:
 
-全 9 PDF / 5,141 pages の operator list を調査した結果:
+- `docs/stage19-production-image-integration.md`
+- `docs/stage19-review.md`
+- `docs/stage19-hardening.md`
+- `docs/continuation-status.md`
+- `docs/remaining-work/README.md`
+
+## Correct starting point
+
+PR #11 integrates Stage 18/19 into `main`. Once PR #11 is merged, **new work starts from the latest `main`**. Do not reset to old Stage 19 implementation commits and do not continue from a stale pre-merge feature branch.
+
+Before editing:
+
+```sh
+git fetch origin
+git switch main
+git pull --ff-only
+git rev-parse HEAD
+```
+
+If PR #11 is still open, finish/merge it first after its CI is green.
+
+## Next implementation checkpoint
+
+The next Task 3 work is **explicit/source-backed cover policy**.
+
+Required policy:
+
+- no automatic cover inference by page number, image dimensions, position, filename, appearance, OCR/content, Creator/Producer, or font;
+- inputs without explicit/source-backed cover evidence remain valid EPUBs with no cover designation;
+- initial user-facing selector should identify an exact existing image occurrence using source provenance, not a guessed image;
+- missing or ambiguous selector must fail closed before output replacement;
+- selecting a cover marks the already packaged image resource as EPUB `cover-image`;
+- keep the original body image occurrence; do not delete/reorder it;
+- do not synthesize a separate cover XHTML/spine page unless a later requirement proves it necessary, because doing so creates an extra visible occurrence;
+- one cover image maximum;
+- default behavior remains deterministic and unchanged when no cover is selected.
+
+A practical initial CLI contract is:
 
 ```text
-MARKED_OCCURRENCES=0
-TAG_COUNTS={}
-WRAPPER_TAG_COUNTS={}
-POINT_TAG_COUNTS={}
-MAX_MARKED_DEPTH=0
-MARKED_ISSUES=0
+--cover-occurrence PAGE:OPERATOR:OCCURRENCE
 ```
 
-したがって、**現在の private corpus に PDF marked-content tag 由来の特殊効果はありません**。Stage 17 の generic policy は維持しますが、現 corpus のためだけに特殊タグ変換規則を追加しないでください。
+Validate source page > 0, operator/occurrence >= 0, require exactly one matching `DocumentImageOccurrence`, and resolve that occurrence's `resourceId`. OPF should add `properties="cover-image"` only to that image resource item.
 
-Generic policy:
+Focused tests must cover: no cover by default, valid selection, missing selection, malformed CLI selector, same content resource used by multiple occurrences, and preservation of the selected body occurrence. Run `npm test` and `npm run verify:epubcheck`; package changes then require a fresh private full EPUB acceptance before cover work is accepted.
 
-- EPUB/XHTML/CSS で安全に表現できる presentation semantics は変換する。
-- 表現不能な presentation-only wrapper は child content を保持して unwrap してよい。
-- content-bearing / hidden / replacement / interactive / ambiguous effect を黙って削除しない。
-- proprietary scripted behavior は既定で出力しない。
+## Remaining roadmap
 
-## 次にやること
+1. explicit cover policy;
+2. real-reader acceptance for vertical/ruby/image output;
+3. unresolved-ruby refinement (6387 current private candidates);
+4. CLI final acceptance and supported-contract freeze;
+5. browser/Android after CLI completion.
 
-現在の優先作業は `docs/remaining-work/03-images-and-cover.md` の **production image integration** です。Stage 15〜17 の evidence gathering は current corpus について必要な地点まで完了しています。
+Task 1 body heading/section mapping remains on hold because Stage 13a found no source-backed body anchor. Do not manufacture one by string or visual heuristics.
 
-実装の順序:
+## Prohibitions
 
-1. 現行 image resource / occurrence evidence と `FileShapeDocument` / EPUB package 境界を再読する。
-2. image resource identity と occurrence provenance を分離した typed representation を追加する。content hash dedupe は resource にのみ適用し、4 occurrence を 1 occurrence に潰さない。
-3. current corpus の `exact-rect + contains-image` は通常画像として EPUB へ同梱できるようにする。
-4. body XHTML の source/geometry ordering に従って image occurrence を配置する。一意でない配置を推測で page末尾に置いて「保持済み」としない。
-5. PNG resource を OPF manifest に登録し、XHTML relative reference と archive path を決定的にする。
-6. cropped / complex / unknown clip、mask、unsupported image schema は fixture で fail closed を維持する。現在 corpus に無いからと処理を削除しない。
-7. cover は自動推測しない。通常の画像保持を先に完成させ、cover 指定は explicit policy / CLI として別 checkpoint にする。
-8. production path を変えたら `npm test`、`npm run verify:epubcheck`、private 9-PDF full corpus を実行する。model/parser を変える場合は `npm run verify:ruby` と `npm run verify:stage2` も実行する。
-
-## その後の道順
-
-`docs/remaining-work/README.md` が CLI 版完成までの正本ロードマップです。現在の状態は概ね以下です。
-
-1. headings/sections: source-backed evidence が得られず保留。Stage 12a page-level navigation が accepted fallback。
-2. reading systems: CSS/resource implementation は Stage 14 で進んだが、実 reader acceptance は未完了。
-3. images/cover: evidence/resource/clip 調査は Stage 15〜17 で進行済み。次は production image integration。cover はその後。
-4. unresolved ruby refinement: 6,387 unresolved annotations の改善は未完了。exact ruby on/off は Stage 17 で追加済みだが、これは Task 4 完了を意味しない。
-5. CLI final acceptance: 上記を統合して実施。
-6. browser/Android: CLI 完了後の別工程。
-
-つまり、以前の runbook は「完成までの道のり」と考えてよいですが、作成時点が古く、Stage 13〜17 で消化された部分を現在値で読み替える必要があります。`docs/remaining-work/README.md` と `docs/continuation-status.md` を今回更新し、以後はそこを正本にしてください。
-
-## 禁止事項
-
-- verifier を弱めて PASS にしない。
-- website / filename / URL / Creator / Producer / font name / N-code / character appearance 固有ルールを追加しない。
-- source text/provenance を推測値で置換しない。
-- unresolved ruby、unsupported image、unknown effect を件数を減らす目的で捨てない。
-- private PDF、抽出画像、本文断片、local report を commit しない。
-
-## Codex 開始時の最小指示
-
-```text
-BKrepublic/fileshape の最新 main から作業する。
-docs/codex-handoff-20260912.md、docs/continuation-status.md、docs/remaining-work/README.md、docs/remaining-work/03-images-and-cover.md、docs/stage15-image-evidence.md、docs/stage16-image-resources.md、docs/stage17-content-controls-image-placement.md を先に読む。
-現在の最優先は production image integration。Stage 17 の private corpus result では 4/4 images が exact-rect + contains-image、marked-content occurrence は 0。source provenance と fail-closed policy を壊さず、bounded checkpoint ごとに実装・テスト・レビュー・pushする。
-```
+- do not weaken verifiers to obtain PASS;
+- do not introduce source/site-specific parser branches;
+- do not silently drop unresolved ruby or unsupported image/effect evidence;
+- do not commit private PDFs, private images, generated private EPUBs, extracted body text, or local reports.

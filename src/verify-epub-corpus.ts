@@ -5,6 +5,7 @@ import process from "node:process";
 import { convertPdfToEpub } from "./pdf-to-epub.js";
 import { createEpubChecker, epubCheckSummary, type EpubCheckResult } from "./epubcheck.js";
 import type { EpubNavigationSummary } from "./epub-navigation.js";
+import { validateEpubImagePackage } from "./epub-image-package-validation.js";
 
 const WIDTH = 72;
 const RULE = "=".repeat(WIDTH);
@@ -14,6 +15,9 @@ const EXPECTED_TOTAL_PAGES = 5141;
 // Independently inventoried from the unchanged local PDFs before Stage 12a.
 const EXPECTED_OUTLINE_ENTRIES = 250;
 const EXPECTED_OUTLINE_PDFS = 6;
+// Independently inventoried at Stages 15-17 before production image packaging.
+const EXPECTED_IMAGE_OCCURRENCES = 4;
+const EXPECTED_UNIQUE_IMAGE_RESOURCES = 1;
 const EPUB_MIMETYPE = "application/epub+zip";
 
 type Summary = {
@@ -21,6 +25,8 @@ type Summary = {
   pages: number;
   unresolvedAnnotations: number;
   bytes: number;
+  imageOccurrences: number;
+  imageResources: number;
   navigation: EpubNavigationSummary;
   epubcheck?: EpubCheckResult;
 };
@@ -108,7 +114,7 @@ function printFail(issues: Issue[], summaries: Summary[]): never {
   console.log(RULE);
   console.log("!!! FILESHAPE EPUB FULL CORPUS RESULT: FAIL !!!");
   for (const summary of summaries) {
-    console.log(`${summary.file}: pages=${summary.pages}, unresolved=${summary.unresolvedAnnotations}, bytes=${summary.bytes}`);
+    console.log(`${summary.file}: pages=${summary.pages}, unresolved=${summary.unresolvedAnnotations}, images=${summary.imageOccurrences}, imageResources=${summary.imageResources}, bytes=${summary.bytes}`);
   }
   for (const issue of issues) console.log(`FAIL: ${issue.file}: ${issue.detail}`);
   console.log(RULE);
@@ -127,7 +133,6 @@ async function main(): Promise<void> {
     } else throw new Error("usage: npm run verify:epub -- [--epubcheck [--report-dir NEW_DIRECTORY]]");
   }
   if (reportDirectory && !checkStandards) throw new Error("--report-dir requires --epubcheck");
-  // Fail before the expensive conversions if the requested validator is unavailable.
   const checker = checkStandards ? await createEpubChecker() : undefined;
   if (checker) console.log(`Standards validation: EPUBCheck ${checker.version} (warnings fail)`);
   let names: string[];
@@ -143,12 +148,11 @@ async function main(): Promise<void> {
   if (names.length !== EXPECTED_PDF_COUNT) {
     issues.push({ file: SAMPLE_DIRECTORY, detail: `expected ${EXPECTED_PDF_COUNT} PDFs but found ${names.length}` });
   }
-
-  // Refuse reuse so old reports cannot masquerade as results from this run.
   if (reportDirectory) await mkdir(reportDirectory, { recursive: false });
 
   const outputDirectory = await mkdtemp(path.join(os.tmpdir(), "fileshape-epub-corpus-"));
   const summaries: Summary[] = [];
+  const imageResourceHashes = new Set<string>();
 
   try {
     for (let index = 0; index < names.length; index += 1) {
@@ -167,11 +171,16 @@ async function main(): Promise<void> {
         }
         for (const detail of validateArchive(bytes, result.pageCount)) issues.push({ file: name, detail });
         for (const detail of validateNavigation(bytes, result.navigation, result.pageCount)) issues.push({ file: name, detail });
+        const imageValidation = validateEpubImagePackage(bytes);
+        for (const detail of imageValidation.issues) issues.push({ file: name, detail });
+        for (const hash of imageValidation.resourceHashes) imageResourceHashes.add(hash);
         const summary: Summary = {
           file: name,
           pages: result.pageCount,
           unresolvedAnnotations: result.unresolvedAnnotationCount,
           bytes: result.byteLength,
+          imageOccurrences: imageValidation.occurrenceCount,
+          imageResources: imageValidation.resourceCount,
           navigation: result.navigation,
         };
         summaries.push(summary);
@@ -209,6 +218,13 @@ async function main(): Promise<void> {
   if (outlineEntries !== EXPECTED_OUTLINE_ENTRIES || outlinePdfs !== EXPECTED_OUTLINE_PDFS || unresolvedOutlineEntries !== 0) {
     issues.push({ file: SAMPLE_DIRECTORY, detail: `outline contract mismatch: entries=${outlineEntries}/${EXPECTED_OUTLINE_ENTRIES}, PDFs=${outlinePdfs}/${EXPECTED_OUTLINE_PDFS}, unresolved=${unresolvedOutlineEntries}/0` });
   }
+  const imageOccurrences = summaries.reduce((sum, summary) => sum + summary.imageOccurrences, 0);
+  if (imageOccurrences !== EXPECTED_IMAGE_OCCURRENCES) {
+    issues.push({ file: SAMPLE_DIRECTORY, detail: `image occurrence contract mismatch: ${imageOccurrences}/${EXPECTED_IMAGE_OCCURRENCES}` });
+  }
+  if (imageResourceHashes.size !== EXPECTED_UNIQUE_IMAGE_RESOURCES) {
+    issues.push({ file: SAMPLE_DIRECTORY, detail: `unique image content resource contract mismatch: ${imageResourceHashes.size}/${EXPECTED_UNIQUE_IMAGE_RESOURCES}` });
+  }
   if (checker && checked !== EXPECTED_PDF_COUNT) {
     issues.push({ file: SAMPLE_DIRECTORY, detail: `expected ${EXPECTED_PDF_COUNT} EPUBCheck passes but got ${checked}` });
   }
@@ -222,6 +238,8 @@ async function main(): Promise<void> {
       outlineEntries,
       outlinePdfs,
       unresolvedOutlineEntries,
+      imageOccurrences,
+      uniqueImageResources: imageResourceHashes.size,
       summaries,
       issues,
     }, null, 2) + "\n", { flag: "wx" });
@@ -241,6 +259,7 @@ async function main(): Promise<void> {
   console.log(`Unresolved annotations preserved: ${totalUnresolved}`);
   console.log(`Total EPUB bytes: ${totalBytes}`);
   console.log(`Outline entries: ${outlineEntries}/${EXPECTED_OUTLINE_ENTRIES}; outline PDFs: ${outlinePdfs}/${EXPECTED_OUTLINE_PDFS}; unresolved outline entries: ${unresolvedOutlineEntries}`);
+  console.log(`Image occurrences: ${imageOccurrences}/${EXPECTED_IMAGE_OCCURRENCES}; unique PNG content resources: ${imageResourceHashes.size}/${EXPECTED_UNIQUE_IMAGE_RESOURCES}; XHTML/OPF/ZIP references: consistent`);
   if (checker) console.log(`EPUBCheck ${checker.version}: ${checked}/${EXPECTED_PDF_COUNT} passed (0 errors, 0 warnings)`);
   console.log("All corpus PDFs completed end-to-end PDF -> EPUB conversion.");
   console.log(RULE);

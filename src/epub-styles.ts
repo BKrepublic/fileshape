@@ -36,6 +36,15 @@ body {
   margin: 0 0 1em 0;
 }
 
+.fileshape-image {
+  margin: 1em 0;
+}
+
+.fileshape-image img {
+  max-inline-size: 100%;
+  block-size: auto;
+}
+
 ruby {
   ruby-position: over;
 }

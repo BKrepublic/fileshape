@@ -48,6 +48,7 @@ export function buildDocumentFromInspection(
   const documentPages = flows.map(({ page, flow }) => {
     const resolved = resolvedByPage.get(page.page);
     const orientation = resolved?.resolved ?? flow.orientation;
+    const layout = reconstructPhysicalLayout(page, orientation, flow.bodyFontSize);
 
     if (orientation === "unknown") {
       if (hasVisibleText(inspection, page.page)) {
@@ -56,15 +57,12 @@ export function buildDocumentFromInspection(
       return {
         page: page.page,
         orientation,
-        semantic: buildSemanticBlocks(
-          reconstructPhysicalLayout(page, orientation, flow.bodyFontSize),
-          flow.bodyFontSize,
-        ),
+        layout,
+        semantic: buildSemanticBlocks(layout, flow.bodyFontSize),
         rubySpans: associateRubySpans(page, flow.bodyFontSize),
       };
     }
 
-    const layout = reconstructPhysicalLayout(page, orientation, flow.bodyFontSize);
     const semantic = buildSemanticBlocks(layout, flow.bodyFontSize);
     if (flow.primaryItemCount > 0 && semantic.blocks.length === 0) {
       throw new Error(`page ${page.page} has primary text but no semantic output`);
@@ -74,6 +72,7 @@ export function buildDocumentFromInspection(
     return {
       page: page.page,
       orientation,
+      layout,
       semantic,
       rubySpans: associateRubySpans(page, flow.bodyFontSize),
     };

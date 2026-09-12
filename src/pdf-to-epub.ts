@@ -1,5 +1,5 @@
-import { createHash } from "node:crypto";
-import { readFile, writeFile } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { readFile, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { UnresolvedRubyPolicy } from "./content-policy.js";
@@ -65,7 +65,7 @@ export async function convertPdfToEpub(
   const absoluteOutput = path.resolve(outputPath);
   const sourceBytes = new Uint8Array(await readFile(absoluteInput));
   const documentId = sourceId(sourceBytes);
-  const inspection = await inspectPdf(absoluteInput, { includeGlyphs: true });
+  const inspection = await inspectPdf(absoluteInput, { includeGlyphs: true, includeImages: true });
   const { document } = buildDocumentFromInspection(inspection, documentId);
   const unresolvedAnnotationCount = document.pages.reduce(
     (count, page) => count + page.unresolvedRuby.length,
@@ -87,7 +87,17 @@ export async function convertPdfToEpub(
     unresolvedRubyPolicy: effectiveUnresolvedPolicy,
   });
 
-  await writeFile(absoluteOutput, epub.bytes);
+  const temporaryOutput = path.join(
+    path.dirname(absoluteOutput),
+    `.${path.basename(absoluteOutput)}.${randomUUID()}.tmp`,
+  );
+  try {
+    await writeFile(temporaryOutput, epub.bytes, { flag: "wx" });
+    await rename(temporaryOutput, absoluteOutput);
+  } catch (error) {
+    try { await unlink(temporaryOutput); } catch { /* best-effort cleanup */ }
+    throw error;
+  }
   return {
     inputPath: absoluteInput,
     outputPath: absoluteOutput,

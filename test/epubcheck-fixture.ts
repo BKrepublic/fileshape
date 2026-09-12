@@ -11,6 +11,7 @@ export function epubcheckDocumentFixture(): FileShapeDocument {
   return {
     kind: "document",
     id: "urn:fileshape:epubcheck-fixture",
+    imageResources: [],
     source: {
       documentId: "urn:fileshape:epubcheck-fixture",
       pages: [1, 2, 3].map((page) => ({
@@ -22,6 +23,7 @@ export function epubcheckDocumentFixture(): FileShapeDocument {
       const page = index + 1;
       return {
         kind: "page",
+        imageOccurrences: [],
         sourcePage: page,
         rotation: 0,
         orientation: orientation as "horizontal" | "vertical" | "unknown",

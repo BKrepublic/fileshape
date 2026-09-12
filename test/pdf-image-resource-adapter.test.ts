@@ -32,6 +32,7 @@ test("decoded RGB and RGBA PDF.js image objects become deterministic PNG resourc
   assert.equal(rgb.width, 2);
   assert.equal(rgb.height, 1);
   assert.equal(rgb.interpolate, true);
+  assert.equal(rgb.decodedByteLength, 6);
   assert.equal(rgb.mediaType, "image/png");
   assertPng(rgb.bytes);
 
@@ -54,6 +55,7 @@ test("decoded RGB and RGBA PDF.js image objects become deterministic PNG resourc
   });
   assert.ok(!("status" in rgba));
   assert.equal(rgba.pixelKind, "rgba32");
+  assert.equal(rgba.decodedByteLength, 4);
   assertPng(rgba.bytes);
 });
 
@@ -66,6 +68,7 @@ test("1-bit grayscale remains packed and unsupported schemas fail closed", () =>
   });
   assert.ok(!("status" in gray));
   assert.equal(gray.pixelKind, "gray1");
+  assert.equal(gray.decodedByteLength, 1);
   assertPng(gray.bytes);
 
   const wrongLength = extractPdfImageResource("bad-length", {

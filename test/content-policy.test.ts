@@ -9,6 +9,7 @@ function fixture(): FileShapeDocument {
   return {
     kind: "document",
     id: "policy:fixture",
+    imageResources: [],
     source: {
       documentId: "policy:fixture",
       pages: [{
@@ -21,6 +22,7 @@ function fixture(): FileShapeDocument {
     },
     pages: [{
       kind: "page",
+      imageOccurrences: [],
       sourcePage: 1,
       rotation: 0,
       orientation: "horizontal",
