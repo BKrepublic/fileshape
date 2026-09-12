@@ -92,7 +92,7 @@ export async function convertPdfBytesToEpubWithResources(
     resources,
     binaryRuntime,
     {
-      throwIfCancelled: control?.throwIfCancelled,
+      ...(control?.throwIfCancelled === undefined ? {} : { throwIfCancelled: control.throwIfCancelled }),
       onDocumentLoaded: (pageCount) => {
         totalUnits = pageCount + 3;
         control?.onProgress?.({ phase: "loading-pdf", completedUnits: 1, totalUnits });
