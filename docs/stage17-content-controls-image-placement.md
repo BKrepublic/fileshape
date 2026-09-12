@@ -41,4 +41,49 @@ Each image paint records:
 
 `contains-image` means the explicit exact clip does not alter the visible image. It is the only Stage 17 clip result that can advance to ordinary reflowable EPUB image placement without cropping. `crops-image` requires deterministic pixel cropping first. `unknown` remains blocked until the clip can be reproduced or an explicit policy is chosen.
 
-The next private corpus check must classify all four known image occurrences before adding image nodes/manifest references to production EPUB output.
+## Final private corpus result — 2026-09-12
+
+The complete unchanged private corpus was scanned after Stage 17 merged to `main` at:
+
+```text
+de07e5c2beda42ad8f2da296a36e637491589016
+```
+
+Image clip inventory:
+
+```text
+PDFS=9
+PAGES=5141
+IMAGE_PAINTS=4
+CLIP_STATUS_COUNTS={"exact-rect":4}
+CLIP_COVERAGE_COUNTS={"contains-image":4}
+IMAGE_ISSUES=0
+```
+
+For all four occurrences, `clipRect` matches/contains `displayBounds`. No occurrence is actually cropped. Combined with Stage 16, the current corpus therefore has four distinct image occurrences backed by one identical deterministic PNG content resource, and all four may proceed to ordinary EPUB image placement without pixel cropping.
+
+Marked-content inventory over the same 5,141 pages:
+
+```text
+MARKED_OCCURRENCES=0
+TAG_COUNTS={}
+WRAPPER_TAG_COUNTS={}
+POINT_TAG_COUNTS={}
+MAX_MARKED_DEPTH=0
+MARKED_ISSUES=0
+```
+
+The private corpus therefore contains no observed PDF marked-content tag that needs a special-effect mapping. The generic safe-normalization policy remains part of FileShape's input contract for future PDFs, but no corpus-specific special-tag rule should be invented.
+
+## Stage 17 conclusion
+
+Stage 17 evidence gathering is complete for the current private corpus. The next checkpoint is **production image integration** under `docs/remaining-work/03-images-and-cover.md`:
+
+- add typed image resource/occurrence representation;
+- keep resource deduplication separate from occurrence provenance;
+- package the deterministic PNG resource in EPUB;
+- place the four occurrences from source/geometry evidence;
+- retain fail-closed handling for cropped/complex/unknown clips and unsupported image schemas through synthetic fixtures;
+- do not infer a cover from appearance.
+
+See `docs/codex-handoff-20260912.md` for the next-session entry point.
