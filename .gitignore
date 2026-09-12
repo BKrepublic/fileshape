@@ -8,3 +8,4 @@ local-samples/
 local-reports/
 test-results/
 playwright-report/
+web/public/pdfjs/
