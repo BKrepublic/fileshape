@@ -8,6 +8,7 @@
     "verify:ruby": "tsx src/verify-ruby-samples.ts",
     "diagnose:ruby": "tsx src/diagnose-ruby.ts",
     "inspect:ruby-refinement": "tsx src/ruby-refinement-inventory.ts",
+    "inspect:ruby-near-miss": "tsx src/ruby-near-miss-evidence.ts",
     "inspect:pdf": "tsx src/pdf-inspect.ts",
     "inspect:all": "tsx src/pdf-inspect-all.ts",
     "inspect:structure": "tsx src/pdf-structure-inventory.ts",
