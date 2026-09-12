@@ -74,6 +74,8 @@ async function main(): Promise<void> {
     "web/conversion-worker.ts",
   ].map(sourceText))).join("\n");
   if (/https?:\/\//.test(browserSources)) throw new Error("browser application source contains an HTTP(S) runtime URL");
+  requireMatch(browserSources, /isOffscreenCanvasSupported:\s*false/, "browser PDF.js config must keep OffscreenCanvas image conversion disabled for Node parity");
+  requireMatch(browserSources, /isImageDecoderSupported:\s*false/, "browser PDF.js config must keep ImageDecoder disabled for Node parity");
   requireMatch(emitted, /PDFWorker/, "PDF.js browser worker code was not emitted");
   requireMatch(emitted, /CompressionStream/, "browser binary runtime was not emitted");
   requireMatch(emitted, /PDF input must not be empty/, "dedicated conversion worker did not include the accepted conversion core");
