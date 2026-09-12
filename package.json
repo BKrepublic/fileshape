@@ -9,7 +9,6 @@
     "diagnose:ruby": "tsx src/diagnose-ruby.ts",
     "inspect:ruby-refinement": "tsx src/ruby-refinement-inventory.ts",
     "inspect:ruby-near-miss": "tsx src/ruby-near-miss-evidence.ts",
-    "inspect:ruby-glyph-selection": "tsx src/ruby-glyph-selection-evidence.ts",
     "inspect:pdf": "tsx src/pdf-inspect.ts",
     "inspect:all": "tsx src/pdf-inspect-all.ts",
     "inspect:structure": "tsx src/pdf-structure-inventory.ts",
