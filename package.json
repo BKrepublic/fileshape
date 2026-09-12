@@ -14,6 +14,7 @@
     "inspect:images": "tsx src/pdf-image-inventory.ts",
     "inspect:image-resources": "tsx src/pdf-image-resource-inventory.ts",
     "verify:image-model": "tsx src/verify-production-image-model.ts",
+    "verify:cover": "tsx src/verify-cover-policy.ts",
     "inspect:marked-content": "tsx src/pdf-marked-content-inventory.ts",
     "probe:layout": "tsx src/pdf-layout-probe.ts",
     "reconstruct:page": "tsx src/pdf-reconstruct-page.ts",
