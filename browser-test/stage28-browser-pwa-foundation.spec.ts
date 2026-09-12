@@ -29,6 +29,7 @@ async function convertFixture(
     mimeType: "application/pdf",
     buffer: fixture,
   });
+  await page.locator("details.advanced-settings > summary").click();
   await page.locator('[name="modified"]').fill(MODIFIED);
   await expect(page.locator("#selected-file")).toContainText(sourceName);
   await expect(page.locator("#convert-button")).toBeEnabled();
