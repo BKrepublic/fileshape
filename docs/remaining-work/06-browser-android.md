@@ -6,6 +6,12 @@
 
 開始時にCLI版の受け入れ記録を読み、最初の対象を「ブラウザー版」「Android版」のどちらにするか、対象OS／ブラウザー、配布方式、オフライン要件、最大入力の想定を整理します。既定の設計案はローカル処理で、ユーザーのPDFをサーバーへ送る方式へ勝手に変更しません。対象方式が未決なら、実装案と実測可能な比較を提示してその判断を受けてからUI実装へ進みます。
 
+## 現在のcheckpoint
+
+[Stage 26 byte-oriented conversion boundary](../stage26-byte-core-boundary.md) で、byte入力のinspection/conversion API、明示的なPDF.js resource config、Node CLIの一回読込、byte ownership、固定metadataでのpath/byte出力一致を実装しました。ローカル公開検証は202/202 testsとpinned EPUBCheck 5/5 integration testsに合格しています。GitHub CIとmergeが完了するまではaccepted扱いにしません。
+
+この時点でも変換runtimeはbrowser-readyではありません。変換graphにはNode SHA-256、Node zlib deflate、Node由来のPDF.js資源path、pinned legacy PDF.js importが残っています。worker、進捗、キャンセル、診断、browser bundle、保存UI、large-file policyも未実装です。次checkpointはこのtransitive runtime境界を測定して契約化し、browser fixtureへ進める最小構成を決めます。
+
 ## 6A：共通コアと環境依存処理を分離する
 
 1. [pdf-inspector.ts](../../src/pdf-inspector.ts)、[pdf-to-epub.ts](../../src/pdf-to-epub.ts)、validator、model／serializerのimportを調べ、Nodeのfs/path/crypto、PDF.js資源読み込み、Java、ファイル保存に依存する境界を一覧化します。`src/index.ts`等を完成した共通APIとみなさず、実際のexportと依存を確認します。

@@ -14,7 +14,7 @@ import {
   type EpubPageProgressionDirection,
 } from "./epub-package.js";
 import { buildDocumentFromInspection } from "./pdf-document-pipeline.js";
-import { inspectPdf } from "./pdf-inspector.js";
+import { inspectPdfBytes, nodePdfJsResourceConfig } from "./pdf-inspector.js";
 import type { EpubNavigationSummary } from "./epub-navigation.js";
 import type { EpubRubyMode } from "./epub-xhtml.js";
 
@@ -44,11 +44,20 @@ function defaultOutputPath(inputPath: string): string {
 }
 
 function defaultTitle(inputPath: string): string {
-  return path.parse(inputPath).name;
+  const lastDot = inputPath.lastIndexOf(".");
+  return lastDot > 0 ? inputPath.slice(0, lastDot) : inputPath;
 }
 
 function sourceId(bytes: Uint8Array): string {
   return `urn:sha256:${createHash("sha256").update(bytes).digest("hex")}`;
+}
+
+function validateSourceInput(sourceBytes: Uint8Array, sourceName: string): void {
+  if (sourceName.length === 0) throw new Error("sourceName must not be empty");
+  if (/[\\/\0]/.test(sourceName)) {
+    throw new Error("sourceName must not contain path separators or NUL");
+  }
+  if (sourceBytes.byteLength === 0) throw new Error("PDF input must not be empty");
 }
 
 function unresolvedRubyPolicy(value: string): UnresolvedRubyPolicy {
@@ -66,19 +75,30 @@ function pageProgressionDirection(value: string): EpubPageProgressionDirection {
   throw new Error("--page-progression-direction must be ltr or rtl");
 }
 
-export async function convertPdfToEpub(
-  inputPath: string,
-  outputPath = defaultOutputPath(inputPath),
+export type PdfBytesToEpubResult = {
+  sourceName: string;
+  bytes: Uint8Array;
+  documentId: string;
+  pageCount: number;
+  unresolvedAnnotationCount: number;
+  byteLength: number;
+  navigation: EpubNavigationSummary;
+  coverImageResourceId?: string;
+};
+
+export async function convertPdfBytesToEpub(
+  sourceBytes: Uint8Array,
+  sourceName: string,
   options: PdfToEpubOptions = {},
-): Promise<PdfToEpubResult> {
-  const absoluteInput = path.resolve(inputPath);
-  const absoluteOutput = path.resolve(outputPath);
-  if (absoluteInput === absoluteOutput) {
-    throw new Error("output path must differ from input PDF path");
-  }
-  const sourceBytes = new Uint8Array(await readFile(absoluteInput));
+): Promise<PdfBytesToEpubResult> {
+  validateSourceInput(sourceBytes, sourceName);
   const documentId = sourceId(sourceBytes);
-  const inspection = await inspectPdf(absoluteInput, { includeGlyphs: true, includeImages: true });
+  const inspection = await inspectPdfBytes(
+    sourceBytes,
+    sourceName,
+    { includeGlyphs: true, includeImages: true },
+    nodePdfJsResourceConfig,
+  );
   const { document } = buildDocumentFromInspection(inspection, documentId);
   const unresolvedAnnotationCount = document.pages.reduce(
     (count, page) => count + page.unresolvedRuby.length,
@@ -90,7 +110,7 @@ export async function convertPdfToEpub(
     : resolveCoverImageResourceId(document, options.coverOccurrence);
 
   const epub = serializeEpubPackage(document, {
-    title: options.title ?? defaultTitle(absoluteInput),
+    title: options.title ?? defaultTitle(sourceName),
     identifier: options.identifier ?? documentId,
     ...(options.creator === undefined ? {} : { creator: options.creator }),
     ...(options.language === undefined ? {} : { language: options.language }),
@@ -104,12 +124,38 @@ export async function convertPdfToEpub(
     unresolvedRubyPolicy: effectiveUnresolvedPolicy,
   });
 
+  const outputBytes = new Uint8Array(epub.bytes);
+  return {
+    sourceName,
+    bytes: outputBytes,
+    documentId,
+    pageCount: document.pages.length,
+    unresolvedAnnotationCount,
+    byteLength: outputBytes.byteLength,
+    navigation: epub.navigation,
+    ...(coverImageResourceId === undefined ? {} : { coverImageResourceId }),
+  };
+}
+
+export async function convertPdfToEpub(
+  inputPath: string,
+  outputPath = defaultOutputPath(inputPath),
+  options: PdfToEpubOptions = {},
+): Promise<PdfToEpubResult> {
+  const absoluteInput = path.resolve(inputPath);
+  const absoluteOutput = path.resolve(outputPath);
+  if (absoluteInput === absoluteOutput) {
+    throw new Error("output path must differ from input PDF path");
+  }
+  const sourceBytes = new Uint8Array(await readFile(absoluteInput));
+  const converted = await convertPdfBytesToEpub(sourceBytes, path.basename(absoluteInput), options);
+
   const temporaryOutput = path.join(
     path.dirname(absoluteOutput),
     `.${path.basename(absoluteOutput)}.${randomUUID()}.tmp`,
   );
   try {
-    await writeFile(temporaryOutput, epub.bytes, { flag: "wx" });
+    await writeFile(temporaryOutput, converted.bytes, { flag: "wx" });
     await rename(temporaryOutput, absoluteOutput);
   } catch (error) {
     try { await unlink(temporaryOutput); } catch { /* best-effort cleanup */ }
@@ -118,12 +164,12 @@ export async function convertPdfToEpub(
   return {
     inputPath: absoluteInput,
     outputPath: absoluteOutput,
-    documentId,
-    pageCount: document.pages.length,
-    unresolvedAnnotationCount,
-    byteLength: epub.bytes.byteLength,
-    navigation: epub.navigation,
-    ...(coverImageResourceId === undefined ? {} : { coverImageResourceId }),
+    documentId: converted.documentId,
+    pageCount: converted.pageCount,
+    unresolvedAnnotationCount: converted.unresolvedAnnotationCount,
+    byteLength: converted.byteLength,
+    navigation: converted.navigation,
+    ...(converted.coverImageResourceId === undefined ? {} : { coverImageResourceId: converted.coverImageResourceId }),
   };
 }
 

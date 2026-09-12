@@ -1,6 +1,6 @@
 # FileShape continuation status
 
-Updated 2026-09-12 after Stage 25 CLI final acceptance and merge.
+Updated 2026-09-12 during Stage 26 Task 6A implementation.
 
 ## Current GitHub baseline
 
@@ -15,6 +15,8 @@ Accepted Stage 25 merge commit:
 The `main` push CI for that merge commit completed successfully. Later documentation-only commits may advance `main`; any continuation should start from the latest `main`, not reset to the Stage 25 branch SHA.
 
 The 9 private corpus PDFs are not committed; their full-corpus checks remain local-only.
+
+Stage 26 is the first bounded Task 6A checkpoint. It adds byte-input inspection/conversion seams, makes the PDF.js resource configuration explicit, and changes the Node CLI adapter to read the source once. Local public verification passed with 202/202 tests and pinned EPUBCheck 5/5 integration tests. GitHub CI and merge remain required before Stage 26 is accepted.
 
 ## Accepted CLI checkpoint
 
@@ -95,7 +97,7 @@ Stages 22–24 found no generic source-backed production rule that could safely 
 - Complete private corpus has zero marked-content occurrences.
 - The automated CLI checkpoint is accepted and merged.
 - Manual Thorium/calibre reading-system validation remains **not yet performed**. EPUBCheck green is not a substitute for real-reader validation.
-- Browser/Android adapters are downstream work and were intentionally excluded from CLI acceptance.
+- Browser/Android work has started at the Task 6A byte boundary. No browser or Android adapter, UI, worker, or device acceptance exists yet.
 
 ## Important invariants
 
@@ -109,7 +111,7 @@ Stages 22–24 found no generic source-backed production rule that could safely 
 
 ## Next work
 
-1. Start from the latest `main` and read this file plus `docs/stage25-cli-final-acceptance.md` and `docs/remaining-work/06-browser-android.md` before changing code.
+1. Complete Stage 26 GitHub CI and merge before building on the new byte boundary.
 2. Manual reading-system acceptance is the only open CLI-adjacent validation: Thorium and calibre should be checked explicitly on representative vertical/horizontal/ruby/note/image/navigation cases. If unavailable, keep the status as unperformed rather than inventing a pass.
-3. The next implementation phase is browser/Android adapters. Keep the accepted CLI converter as the source-of-truth core rather than reimplementing PDF interpretation in each frontend.
+3. Continue Task 6A by measuring the transitive runtime graph from the byte APIs, then design environment-supplied hashing, PNG compression, PDF.js resource/runtime loading, progress, cancellation, and diagnostics. Do not start a large UI before those contracts and a browser fixture are reviewed.
 4. Do not reopen Task 4 or widen ruby thresholds without new generic source-backed evidence.
