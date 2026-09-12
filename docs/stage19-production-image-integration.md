@@ -17,6 +17,14 @@
 - `npm run verify:epubcheck` passed: 4/4 real EPUBCheck integration cases
 - targeted integration tests cover placement order/ambiguity, limits, XHTML escaping and dimensions, deduplicated OPF/ZIP resources, converter image inclusion, and output preservation on pre-write failure.
 
-中断指示に従い、`npm run verify:epub -- --epubcheck --report-dir <new-local-report-dir>` の9 PDF full EPUB regression はこの checkpoint では未実行です。次セッションはこれを最初に実行し、4 occurrence のXHTML参照、1 unique PNG resource、9/9 EPUBCheck、既存page/ruby/navigation集計を確認してください。
+中断指示に従い、`npm run verify:epub -- --epubcheck --report-dir <new-local-report-dir>` の9 PDF full EPUB regression はこの checkpoint では未実行です。
+
+## Post-checkpoint review
+
+Stage 17 baseline `78f0728c515324c22c286ed41327426772f17eac` から Stage 19 implementation `254b001aa6903ab18056b271d0b31d8c5154d2ca` までを独立レビューした結果、generic production acceptance 前に修正すべき事項が見つかりました。詳細は [Stage 19 review](stage19-review.md) を正本とします。
+
+主なblockerは、非等方scaleの縦横比保持、外部PDF graphics state（opacity/blend）の未検証、画像同士の重なり、typed modelでのtransform/bounds/clip cross-check、production limitの適用時点、full corpus verifierの画像参照集計です。
+
+したがって、**次セッションは9 PDF full EPUB regressionから開始しません**。review blockerをfocused fixture/test付きで修正し、`verify:epub` にprivacy-safeな4 occurrence / 1 unique PNG / OPF / ZIP整合検査を追加した後に、fresh report directoryでfull regressionを実行します。
 
 cover selection はこの checkpoint に含めない。private PDF/image bytes、生成 EPUB、local report は repository に追加していない。
