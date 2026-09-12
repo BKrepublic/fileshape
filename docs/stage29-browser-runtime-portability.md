@@ -14,6 +14,7 @@ GitHub Actions is disabled by project policy. All verification below is local-on
 - Input PDF and output EPUB buffers are transferred, not uploaded.
 - Progress phases are sourced from real conversion boundaries; cancellation is checked at source-safe boundaries.
 - UI supports file selection, conversion, cancellation, result Blob URL, save, cleanup, and retry.
+- Browser PDF.js image acceleration is pinned to the decoded-data path (`isOffscreenCanvasSupported: false`, `isImageDecoderSupported: false`) so image resources preserve the accepted Node/browser byte-parity contract instead of becoming browser-only `ImageBitmap` resources.
 - Public browser acceptance covers:
   - real PDF.js worker/runtime probe;
   - real text PDF → EPUB conversion;
@@ -25,40 +26,45 @@ GitHub Actions is disabled by project policy. All verification below is local-on
 
 ## Local commands
 
-Install the pinned local Playwright Chromium once after dependency changes:
+The current development environment uses system Chrome rather than a Playwright-managed download:
 
 ```sh
-npm run setup:browser
+env PLAYWRIGHT_CHROMIUM_EXECUTABLE=/usr/bin/google-chrome-stable npm run verify:browser
 ```
 
-This is a local prerequisite only. Verification does not download browser binaries implicitly and must not fall back to GitHub Actions.
+Playwright-managed Chromium is not required for this environment. Browser verification must remain local and must not fall back to GitHub Actions or other hosted compute.
 
-Public verification:
+Public verification on the current environment:
 
 ```sh
-npm run verify:local
+env PLAYWRIGHT_CHROMIUM_EXECUTABLE=/usr/bin/google-chrome-stable npm run verify:local
 ```
 
-Private full regression + browser parity:
+Private full regression + browser parity on the current environment:
 
 ```sh
-npm run verify:local-private
+env PLAYWRIGHT_CHROMIUM_EXECUTABLE=/usr/bin/google-chrome-stable npm run verify:local-private
+```
+
+When the non-browser private regressions are already accepted and only the Stage 29 browser gate needs to be rerun, use:
+
+```sh
+env PLAYWRIGHT_CHROMIUM_EXECUTABLE=/usr/bin/google-chrome-stable npm run verify:browser-private
 ```
 
 The private browser report is written under `local-reports/`, which is gitignored.
 
 ## Acceptance gates still open
 
-1. Run `npm run setup:browser` if the pinned Playwright executable is not installed locally.
-2. Run `npm run verify:local` on the current Stage 29 HEAD.
-3. Run `npm run verify:local-private` against the 9 private PDFs and confirm:
+1. Run public browser verification on the current Stage 29 HEAD with system Chrome.
+2. Run the private browser parity harness against the 9 private PDFs and confirm:
    - 9 PDFs;
    - 5,141 pages;
    - 6,387 unresolved annotations preserved;
    - every browser EPUB byte-identical to the Node byte API;
    - no external runtime request;
    - measured timing/RSS recorded for every PDF.
-4. Inspect any failure instead of weakening expectations.
-5. Manual Thorium/calibre validation remains a separate unperformed reader gate.
+3. Inspect any failure instead of weakening expectations.
+4. Manual Thorium/calibre validation remains a separate unperformed reader gate.
 
 Do not claim browser corpus parity, a supported maximum file size, or Stage 29 acceptance until the private local run passes.
