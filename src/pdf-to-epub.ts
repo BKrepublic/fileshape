@@ -36,6 +36,8 @@ export type PdfToEpubResult = {
   coverImageResourceId?: string;
 };
 
+export const CLI_USAGE = "usage: npm run convert:epub -- input.pdf [output.epub] [--title TITLE] [--creator NAME] [--language TAG] [--identifier ID] [--modified YYYY-MM-DDTHH:MM:SSZ] [--title-prefix PREFIX] [--ruby on|off] [--unresolved-ruby error|preserve-as-page-note] [--page-progression-direction ltr|rtl] [--cover-occurrence PAGE:OPERATOR:OCCURRENCE]";
+
 function defaultOutputPath(inputPath: string): string {
   const parsed = path.parse(inputPath);
   return path.join(parsed.dir, `${parsed.name}.epub`);
@@ -71,6 +73,9 @@ export async function convertPdfToEpub(
 ): Promise<PdfToEpubResult> {
   const absoluteInput = path.resolve(inputPath);
   const absoluteOutput = path.resolve(outputPath);
+  if (absoluteInput === absoluteOutput) {
+    throw new Error("output path must differ from input PDF path");
+  }
   const sourceBytes = new Uint8Array(await readFile(absoluteInput));
   const documentId = sourceId(sourceBytes);
   const inspection = await inspectPdf(absoluteInput, { includeGlyphs: true, includeImages: true });
@@ -122,13 +127,13 @@ export async function convertPdfToEpub(
   };
 }
 
-type CliArguments = {
+export type CliArguments = {
   inputPath: string;
   outputPath?: string;
   options: PdfToEpubOptions;
 };
 
-function parseCliArguments(argv: string[]): CliArguments {
+export function parseCliArguments(argv: string[]): CliArguments {
   const positionals: string[] = [];
   const options: PdfToEpubOptions = {};
 
@@ -163,16 +168,19 @@ function parseCliArguments(argv: string[]): CliArguments {
 
   const inputPath = positionals[0];
   if (!inputPath || positionals.length > 2) {
-    throw new Error(
-      "usage: npm run convert:epub -- input.pdf [output.epub] [--title TITLE] [--creator NAME] [--language ja] [--ruby on|off] [--unresolved-ruby error|preserve-as-page-note] [--page-progression-direction ltr|rtl] [--cover-occurrence PAGE:OPERATOR:OCCURRENCE]",
-    );
+    throw new Error(CLI_USAGE);
   }
   const outputPath = positionals[1];
   return outputPath === undefined ? { inputPath, options } : { inputPath, outputPath, options };
 }
 
 async function main(): Promise<void> {
-  const parsed = parseCliArguments(process.argv.slice(2));
+  const argv = process.argv.slice(2);
+  if (argv.includes("--help") || argv.includes("-h")) {
+    console.log(CLI_USAGE);
+    return;
+  }
+  const parsed = parseCliArguments(argv);
   const result = await convertPdfToEpub(parsed.inputPath, parsed.outputPath, parsed.options);
   console.log(`EPUB=${result.outputPath}`);
   console.log(`PAGES=${result.pageCount}`);
