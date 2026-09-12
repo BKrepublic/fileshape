@@ -1,9 +1,33 @@
-import { deflate } from "pako/browser/deflate";
 import type { BinaryRuntime } from "./binary-runtime.js";
 
 function hex(bytes: Uint8Array): string {
   let output = "";
   for (const byte of bytes) output += byte.toString(16).padStart(2, "0");
+  return output;
+}
+
+async function readAll(stream: ReadableStream<Uint8Array>): Promise<Uint8Array> {
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let length = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value.byteLength === 0) continue;
+      const copy = Uint8Array.from(value);
+      chunks.push(copy);
+      length += copy.byteLength;
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const output = new Uint8Array(length);
+  let offset = 0;
+  for (const chunk of chunks) {
+    output.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
   return output;
 }
 
@@ -15,11 +39,22 @@ export const webBinaryRuntime: BinaryRuntime = Object.freeze({
     return hex(new Uint8Array(digest));
   },
 
-  deflateZlib(bytes: Uint8Array): Uint8Array {
-    // FileShape's accepted Node provider delegates to the host node:zlib.
-    // Arch/CachyOS Node is built against the shared stock zlib rather than
-    // Node's patched bundled zlib. Pako's legacyHash=true selects the stock
-    // zlib hash/deflate path, preserving the accepted Node PNG bitstream.
-    return deflate(Uint8Array.from(bytes), { legacyHash: true });
+  async deflateZlib(bytes: Uint8Array): Promise<Uint8Array> {
+    if (typeof globalThis.CompressionStream !== "function") {
+      throw new Error("CompressionStream deflate is unavailable");
+    }
+    const compression = new CompressionStream("deflate");
+    const output = readAll(compression.readable);
+    const writer = compression.writable.getWriter();
+    try {
+      await writer.write(Uint8Array.from(bytes));
+      await writer.close();
+    } catch (error) {
+      await writer.abort(error).catch(() => undefined);
+      throw error;
+    } finally {
+      writer.releaseLock();
+    }
+    return output;
   },
 });
