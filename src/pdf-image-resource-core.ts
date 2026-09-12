@@ -78,6 +78,15 @@ function pixelKind(kind: number): PdfImagePixelKind | undefined {
   }
 }
 
+function inferImageKindFromDecodedLength(width: number, height: number, dataLength: number): number | undefined {
+  const matches = [
+    IMAGE_KIND_GRAYSCALE_1BPP,
+    IMAGE_KIND_RGB_24BPP,
+    IMAGE_KIND_RGBA_32BPP,
+  ].filter((kind) => expectedLength(kind, width, height) === dataLength);
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
 function u32be(value: number): Uint8Array {
   const out = new Uint8Array(4);
   new DataView(out.buffer).setUint32(0, value >>> 0, false);
@@ -159,13 +168,6 @@ export async function extractPdfImageResourceWithRuntime(
   if (!isPositiveInteger(image.width) || !isPositiveInteger(image.height)) {
     return { sourceResourceId, status: "unsupported", reason: "invalid-image-dimensions" };
   }
-  if (typeof image.kind !== "number") {
-    return { sourceResourceId, status: "unsupported", reason: "missing-image-kind" };
-  }
-  const format = pixelKind(image.kind);
-  if (!format) {
-    return { sourceResourceId, status: "unsupported", reason: `unsupported-image-kind:${image.kind}` };
-  }
   const data = byteView(image.data);
   if (!data) {
     return {
@@ -174,7 +176,27 @@ export async function extractPdfImageResourceWithRuntime(
       reason: image.bitmap === undefined ? "missing-decoded-image-data" : "bitmap-only-image-object",
     };
   }
-  const length = expectedLength(image.kind, image.width, image.height);
+
+  let kind: number;
+  if (typeof image.kind === "number") {
+    kind = image.kind;
+  } else {
+    const inferred = inferImageKindFromDecodedLength(image.width, image.height, data.byteLength);
+    if (inferred === undefined) {
+      return {
+        sourceResourceId,
+        status: "unsupported",
+        reason: `missing-image-kind-unresolvable:${data.byteLength}`,
+      };
+    }
+    kind = inferred;
+  }
+
+  const format = pixelKind(kind);
+  if (!format) {
+    return { sourceResourceId, status: "unsupported", reason: `unsupported-image-kind:${kind}` };
+  }
+  const length = expectedLength(kind, image.width, image.height);
   if (length === undefined || data.byteLength !== length) {
     return {
       sourceResourceId,
