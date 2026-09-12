@@ -70,4 +70,7 @@ export type PdfJsResourceConfig = {
   iccUrl?: string;
   useWasm?: boolean;
   useWorkerFetch?: boolean;
+  /** Keep browser image object representation aligned with Node when byte parity is required. */
+  isOffscreenCanvasSupported?: boolean;
+  isImageDecoderSupported?: boolean;
 };
