@@ -1,16 +1,24 @@
 # FileShape continuation status
 
-Updated 2026-09-12 after Stage 25 CLI final acceptance.
+Updated 2026-09-12 after Stage 25 CLI final acceptance and merge.
 
 ## Current GitHub baseline
 
-Stages 19–20 image preservation / explicit cover are accepted. Stages 21–24 complete Task 4 ruby refinement evidence. Stage 25 completes Task 5 automated CLI acceptance.
+Stages 19–20 image preservation / explicit cover are accepted. Stages 21–24 complete Task 4 ruby refinement evidence. Stage 25 completes Task 5 automated CLI acceptance and is merged to `main`.
+
+Accepted Stage 25 merge commit:
+
+```text
+3f5a3754c6ec084a359ac9967c99e60a7f145e90
+```
+
+The `main` push CI for that merge commit completed successfully. Later documentation-only commits may advance `main`; any continuation should start from the latest `main`, not reset to the Stage 25 branch SHA.
 
 The 9 private corpus PDFs are not committed; their full-corpus checks remain local-only.
 
 ## Accepted CLI checkpoint
 
-Stage 25 private acceptance passed on:
+Stage 25 private acceptance passed on the final implementation branch HEAD:
 
 ```text
 fcc4dff39e5ce6e1c10e5cf2568be8afbe6fafbd
@@ -48,7 +56,7 @@ Pages: 5141/5141
 Unresolved annotations preserved: 6387
 Total EPUB bytes: 17959256
 Outline entries: 250/250; outline PDFs: 6/6; unresolved outline entries: 0
-Image occurrences: 4/4; unique PNG content resources: 1/1; XHTML/OPF/ZIP image references: consistent
+Image occurrences: 4/4; unique PNG content resources: 1/1; XHTML/OPF/ZIP references: consistent
 EPUBCheck 5.3.0: 9/9 passed (0 errors, 0 warnings)
 ```
 
@@ -85,7 +93,7 @@ Stages 22–24 found no generic source-backed production rule that could safely 
 - Stage 13a body heading mapping remains on hold; page-level navigation is the accepted fallback for this corpus because no source-backed body anchors were found.
 - Stages 15–20 image preservation and explicit source-backed cover are accepted. No automatic cover inference.
 - Complete private corpus has zero marked-content occurrences.
-- The automated CLI checkpoint is accepted.
+- The automated CLI checkpoint is accepted and merged.
 - Manual Thorium/calibre reading-system validation remains **not yet performed**. EPUBCheck green is not a substitute for real-reader validation.
 - Browser/Android adapters are downstream work and were intentionally excluded from CLI acceptance.
 
@@ -101,7 +109,7 @@ Stages 22–24 found no generic source-backed production rule that could safely 
 
 ## Next work
 
-1. Merge the accepted Stage 25 checkpoint to `main`, verify the resulting `main` CI and record its exact SHA.
-2. Manual reading-system acceptance remains the only open CLI-adjacent validation: Thorium and calibre should be checked explicitly on representative vertical/horizontal/ruby/note/image/navigation cases. If unavailable, keep the status as unperformed rather than inventing a pass.
-3. After the CLI checkpoint is fixed, continue with `docs/remaining-work/06-browser-android.md` for the browser/Android adapter phase.
+1. Start from the latest `main` and read this file plus `docs/stage25-cli-final-acceptance.md` and `docs/remaining-work/06-browser-android.md` before changing code.
+2. Manual reading-system acceptance is the only open CLI-adjacent validation: Thorium and calibre should be checked explicitly on representative vertical/horizontal/ruby/note/image/navigation cases. If unavailable, keep the status as unperformed rather than inventing a pass.
+3. The next implementation phase is browser/Android adapters. Keep the accepted CLI converter as the source-of-truth core rather than reimplementing PDF interpretation in each frontend.
 4. Do not reopen Task 4 or widen ruby thresholds without new generic source-backed evidence.
