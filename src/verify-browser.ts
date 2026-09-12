@@ -37,6 +37,16 @@ async function main(): Promise<void> {
   requireMatch(serviceWorker, /url\.origin !== self\.location\.origin/, "service worker must restrict cache requests to same origin");
   requireMatch(serviceWorker, /self\.registration\.scope/, "service worker must use application scope");
 
+  for (const relative of [
+    "pdfjs/cmaps/Adobe-Japan1-UCS2.bcmap",
+    "pdfjs/standard_fonts/FoxitSymbol.pfb",
+    "pdfjs/wasm/qcms_bg.wasm",
+    "pdfjs/iccs/CGATS001Compat-v2-micro.icc",
+  ]) {
+    const resource = await requireFile(relative);
+    if (resource.byteLength === 0) throw new Error(`PDF.js browser resource is empty: ${relative}`);
+  }
+
   const assetNames = (html.match(/\.\/assets\/[^"']+\.js/g) ?? []).map((name) => name.replace(/^\.\/assets\//, ""));
   if (assetNames.length === 0) throw new Error("no emitted JavaScript assets found");
   const javascript = await Promise.all(assetNames.map((name) => text(`assets/${name}`)));
@@ -44,10 +54,16 @@ async function main(): Promise<void> {
   if (/(?:\bfrom\s*|\bimport\s*\(|\brequire\s*\()\s*["']node:/.test(emitted) || /__vite-browser-external/.test(emitted)) {
     throw new Error("browser bundle contains a Node import or browser shim");
   }
-  const browserSources = `${await sourceText("web/main.ts")}\n${await sourceText("web/pdfjs-runtime-probe.ts")}`;
+  const browserSources = (await Promise.all([
+    "web/main.ts",
+    "web/pdfjs-runtime-probe.ts",
+    "web/binary-runtime-probe.ts",
+    "web/pdfjs-resource-config.ts",
+  ].map(sourceText))).join("\n");
   if (/https?:\/\//.test(browserSources)) throw new Error("browser application source contains an HTTP(S) runtime URL");
-  if (/pdf-inspector-core|pdf-to-epub-core/.test(emitted)) throw new Error("browser entry graph imports accepted conversion cores");
+  if (/pdf-inspector-core|pdf-to-epub-core/.test(emitted)) throw new Error("browser entry graph imports accepted conversion cores before the dedicated worker is connected");
   requireMatch(emitted, /PDFWorker/, "PDF.js browser probe was not emitted");
+  requireMatch(emitted, /CompressionStream/, "browser binary runtime was not emitted");
   const cssAsset = (html.match(/\.\/assets\/[^"']+\.css/) ?? [""])[0].replace(/^\.\/assets\//, "");
   if (cssAsset.length === 0) throw new Error("no emitted CSS asset found");
   const css = await text(`assets/${cssAsset}`);
