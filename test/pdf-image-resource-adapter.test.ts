@@ -59,6 +59,35 @@ test("decoded RGB and RGBA PDF.js image objects become deterministic PNG resourc
   assertPng(rgba.bytes);
 });
 
+test("browser image objects without kind infer the unique supported pixel layout from decoded length", async () => {
+  const data = Uint8ClampedArray.from([255, 0, 0, 0, 255, 0]);
+  const explicit = await extractPdfImageResource("img-explicit", {
+    width: 2,
+    height: 1,
+    kind: 2,
+    data,
+  });
+  const inferred = await extractPdfImageResource("img-inferred", {
+    width: 2,
+    height: 1,
+    data,
+  });
+  assert.ok(!("status" in explicit));
+  assert.ok(!("status" in inferred));
+  assert.equal(inferred.pixelKind, "rgb24");
+  assert.equal(inferred.decodedByteLength, explicit.decodedByteLength);
+  assert.equal(inferred.contentHash, explicit.contentHash);
+  assert.deepEqual(inferred.bytes, explicit.bytes);
+
+  const unresolvable = await extractPdfImageResource("img-unresolvable", {
+    width: 2,
+    height: 1,
+    data: Uint8Array.from([1, 2, 3, 4, 5]),
+  });
+  assert.ok("status" in unresolvable);
+  assert.equal(unresolvable.reason, "missing-image-kind-unresolvable:5");
+});
+
 test("1-bit grayscale remains packed and unsupported schemas fail closed", async () => {
   const gray = await extractPdfImageResource("img-gray", {
     width: 8,
