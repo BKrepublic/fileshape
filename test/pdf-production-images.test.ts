@@ -38,7 +38,7 @@ test("production inspection deduplicates PNG content while preserving every XObj
   const directory = await mkdtemp(path.join(os.tmpdir(), "fileshape-production-images-"));
   try {
     const input = path.join(directory, "fixture.pdf");
-    await writeFile(input, imagePdfBytes({ includeInline: false }));
+    await writeFile(input, imagePdfBytes({ includeInline: false, rotation: 0 }));
     const inspection = await inspectPdf(input, { includeImages: true });
 
     assert.equal(inspection.imageResources?.length, 1);
@@ -105,7 +105,7 @@ test("document validation rejects image byte, identity, occurrence and clip corr
   const directory = await mkdtemp(path.join(os.tmpdir(), "fileshape-production-image-model-"));
   try {
     const input = path.join(directory, "fixture.pdf");
-    await writeFile(input, imagePdfBytes({ includeInline: false }));
+    await writeFile(input, imagePdfBytes({ includeInline: false, rotation: 0 }));
     const inspection = await inspectPdf(input, { includeImages: true });
     const { document } = buildDocumentFromInspection(inspection, "fixture:image-validation");
 

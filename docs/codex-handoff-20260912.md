@@ -4,13 +4,14 @@
 
 ## 開始点
 
-この handoff 作成前の production `main` は次です。
+Stage 19 の開始点は、GitHubへpush済みの次のbranch checkpointです。
 
 ```text
-de07e5c2beda42ad8f2da296a36e637491589016
+branch: codex-next-20260912
+commit: f3776ba5c6558794daff98cbb6523351913b0c06
 ```
 
-Stage 17 は `main` に merge 済みで、GitHub Actions の push CI も成功しています。作業開始時は必ず最新 `main` を取得し、`docs/continuation-status.md` の現在値と照合してください。
+Stage 19 implementation checkpoint は同じbranchへ、このhandoffを含むcommitとしてpushされています。作業開始時はbranchのlocal／tracking／remote SHAを照合し、`docs/continuation-status.md` の現在値を確認してください。
 
 ## 現在わかっていること
 
@@ -39,6 +40,8 @@ IMAGE_ISSUES=0
 
 4 occurrence はすべて XObject。clip rectangle と transformed image bounds が一致し、実際の crop はありません。したがって、この corpus については pixel cropping を挟まず通常の EPUB image placement へ進めます。ただし generic implementation では cropped / complex / unknown clip を安全に扱う fixture と fail-closed policy を残してください。
 
+Stage 19 では `placementIndex`、ordered XHTML occurrence、content-hash PNG path、OPF manifest／ZIP entry、production limits、image-only/blank page区別、converterのatomic output置換まで実装済みです。164 tests、image model 9 PDF / 5,141 pages、ruby、Stage 2、4/4 real EPUBCheck integrationは合格しています。9 PDFのgenerated EPUBを使うfull regressionだけは中断点のため未実行です。
+
 ### marked content / 「特殊効果」
 
 全 9 PDF / 5,141 pages の operator list を調査した結果:
@@ -63,18 +66,16 @@ Generic policy:
 
 ## 次にやること
 
-現在の優先作業は `docs/remaining-work/03-images-and-cover.md` の **production image integration** です。Stage 15〜17 の evidence gathering は current corpus について必要な地点まで完了し、Stage 18 で typed production image resource/occurrence 境界まで進みました。
+現在の優先作業は Stage 19 の **private full EPUB acceptance** です。production image integration の実装は完了しています。
 
 実装の順序:
 
-1. Stage 18 の typed resource/occurrence と fail-closed boundary を再読する。
-2. body XHTML の source/geometry ordering に従って image occurrence を配置する。一意でない配置を推測で page末尾に置いて「保持済み」としない。
-3. current corpus の `exact-rect + contains-image` を通常画像として EPUB へ同梱する。
-4. PNG resource を OPF manifest に登録し、XHTML relative reference と archive path を決定的にする。
-5. placement/package の end-to-end tests が通ってから production converter の `includeImages` を有効にする。
-6. cropped / complex / unknown clip、mask、unsupported image schema は fixture で fail closed を維持する。現在 corpus に無いからと処理を削除しない。
-7. cover は自動推測しない。通常の画像保持を先に完成させ、cover 指定は explicit policy / CLI として別 checkpoint にする。
-8. production path を変えたら `npm test`、`npm run verify:epubcheck`、private 9-PDF full corpus を実行する。model/parser を変える場合は `npm run verify:ruby` と `npm run verify:stage2` も実行する。
+1. `docs/stage19-production-image-integration.md` とreview済みStage 19 contractを読む。
+2. `npm run verify:epub -- --epubcheck --report-dir <NEW_LOCAL_REPORT_DIR>` を実行する。
+3. 9/9 EPUB、5,141/5,141 pages、6,387 unresolved annotations、250/250 outline entriesの既存baselineを確認する。
+4. report/archive検査で4 image occurrences、1 unique PNG resource、全XHTML reference／OPF manifest／ZIP entry整合を確認する。verifierがまだこの集計を出さない場合は、private本文やfilenameを出さない集計検証を追加してから再実行する。
+5. 成功reportを再読込後にlocal report/generated EPUBを削除する。
+6. Stage 19をacceptedにした後、explicit cover policyへ進む。coverは自動推測しない。
 
 ## その後の道順
 
@@ -82,7 +83,7 @@ Generic policy:
 
 1. headings/sections: source-backed evidence が得られず保留。Stage 12a page-level navigation が accepted fallback。
 2. reading systems: CSS/resource implementation は Stage 14 で進んだが、実 reader acceptance は未完了。
-3. images/cover: evidence/resource/clip 調査は Stage 15〜17 で進行済み。次は production image integration。cover はその後。
+3. images/cover: Stage 19 production integration実装済み。9 PDF full acceptance未実行。coverはその後。
 4. unresolved ruby refinement: 6,387 unresolved annotations の改善は未完了。exact ruby on/off は Stage 17 で追加済みだが、これは Task 4 完了を意味しない。
 5. CLI final acceptance: 上記を統合して実施。
 6. browser/Android: CLI 完了後の別工程。
@@ -101,6 +102,6 @@ Generic policy:
 
 ```text
 BKrepublic/fileshape の最新 main から作業する。
-docs/codex-handoff-20260912.md、docs/continuation-status.md、docs/remaining-work/README.md、docs/remaining-work/03-images-and-cover.md、docs/stage15-image-evidence.md、docs/stage16-image-resources.md、docs/stage17-content-controls-image-placement.md を先に読む。
-現在の最優先は production image integration。Stage 17 の private corpus result では 4/4 images が exact-rect + contains-image、marked-content occurrence は 0。source provenance と fail-closed policy を壊さず、bounded checkpoint ごとに実装・テスト・レビュー・pushする。
+docs/codex-handoff-20260912.md、docs/continuation-status.md、docs/remaining-work/README.md、docs/remaining-work/03-images-and-cover.md、docs/stage19-production-image-integration.md を先に読む。
+現在の最優先は Stage 19 private full EPUB acceptance。実装と164 tests、image model、ruby、Stage 2、4件のreal EPUBCheck integrationは合格済み。未実行の9 PDF full EPUB regressionを新規local reportで行い、4 occurrences／1 PNG resourceを検証してからexplicit cover policyへ進む。
 ```

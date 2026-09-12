@@ -4,6 +4,10 @@ import type { RubySpan } from "./ruby-spans.js";
 import type { SemanticBlock, SemanticPageBlocks } from "./semantic-blocks.js";
 import { mergeSourceRanges, type SourceGlyphRef, type SourceTextRef } from "./source-text.js";
 import type { WritingOrientation } from "./text-flow.js";
+import type { PhysicalPageLayout } from "./physical-layout.js";
+import { assignImagePlacements, validateImageDisplayTransform } from "./production-image-placement.js";
+import { validateProductionImageLimits } from "./pdf-production-images.js";
+import type { PdfImagePixelKind } from "./pdf-image-resource-adapter.js";
 import {
   buildDocumentNavigation,
   validateDocumentNavigation,
@@ -72,6 +76,8 @@ export type DocumentImageResource = {
   extension: "png";
   width: number;
   height: number;
+  pixelKind: PdfImagePixelKind;
+  decodedByteLength: number;
   bytes: Uint8Array;
 };
 
@@ -80,6 +86,7 @@ export type DocumentImageOccurrence = {
   sourcePage: number;
   operatorIndex: number;
   occurrenceIndex: number;
+  placementIndex: number;
   resourceId: string;
   displayTransform: number[];
   displayBounds: { left: number; top: number; right: number; bottom: number };
@@ -117,6 +124,8 @@ export type DocumentPageInput = {
   orientation: WritingOrientation;
   semantic: SemanticPageBlocks;
   rubySpans: RubySpan[];
+  /** Physical positions used to assign image/text placement gaps. */
+  layout?: PhysicalPageLayout;
 };
 
 export type BuildDocumentInput = {
@@ -157,6 +166,7 @@ function cloneImageOccurrence(occurrence: NonNullable<InspectResult["pages"][num
     sourcePage: occurrence.sourcePage,
     operatorIndex: occurrence.operatorIndex,
     occurrenceIndex: occurrence.occurrenceIndex,
+    placementIndex: 0,
     resourceId: occurrence.resourceId,
     displayTransform: [...occurrence.displayTransform],
     displayBounds: { ...occurrence.displayBounds },
@@ -403,7 +413,11 @@ export function buildFileShapeDocument(input: BuildDocumentInput): FileShapeDocu
       rotation: inspectionPage.rotation,
       orientation: pageInput.orientation,
       blocks,
-      imageOccurrences: (inspectionPage.imageOccurrences ?? []).map(cloneImageOccurrence),
+      imageOccurrences: assignImagePlacements(
+        pageInput.layout,
+        blocks,
+        (inspectionPage.imageOccurrences ?? []).map(cloneImageOccurrence),
+      ),
       unresolvedRuby: pageInput.rubySpans.filter((span) => span.status === "unresolved").map(cloneRubySpan),
       unmappedExactRuby: unmapped,
     };
@@ -423,6 +437,8 @@ export function buildFileShapeDocument(input: BuildDocumentInput): FileShapeDocu
       extension: resource.extension,
       width: resource.width,
       height: resource.height,
+      pixelKind: resource.pixelKind,
+      decodedByteLength: resource.decodedByteLength,
       bytes: Uint8Array.from(resource.bytes),
     })),
     ...(source.outline === undefined ? {} : { navigation: buildDocumentNavigation(source.outline) }),
@@ -468,6 +484,11 @@ export function validateDocumentModel(document: FileShapeDocument): string[] {
       errors.push(`${label} bytes do not match content hash`);
     }
   }
+  try {
+    validateProductionImageLimits(document.imageResources, document.pages.flatMap((page) => page.imageOccurrences));
+  } catch (error) {
+    errors.push(error instanceof Error ? error.message : String(error));
+  }
 
   const sourcePages = new Set<number>();
   for (const page of document.source.pages) {
@@ -494,6 +515,10 @@ export function validateDocumentModel(document: FileShapeDocument): string[] {
           !Number.isInteger(occurrence.occurrenceIndex) || occurrence.occurrenceIndex < 0) {
         errors.push(`${label} has invalid source indexes`);
       }
+      if (!Number.isInteger(occurrence.placementIndex) || occurrence.placementIndex < 0 ||
+          occurrence.placementIndex > page.blocks.length) {
+        errors.push(`${label} has invalid placement index ${occurrence.placementIndex}`);
+      }
       if (imageOccurrenceSources.has(sourceKey)) errors.push(`duplicate image occurrence source ${sourceKey}`);
       imageOccurrenceSources.add(sourceKey);
       if (!imageResourceIds.has(occurrence.resourceId)) errors.push(`${label} references missing resource ${occurrence.resourceId}`);
@@ -503,11 +528,13 @@ export function validateDocumentModel(document: FileShapeDocument): string[] {
         errors.push(`${label} is not in source operator order`);
       }
       previousImageSource = [occurrence.operatorIndex, occurrence.occurrenceIndex];
-      if (occurrence.displayTransform.length !== 6 || !occurrence.displayTransform.every(Number.isFinite)) {
+      if (!Array.isArray(occurrence.displayTransform) || occurrence.displayTransform.length !== 6 || !occurrence.displayTransform.every(Number.isFinite)) {
         errors.push(`${label} has invalid display transform`);
       }
+      const transformError = validateImageDisplayTransform(occurrence);
+      if (transformError) errors.push(`${label} ${transformError}`);
       const bounds = occurrence.displayBounds;
-      if (![bounds.left, bounds.top, bounds.right, bounds.bottom].every(Number.isFinite) ||
+      if (!bounds || ![bounds.left, bounds.top, bounds.right, bounds.bottom].every(Number.isFinite) ||
           bounds.right <= bounds.left || bounds.bottom <= bounds.top) errors.push(`${label} has invalid display bounds`);
       if (!Number.isInteger(occurrence.formDepth) || occurrence.formDepth < 0) errors.push(`${label} has invalid form depth`);
       if (typeof occurrence.interpolate !== "boolean") errors.push(`${label} has invalid interpolation evidence`);

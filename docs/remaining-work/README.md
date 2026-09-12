@@ -2,7 +2,7 @@
 
 この手順書は、FileShape の **CLI版 PDF → EPUB を完成させるまでの正本ロードマップ**です。各個別文書が実装・検証・受け入れ条件の詳細を持ち、この README は順序・現在地・共通ルールを管理します。
 
-2026-09-12 時点の基準は Stage 17 merge 後の `main`、`de07e5c2beda42ad8f2da296a36e637491589016` です。次セッションは [Codex handoff](../codex-handoff-20260912.md) と [continuation status](../continuation-status.md) を先に読んでください。
+2026-09-12 時点の作業基準は `codex-next-20260912` の Stage 19 checkpoint です。次セッションは [Codex handoff](../codex-handoff-20260912.md) と [continuation status](../continuation-status.md) を先に読んでください。
 
 ## 完成までの工程
 
@@ -10,7 +10,7 @@
 | --- | --- | --- | --- |
 | 1 | [本文見出し・章構造](01-headings-and-sections.md) | PDF-native evidence があれば本文見出し/章境界へ反映 | **保留**。Stage 12b/13a で使える source-backed body anchor が 0。Stage 12a page-level nav を accepted fallback とする |
 | 2 | [縦書き・ルビの表示互換性](02-reading-systems.md) | CSS、reading direction、実 reader での確認 | **検証中**。Stage 14 で packaged CSS / fixture / explicit page progression を実装済み。実 reader acceptance が未完了 |
-| 3 | [表紙・挿絵](03-images-and-cover.md) | 画像資源、出現位置、EPUB同梱、明示的 cover policy | **実装中**。Stage 18 で typed resource/occurrence 境界まで実装。次は geometry-backed placement と EPUB package。cover はその後 |
+| 3 | [表紙・挿絵](03-images-and-cover.md) | 画像資源、出現位置、EPUB同梱、明示的 cover policy | **検証中**。Stage 19 で通常画像の placement と EPUB package を実装。次は9 PDF full EPUB acceptance、その後に explicit cover policy |
 | 4 | [未解決ルビの改善](04-ruby-refinement.md) | unresolved 6,387件の分類・改善・保存性確認 | **未完了**。Stage 17 の exact ruby on/off は追加済みだが、unresolved refinement とは別 |
 | 5 | [CLI版の最終受け入れ](05-cli-acceptance.md) | 1〜4の accepted scope を統合し、CLIと既知制限を確定 | **未着手** |
 | 後続 | [ブラウザー／Android](06-browser-android.md) | UI/環境依存adapter/実機 | **CLI完了後**。CLI完成条件には含めない |
@@ -84,15 +84,12 @@ MARKED_ISSUES=0
 
 ## 次の実装 checkpoint
 
-現在の最優先は **Task 3 production image integration** です。
+Stage 19 で **Task 3 production image integration** の実装まで完了しました。
 
-1. Stage 18 の typed image content resource と occurrence provenance を前提にする。content hash dedupe は resource だけに適用済み。
-2. body XHTML の source/geometry ordering に基づいて occurrence を配置する。位置が一意でない場合は推測で page末尾へ送らない。
-3. PNG resource を deterministic path で ZIP に入れ、OPF manifest と XHTML relative reference を一致させる。
-4. placement と package を一体で検証した後にだけ production converter の image extraction を有効にする。
-5. cropped / complex / unknown clip、mask、unsupported schema は synthetic fixture で fail closed を維持する。
-6. cover を自動推測しない。通常 image preservation を先に完成させ、explicit cover policy を別 checkpoint で実装する。
-7. production path 変更後に full validation を行う。
+1. 次セッションの最初に `npm run verify:epub -- --epubcheck --report-dir <NEW_LOCAL_REPORT_DIR>` を実行する。
+2. 9/9 EPUB、5,141/5,141 source pages、既存ruby/navigation集計に加え、4 XHTML image occurrences と1 unique PNG archive resourceを確認する。
+3. reportを再読込して成功を確認した後、private generated EPUB/local reportを削除する。
+4. 問題がなければ通常 image preservation をacceptedとし、explicit cover policyを別checkpointで設計する。coverを自動推測しない。
 
 詳細は [工程3](03-images-and-cover.md) と [Codex handoff](../codex-handoff-20260912.md) を参照。
 

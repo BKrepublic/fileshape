@@ -1,6 +1,7 @@
 /** Real PDF fixture with XObject reuse, clipping, inline image and a Form-contained image. */
-export function imagePdfBytes(options: { includeInline?: boolean } = {}): Buffer {
+export function imagePdfBytes(options: { includeInline?: boolean; rotation?: 0 | 90 } = {}): Buffer {
   const includeInline = options.includeInline ?? true;
+  const rotation = options.rotation ?? 90;
   const pageContent = [
     "q",
     "50 50 100 100 re W n",
@@ -27,7 +28,7 @@ export function imagePdfBytes(options: { includeInline?: boolean } = {}): Buffer
   const objects = [
     "<< /Type /Catalog /Pages 2 0 R >>",
     "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    "<< /Type /Page /Parent 2 0 R /Rotate 90 /MediaBox [0 0 600 800] /Resources << /XObject << /Im1 5 0 R /Fm1 6 0 R >> >> /Contents 4 0 R >>",
+    `<< /Type /Page /Parent 2 0 R /Rotate ${rotation} /MediaBox [0 0 600 800] /Resources << /XObject << /Im1 5 0 R /Fm1 6 0 R >> >> /Contents 4 0 R >>`,
     `<< /Length ${Buffer.byteLength(pageContent)} >>\nstream\n${pageContent}\nendstream`,
     `<< /Type /XObject /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /ASCIIHexDecode /Length ${Buffer.byteLength(imageData)} >>\nstream\n${imageData}\nendstream`,
     `<< /Type /XObject /Subtype /Form /BBox [0 0 1 1] /Resources << /XObject << /Im1 5 0 R >> >> /Length ${Buffer.byteLength(formContent)} >>\nstream\n${formContent}\nendstream`,

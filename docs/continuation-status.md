@@ -1,16 +1,17 @@
 # FileShape continuation status
 
-Updated 2026-09-12 after Stage 18 local acceptance of the production image model boundary.
+Updated 2026-09-12 at the Stage 19 production image integration checkpoint.
 
 ## Current GitHub baseline
 
-Stage 17 production `main` before this documentation refresh:
+Stage 19 started from the pushed Stage 18 branch checkpoint:
 
 ```text
-de07e5c2beda42ad8f2da296a36e637491589016
+branch: codex-next-20260912
+commit: f3776ba5c6558794daff98cbb6523351913b0c06
 ```
 
-Stage 17 is merged. The post-merge GitHub Actions CI passed, including typecheck/unit tests and EPUBCheck integration. The 9 private corpus PDFs are not committed; their full-corpus checks remain local-only.
+Stage 19 is committed to the same branch by the checkpoint update that contains this document. The 9 private corpus PDFs are not committed; their full-corpus checks remain local-only.
 
 For the next Codex session, start with [codex-handoff-20260912.md](codex-handoff-20260912.md) and the [remaining-work runbook](remaining-work/README.md).
 
@@ -127,6 +128,12 @@ Inline images, masks, cropping, complex/unknown clips, unsupported schemas and f
 
 Local acceptance passed 154 tests, ruby and Stage 2 full-corpus baselines, four real EPUBCheck integration cases, the complete 9-PDF EPUB regression, and the new production image model verifier. The latter transported 4/4 occurrences as four model resources across the source PDFs while confirming one unique PNG content hash.
 
+### Stage 19: production image integration checkpoint
+
+The production converter now enables image inspection, assigns every accepted occurrence a geometry-backed block gap, writes each occurrence into ordered XHTML, and packages deduplicated PNG bytes at deterministic content-hash paths with matching OPF manifest entries. Image-only and blank pages remain distinct. Ambiguous placement, unsupported transforms/clips/schemas, invalid resources and production-limit violations fail before the output path is replaced. Cover selection remains outside this checkpoint.
+
+Local acceptance passed 164 tests, the 9-PDF image-model verifier (4 occurrences / 1 unique content resource), ruby, Stage 2, and 4/4 real EPUBCheck integration cases. The 9-PDF full EPUB regression with generated Stage 19 EPUBs was deliberately left unrun at the requested interruption point. See [Stage 19](stage19-production-image-integration.md).
+
 ## Current pipeline
 
 ```text
@@ -136,10 +143,10 @@ PDF
   -> physical layout
   -> semantic blocks
   -> exact/unresolved ruby association
-  -> typed FileShape Document Model + explicit outline navigation
+  -> typed FileShape Document Model + explicit outline navigation + image placement gaps
   -> unresolved-content policy
-  -> EPUB XHTML + packaged CSS
-  -> OPF / nav / container / ZIP package
+  -> ordered text/image EPUB XHTML + packaged CSS
+  -> OPF / nav / image resources / container / ZIP package
   -> .epub
 ```
 
@@ -186,11 +193,11 @@ npm run verify:stage2
 
 ## Next work
 
-The [remaining-work runbook](remaining-work/README.md) is the CLI-completion roadmap. Its detailed task documents remain the acceptance contracts, but the status table must be read at the current Stage 17 state rather than its original Stage 12 creation point.
+The [remaining-work runbook](remaining-work/README.md) is the CLI-completion roadmap. Its detailed task documents remain the acceptance contracts.
 
 Current priority order:
 
-1. **Task 3 production image integration**: Stage 18 adds the typed resource/occurrence boundary. Next, add unique source/geometry-backed body placement plus deterministic XHTML/OPF/ZIP image packaging, and only then enable image extraction in the converter. Preserve four occurrences while deduplicating identical content resource bytes. Current-corpus clips need no crop. Do not auto-guess a cover.
+1. **Finish Stage 19 private EPUB acceptance**: run the complete 9-PDF EPUB regression with EPUBCheck and verify 4 XHTML image occurrences backed by 1 unique PNG archive resource, alongside the unchanged page/ruby/navigation expectations. Remove the new local report afterward.
 2. **Task 2 real-reader acceptance**: Stage 14 implementation exists, but the selected real readers still need explicit compatibility validation. Re-run affected display checks after image integration.
 3. **Task 3 explicit cover policy**: only after ordinary image preservation is stable. Cover choice must be explicit or source-backed, never visual guesswork.
 4. **Task 4 unresolved ruby refinement**: 6,387 unresolved annotations remain a separate improvement area. The Stage 17 ruby on/off control does not complete this task.

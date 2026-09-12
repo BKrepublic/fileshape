@@ -9,6 +9,7 @@ import type { SourceOutlineItem } from "./document-navigation.js";
 import { readPdfOutline } from "./pdf-outline.js";
 import {
   extractProductionPageImages,
+  validateProductionImageLimits,
   type InspectedImageOccurrence,
   type InspectedImageResource,
 } from "./pdf-production-images.js";
@@ -181,6 +182,7 @@ export async function inspectPdf(
       for (const resource of productionImages?.resources ?? []) {
         const existing = imageResources.get(resource.id);
         if (existing && (existing.width !== resource.width || existing.height !== resource.height ||
+            existing.pixelKind !== resource.pixelKind || existing.decodedByteLength !== resource.decodedByteLength ||
             existing.mediaType !== resource.mediaType || existing.contentHash !== resource.contentHash)) {
           throw new Error(`conflicting image resource identity ${resource.id}`);
         }
@@ -202,6 +204,12 @@ export async function inspectPdf(
       });
     }
 
+    if (options.includeImages) {
+      validateProductionImageLimits(
+        [...imageResources.values()],
+        pages.flatMap((page) => page.imageOccurrences ?? []),
+      );
+    }
     return {
       file: path.basename(inputPath),
       byteLength,
