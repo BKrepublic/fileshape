@@ -40,7 +40,7 @@ app.innerHTML = `
       <div class="runtime-row"><span>SHA-256 / zlib deflate</span><strong id="binary-runtime-status" aria-live="polite">確認中…</strong></div>
       <div class="runtime-row"><span>PWA オフラインshell</span><strong id="pwa-status" aria-live="polite">確認中…</strong></div>
       <p id="runtime-message" class="runtime-message" aria-live="polite">ブラウザ機能を確認しています。</p>
-      <div class="blocker-box"><strong>残っている準備</strong><ul><li>PDF.jsのCMap・標準フォント・WASM resource package</li><li>専用workerへの実変換接続と取消・保存</li><li>端末メモリ上限と失敗時cleanupの実装</li></ul></div>
+      <div class="blocker-box"><strong>残っている準備</strong><ul><li>専用workerへの実変換接続と取消・保存</li><li>端末メモリ上限と失敗時cleanupの実装</li></ul></div>
     </section>
     <section class="action-area" aria-labelledby="action-title">
       <h2 id="action-title" class="visually-hidden">変換</h2>
@@ -118,7 +118,7 @@ function renderRuntimeReadiness(): void {
   runtimeBadge.dataset.state = supported ? "supported" : "unsupported";
   runtimeBadge.textContent = supported ? "利用可能" : "要確認";
   runtimeMessage.textContent = supported
-    ? "PDF.js 実ワーカー、Web Crypto SHA-256、CompressionStream deflate を確認しました。"
+    ? "PDF.js 実ワーカー、same-origin変換資源、Web Crypto SHA-256、CompressionStream deflate を確認しました。"
     : [pdfJsReady ? "" : pdfJsMessage, binaryRuntimeReady ? "" : binaryRuntimeMessage].filter(Boolean).join(" ");
 }
 
