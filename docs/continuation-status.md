@@ -1,37 +1,70 @@
 # FileShape continuation status
 
-Updated 2026-09-12 during Stage 25 CLI final acceptance.
+Updated 2026-09-12 after Stage 25 CLI final acceptance.
 
 ## Current GitHub baseline
 
-Stages 19–20 image preservation / explicit cover are accepted and merged. Stages 21–24 complete Task 4 ruby refinement evidence. Production ruby association rules were not changed because the full-corpus evidence did not expose a safe generic improvement.
-
-Stage 25 now hardens the user-facing CLI and adds a reproducible real-CLI private acceptance verifier. Public CI must be green and the private final acceptance must pass before the CLI checkpoint is called complete.
+Stages 19–20 image preservation / explicit cover are accepted. Stages 21–24 complete Task 4 ruby refinement evidence. Stage 25 completes Task 5 automated CLI acceptance.
 
 The 9 private corpus PDFs are not committed; their full-corpus checks remain local-only.
 
-## Proven production baseline
+## Accepted CLI checkpoint
+
+Stage 25 private acceptance passed on:
 
 ```text
+fcc4dff39e5ce6e1c10e5cf2568be8afbe6fafbd
+```
+
+Real CLI acceptance:
+
+```text
+CLI_ACCEPTANCE=PASS
+PDFS=9
+SELECTED_PDF_ID=sha256:c498e2c0069aabd2
+SELECTED_PAGES=46
+SELECTED_UNRESOLVED=3
+DEFAULT_BYTES=128957
+DETERMINISTIC_BYTES=yes
+STRICT_REJECTED=yes
+FAILED_OUTPUT_PRESERVED=yes
+INVALID_OPTION_REJECTED=yes
+MISSING_INPUT_REJECTED=yes
+HELP_SUCCEEDED=yes
+DOCUMENTED_OPTIONS_SUCCEEDED=yes
+ELAPSED_MS=25509
+```
+
+Integrated corpus acceptance on the same HEAD:
+
+```text
+RUBY_EXIT=0
+STAGE2_EXIT=0
+COVER_EXIT=0
+VERIFY_EPUB_EXIT=0
 PDFs: 9/9
 EPUBs: 9/9
 Pages: 5141/5141
 Unresolved annotations preserved: 6387
 Total EPUB bytes: 17959256
-Outline entries: 250/250
-Image occurrences: 4/4
-Unique PNG content resources: 1/1
-XHTML/OPF/ZIP image references: consistent
+Outline entries: 250/250; outline PDFs: 6/6; unresolved outline entries: 0
+Image occurrences: 4/4; unique PNG content resources: 1/1; XHTML/OPF/ZIP image references: consistent
 EPUBCheck 5.3.0: 9/9 passed (0 errors, 0 warnings)
 ```
 
-Known parser/model regression baseline:
+Cover smoke also passed on the same code:
 
 ```text
-ruby: 33 pages; mapped runs 880/880; exact candidates 373;
-      unresolved retained 2; representative exact pairs 11/11
-Stage 2: 9/9 PDFs; 5141 pages; semantic output 5141/5141
+COVER_SMOKE=PASS
+BODY_IMAGE_OCCURRENCES=1
+PNG_RESOURCES=1
+COVER_MARKERS=1
+BODY_OCCURRENCES_PRESERVED=yes
+PNG_RESOURCES_UNCHANGED=yes
+EPUBCheck 5.3.0: pass (0 errors, 0 warnings)
 ```
+
+Stage 25 also verifies that the real CLI refuses the source PDF as its output path, preserves an existing output on failure, rejects bad/missing options, supports help, and produces byte-identical output when `--modified` is fixed.
 
 ## Task 4 accepted result
 
@@ -45,27 +78,16 @@ UNKNOWN_REASON_COUNT=0
 REPLAY_MISMATCHES=0
 ```
 
-Stage 23 showed all 1,204 coarse-gate-eligible `no-base` candidates select zero glyphs and zero choices; 1,130 only partially overlap a glyph cell by 50% or less. Stage 24 showed all 792 `noncontiguous-base` cases have real source or physical discontinuity, while all 541 boundary-uncertain cases are at or inside the existing 1% margin and all exact controls are outside it. The remaining ambiguous cases are overhang, noncontiguous, or unmapped glyph lines.
+Stages 22–24 found no generic source-backed production rule that could safely promote those unresolved candidates. Task 4 therefore closed with no production ruby-rule change. The 6,387 unresolved candidates remain explicitly preserved by policy; reducing that number is not itself a quality goal.
 
-**Conclusion:** Task 4 is accepted with no production ruby-rule change. The 6,387 unresolved candidates remain explicitly preserved by policy; reducing that number is not itself a quality goal.
-
-## Stage 25 changes under acceptance
-
-- complete CLI usage/help surface for all implemented options;
-- reject output path equal to the source PDF path before any read/write;
-- retain atomic successful output replacement and failure preservation of an existing output;
-- public parser/safety contract tests;
-- `npm run verify:cli` private real-command verifier for deterministic fixed-metadata output, strict unresolved-ruby rejection, invalid-option handling, help, documented options, and failure preservation;
-- refreshed user-facing README with defaults, safety behavior, options, limitations, and verification commands.
-
-No PDF extraction, ruby association, image placement, navigation, or EPUB serialization rule is intentionally changed in Stage 25.
-
-## Other accepted/held scope
+## Accepted / held scope
 
 - Stage 13a body heading mapping remains on hold; page-level navigation is the accepted fallback for this corpus because no source-backed body anchors were found.
-- Stage 14 reading-system implementation exists; manual real-reader acceptance remains environment-dependent and is not silently marked complete.
 - Stages 15–20 image preservation and explicit source-backed cover are accepted. No automatic cover inference.
 - Complete private corpus has zero marked-content occurrences.
+- The automated CLI checkpoint is accepted.
+- Manual Thorium/calibre reading-system validation remains **not yet performed**. EPUBCheck green is not a substitute for real-reader validation.
+- Browser/Android adapters are downstream work and were intentionally excluded from CLI acceptance.
 
 ## Important invariants
 
@@ -79,7 +101,7 @@ No PDF extraction, ruby association, image placement, navigation, or EPUB serial
 
 ## Next work
 
-1. Run Stage 25 public CI and fix any real regression without weakening tests.
-2. Run private `verify:cli`, ruby, Stage 2, full EPUB+EPUBCheck, and cover acceptance on the same Stage 25 branch.
-3. Record the final CLI acceptance SHA and measurements. Manual Thorium/calibre checks remain explicitly separate if not performed.
-4. Browser/Android work begins only after the CLI acceptance scope is recorded.
+1. Merge the accepted Stage 25 checkpoint to `main`, verify the resulting `main` CI and record its exact SHA.
+2. Manual reading-system acceptance remains the only open CLI-adjacent validation: Thorium and calibre should be checked explicitly on representative vertical/horizontal/ruby/note/image/navigation cases. If unavailable, keep the status as unperformed rather than inventing a pass.
+3. After the CLI checkpoint is fixed, continue with `docs/remaining-work/06-browser-android.md` for the browser/Android adapter phase.
+4. Do not reopen Task 4 or widen ruby thresholds without new generic source-backed evidence.
