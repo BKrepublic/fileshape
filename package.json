@@ -38,6 +38,7 @@
     "typecheck": "tsc --noEmit",
     "typecheck:browser-tests": "tsc -p tsconfig.browser-tests.json --noEmit",
     "test": "tsx src/test-runner.ts",
+    "setup:browser": "playwright install chromium",
     "prepare:browser-assets": "tsx src/prepare-browser-pdfjs-assets.ts",
     "dev:browser": "npm run prepare:browser-assets && vite --config vite.config.ts",
     "build:browser": "npm run prepare:browser-assets && tsc -p tsconfig.browser.json && vite build --config vite.config.ts",
