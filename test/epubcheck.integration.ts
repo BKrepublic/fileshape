@@ -3,12 +3,15 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { createEpubChecker, epubCheckSummary } from "../src/epubcheck.js";
+import { buildDocumentNavigation, type SourceOutlineItem } from "../src/document-navigation.js";
 import { serializeEpubPackage } from "../src/epub-package.js";
+import { createEpubChecker, epubCheckSummary } from "../src/epubcheck.js";
+import { buildDocumentFromInspection } from "../src/pdf-document-pipeline.js";
+import { inspectPdf } from "../src/pdf-inspector.js";
 import { convertPdfToEpub } from "../src/pdf-to-epub.js";
 import { epubcheckDocumentFixture } from "./epubcheck-fixture.js";
+import { imagePdfBytes } from "./pdf-image-fixture.js";
 import { pdfBytes } from "./pdf-fixture.js";
-import { buildDocumentNavigation, type SourceOutlineItem } from "../src/document-navigation.js";
 
 // This explicit integration command must fail, never skip, when Java/JAR is missing.
 const checker = await createEpubChecker();
@@ -80,4 +83,33 @@ test("all-unresolved outline falls back to conforming page navigation without dr
     const result = await checker.check(input);
     assert.equal(result.valid, true, epubCheckSummary(result) + JSON.stringify(result.messages));
   } finally { await rm(temporary, { recursive: true, force: true }); }
+});
+
+test("explicit image occurrence cover designation passes real EPUBCheck", async () => {
+  const temporary = await mkdtemp(path.join(os.tmpdir(), "fileshape-epubcheck-cover-"));
+  try {
+    const input = path.join(temporary, "image.pdf");
+    const output = path.join(temporary, "image-cover.epub");
+    await writeFile(input, imagePdfBytes({ includeInline: false, rotation: 0 }));
+
+    const inspection = await inspectPdf(input, { includeGlyphs: true, includeImages: true });
+    const { document } = buildDocumentFromInspection(inspection, "urn:fileshape:cover-integration");
+    const first = document.pages.flatMap((page) => page.imageOccurrences)[0];
+    assert.ok(first, "fixture must expose at least one production image occurrence");
+
+    const conversion = await convertPdfToEpub(input, output, {
+      ...options,
+      coverOccurrence: {
+        sourcePage: first.sourcePage,
+        operatorIndex: first.operatorIndex,
+        occurrenceIndex: first.occurrenceIndex,
+      },
+    });
+    assert.equal(conversion.coverImageResourceId, first.resourceId);
+
+    const result = await checker.check(output);
+    assert.equal(result.valid, true, epubCheckSummary(result) + JSON.stringify(result.messages));
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
+  }
 });
