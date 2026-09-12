@@ -1,140 +1,167 @@
 # FileShape 残作業の実行手順書
 
-この手順書は、残っている機能を一つずつ実装・検証・レビュー・pushするための入口です。作成基準は `97b155d1a89bf8e9cd8a31b8b677611648db8e95`。**手順書の作成完了と、以下の機能の実装完了を混同しないでください。** 実装開始時には最新の [continuation status](../continuation-status.md) と差分を確認します。
+この手順書は、FileShape の **CLI版 PDF → EPUB を完成させるまでの正本ロードマップ**です。各個別文書が実装・検証・受け入れ条件の詳細を持ち、この README は順序・現在地・共通ルールを管理します。
 
-## 対象と実行順序
+2026-09-12 時点の基準は Stage 17 merge 後の `main`、`de07e5c2beda42ad8f2da296a36e637491589016` です。次セッションは [Codex handoff](../codex-handoff-20260912.md) と [continuation status](../continuation-status.md) を先に読んでください。
 
-当面の対象は、ローカルで使う PDF → EPUB の CLI 版です。ブラウザー／Androidアプリは別の後続工程として指示書を用意します。ここに記載した新規ファイル名・新しい型は実装候補であり、すでに存在するAPIではありません。
+## 完成までの工程
 
-| 順序 | 指示書 | 今回まとめた残作業 | 開始条件 | 現在の状態 |
-| --- | --- | --- | --- | --- |
-| 1 | [本文見出し・章構造](01-headings-and-sections.md) | 根拠調査、本文との対応付け、型付き構造、EPUBへの反映 | 共通準備完了 | Stage 12bのタグ調査のみ完了。対応付け・実装は未着手 |
-| 2 | [縦書き・ルビの表示互換性](02-reading-systems.md) | CSS同梱、読書方向、実リーダーでの表示確認 | 1の受け入れ済み出力 | 未着手 |
-| 3 | [表紙・挿絵](03-images-and-cover.md) | 画像資源と描画位置の抽出、モデル化、同梱、表紙指定 | 2のCSS／資源管理が確定 | 未着手 |
-| 4 | [未解決ルビの改善](04-ruby-refinement.md) | 全候補の分類、根拠のある修正、保存性の確認 | 3の受け入れ済み出力 | 未着手 |
-| 5 | [CLI版の最終受け入れ](05-cli-acceptance.md) | 1〜4を統合した全検証、使い方と制限の確定 | 1〜4が完了、または限定範囲をユーザーが明示承認 | 未着手 |
-| 後続 | [ブラウザー／Android](06-browser-android.md) | 環境依存処理の分離、UI、実機検証 | CLI版の受け入れ完了と対象方式の決定 | 未着手・CLI版の完了条件には含めない |
+| 順序 | 指示書 | 完成までに必要な内容 | 2026-09-12 現在 |
+| --- | --- | --- | --- |
+| 1 | [本文見出し・章構造](01-headings-and-sections.md) | PDF-native evidence があれば本文見出し/章境界へ反映 | **保留**。Stage 12b/13a で使える source-backed body anchor が 0。Stage 12a page-level nav を accepted fallback とする |
+| 2 | [縦書き・ルビの表示互換性](02-reading-systems.md) | CSS、reading direction、実 reader での確認 | **検証中**。Stage 14 で packaged CSS / fixture / explicit page progression を実装済み。実 reader acceptance が未完了 |
+| 3 | [表紙・挿絵](03-images-and-cover.md) | 画像資源、出現位置、EPUB同梱、明示的 cover policy | **実装中**。Stage 15-17 で evidence / decode / clip 判定まで完了。次は production image integration。cover はその後 |
+| 4 | [未解決ルビの改善](04-ruby-refinement.md) | unresolved 6,387件の分類・改善・保存性確認 | **未完了**。Stage 17 の exact ruby on/off は追加済みだが、unresolved refinement とは別 |
+| 5 | [CLI版の最終受け入れ](05-cli-acceptance.md) | 1〜4の accepted scope を統合し、CLIと既知制限を確定 | **未着手** |
+| 後続 | [ブラウザー／Android](06-browser-android.md) | UI/環境依存adapter/実機 | **CLI完了後**。CLI完成条件には含めない |
 
-原則は表の順序で一工程ずつ進めます。工程1で根拠不足になった場合、工程2の既存出力の表示調査や工程3の画像棚卸しなど、依存しない調査は進めて構いません。ただし、未完了の依存機能を完了扱いにしたり、その機能を必要とする統合検証を合格扱いにしたりしません。
+工程番号を単純な進捗率へ換算しません。Task 1 のように source evidence が存在しない機能は `保留` のままにし、独立して進められる Task 2〜4 を止めません。
 
-## 「いつ終わるか」の管理
+## 現在の重要な実測
 
-以前の「数日規模」は詳細設計前の概算であり、納期保証ではありません。工程番号の消化率を進捗率に換算しません。各工程の根拠調査が終わった時点で、残る実装・検証項目、実作業時間の見込み幅、不確実性をレビュー記録に追加します。
+### production baseline
 
-状態は `未着手 → 調査中 → 実装中 → 検証中 → 完了` とします。根拠・端末・入力などが足りない場合は `保留（理由・解除条件付き）` とし、完了数に含めません。「調査中のチェックポイントをpushした」と「機能が完了した」を報告で明確に区別します。
+```text
+9 PDFs / 5141 pages / 9 EPUBs
+EPUBCheck 5.3.0: 9/9 pass, 0 fatal / 0 error / 0 warning
+unresolved annotations preserved: 6387
+outline entries: 250 in 6 PDFs, unresolved destination 0
+```
 
-## 現在の比較基準
+### heading/section evidence
 
-以下は既存の検証結果です。これから行う実装で再測定した値ではありません。
+Stage 13a:
 
-| 項目 | 確認済みの基準 |
-| --- | --- |
-| 自動テスト | 型検査＋126件、skipなし |
-| 実EPUBCheckテスト | 4件。公式5.3.0を使用 |
-| 完全なローカルコーパス | 9 PDF、5,141ページ、9 EPUB |
-| しおり | 250件／6 PDF、参照先未解決0件。残り3 PDFはページ目次 |
-| 未解決注記 | 6,387件をページ末尾に保存 |
-| EPUB合計サイズ | 16,639,748 bytes（固定値として今後の変更を禁止する意味ではない） |
-| ルビ代表検証 | 33ページ、mapped runs 880/880、exact 373、unresolved 2、代表対応11/11 |
-| Stage 2 | 意味構造出力5,141/5,141ページ、書体違いの意味内容223/223ページ一致 |
-| 明示的な本文タグ | PDF.js 6.3.289で全5,141ページを調査し、構造ツリー／見出しタグ0件 |
+```text
+outline entries: 250
+unique-position: 0
+ambiguous-position: 0
+page-only: 250
+unmappable: 0
+```
 
-歴史的な実測値は書き換えず、新しい実測値と変化の理由を併記します。サイズや未解決数が変わっただけでは改善と判断しません。保存・所有関係を候補単位で照合します。
+したがって title/body string matching、nearest text、outline depth から heading を推測してはいけません。
+
+### image evidence
+
+Stage 15〜17 の private full corpus:
+
+```text
+IMAGE_PAINTS=4
+XOBJECT_PAINTS=4
+EXTRACTED_RESOURCES=4
+UNSUPPORTED_RESOURCES=0
+UNIQUE_CONTENT_RESOURCES=1
+all four: 800x600 RGB24
+CLIP_STATUS_COUNTS={"exact-rect":4}
+CLIP_COVERAGE_COUNTS={"contains-image":4}
+IMAGE_ISSUES=0
+```
+
+4 occurrence は保持し、同一 content bytes の resource だけを dedupe します。現在 corpus の clip は実画像を切っていないため crop 不要です。
+
+### marked content / 特殊効果
+
+全 5,141 pages:
+
+```text
+MARKED_OCCURRENCES=0
+TAG_COUNTS={}
+WRAPPER_TAG_COUNTS={}
+POINT_TAG_COUNTS={}
+MAX_MARKED_DEPTH=0
+MARKED_ISSUES=0
+```
+
+現在 corpus のための特殊タグ処理は不要です。ただし future input 向けの safe-normalization policy は維持します。unknown content subtree をタグ名だけで削除しません。
+
+### ruby
+
+- exact ruby: source-backed。
+- CLI `--ruby on|off` 実装済み。既定 `on`。
+- `off` は exact annotation markup のみを外し、base text と provenance を保持。
+- unresolved ruby は別 policy で、`off` でも黙って捨てない。
+
+## 次の実装 checkpoint
+
+現在の最優先は **Task 3 production image integration** です。
+
+1. Stage 15〜17 の image adapter/resource/clip evidence を読み直す。
+2. image content resource と image occurrence provenance を分離した typed representation を追加する。
+3. current corpus の `exact-rect + contains-image` occurrence を通常の reflowable EPUB image として同梱する。
+4. body XHTML の source/geometry ordering に基づいて occurrence を配置する。位置が一意でない場合は推測で page末尾へ送らない。
+5. PNG resource を deterministic path で ZIP に入れ、OPF manifest と XHTML relative reference を一致させる。
+6. cropped / complex / unknown clip、mask、unsupported schema は synthetic fixture で fail closed を維持する。
+7. cover を自動推測しない。通常 image preservation を先に完成させ、explicit cover policy を別 checkpoint で実装する。
+8. production path 変更後に full validation を行う。
+
+詳細は [工程3](03-images-and-cover.md) と [Codex handoff](../codex-handoff-20260912.md) を参照。
 
 ## 共通準備
 
-各コマンドは一つずつ実行し、終了コードと出力を確認してから次へ進みます。失敗後に後続コマンドだけを実行して合格扱いにしません。
+1. repository root と作業環境の `AGENTS.md` / project instructions を読む。以前のホスト固有パスや認証方法を別環境へ推測で持ち込まない。
+2. 未コミット変更を確認してから fast-forward のみで同期する。自動 `reset --hard`、stash、rebase、force push はしない。
 
-1. 作業環境の `AGENTS.md` と、指示がある場合は共通知識側の手順を読みます。このチェックアウトでは `/home/nut/agent-brain/AGENTS.md` が該当します。他ホストのパスや認証設定を推測で流用しません。
-2. リポジトリルートで次を実行します。未コミット変更がある場合は所有者と内容を確認・保全してから同期します。自動reset・stash・rebase・force pushは行いません。
+```sh
+git status --short --branch
+git fetch origin
+git pull --ff-only
+git rev-parse HEAD
+```
 
-   ```sh
-   git status --short --branch
-   git pull --ff-only
-   git rev-parse HEAD
-   ```
-
-3. [continuation status](../continuation-status.md)、対象の個別指示書、変更候補の現在のコードを読みます。開始SHA、目的、変更対象、今回の完了条件を [レビュー書式](review-template.md) に記録します。
-4. 依存環境は現在のCIとlockfileに合わせます。基準はNode.js 22系、PDF.js 6.3.289、実規格検証にはJava 17とEPUBCheck 5.3.0です。依存関係が未導入、またはlockfileが変わった場合に `npm ci` を実行します。ついでの更新はしません。
-
-   ```sh
-   node --version
-   npm --version
-   java -version
-   npm ci
-   npm run setup:epubcheck
-   ```
-
-   `npm ci` とvalidatorのsetupは必要なときだけ実行します。Java/JARがない状態は規格検証未実施です。通常変換にJavaを必須にしません。
-5. 全コーパス検証にはGit外の `local-samples/` が必要です。9 PDF／5,141ページであることを確認し、入力の匿名IDとSHA-256をローカルに記録します。入力が違う場合は、旧コーパスの結果と直接比較しません。
-6. 比較が必要な工程では、実装前に開始SHAのモデル・候補・出力を取得します。日時など可変メタデータは固定し、同じ入力・設定で比較します。古い検証ログを再利用して新しい実行の証拠にしません。
+3. [continuation status](../continuation-status.md)、対象 task、直前 Stage 文書、変更予定コードを読む。
+4. private full corpus を使う場合は `local-samples/` が 9 PDF / 5,141 pages の同一 corpus であることを確認する。private PDFs や抽出物を commit しない。
+5. dependency/validator は lockfile と CI に合わせる。通常 conversion に Java を必須化しない。
 
 ## 全工程で守る条件
 
-- パーサーの分岐にサイト、ファイル名、URL、Creator/Producer、フォント名、N-code、文字の見た目を使用しません。PDF構造、幾何、順序、source参照を使用します。
-- `TextItem.str` と `SourceTextRef` の対応を保存します。リガチャ・補助文字・結合文字を推測幅で分割しません。空白や改行の見せ方は出力側の方針として分離します。
-- 推測でルビ・見出し・表紙を確定しません。未解決情報は理由と根拠を残します。根拠不足の情報を隠して件数を減らしません。
-- 前書き／後書きの除去やOCRはこの4工程に追加しません。既存の任意フィルター方針を変更する場合は別の設計として扱います。
-- PDF.jsのinternal schemaを利用する必要があれば専用adapterに閉じ込め、実行時の形と固定バージョンを検査します。型定義だけを動作の証拠にしません。
-- 新しい閾値や対応範囲は、陽性・陰性・曖昧事例を選んでから決めます。結果を緑にする目的で既存期待値を変更しません。
+- website、filename、URL、Creator/Producer、font name、N-code、特定文字の見た目を parser branch 条件にしない。
+- PDF structure、geometry、ordering、source refs を根拠にする。
+- `TextItem.str` と source ownership を source truth として保持する。
+- ligature、supplementary Unicode、combining sequence を推測幅で分割しない。
+- uncertain ruby / heading / image placement / effect / cover を推測で確定しない。
+- unresolved / unsupported 件数を減らすために情報を捨てない。
+- verifier の期待値を弱めて PASS にしない。
+- PDF.js internal schema を使う場合は pinned version の専用 adapter に閉じ込め、runtime shape を検証する。
+- private PDF、private image、本文抜粋、generated private EPUB、local report を Git に入れない。
 
-## 変更に応じた検証
+## 変更種別ごとの検証
 
-| 変更の種類 | 必要な検証 |
+| 変更 | 必須検証 |
 | --- | --- |
-| 手順書だけ | 差分、参照先ファイル／リンク、記載コマンドの存在・引数を確認。ローカルの重い変換テストは不要 |
-| 独立した調査ツール | `npm test`、実PDFの陽性／陰性対照、調査対象全件の実行と件数照合 |
-| XHTML・CSS・パッケージ | `npm test`、`npm run verify:epubcheck`、全9 PDFの変換・規格検証、個別指示書の表示確認 |
-| 抽出・モデル・ルビ・本文構造 | 上記に加え `npm run verify:ruby` と `npm run verify:stage2`。Stage 2は内部でsemantic検証も実行する |
+| docs only | diff/link/command validation。private full conversion は不要 |
+| 独立 inventory/evidence tool | `npm test` + positive/negative fixtures + full対象件数照合 |
+| XHTML/CSS/EPUB package | `npm test` + `npm run verify:epubcheck` + 9-PDF full EPUB validation |
+| parser/model/ruby/source ownership | 上記 + `npm run verify:ruby` + `npm run verify:stage2` |
 
-全検証が必要な場合の順序は次の通りです。
+典型的な full validation:
 
 ```sh
 npm test
 npm run verify:ruby
 npm run verify:stage2
 npm run verify:epubcheck
-mkdir -p local-reports
+npm run verify:epub -- --epubcheck --report-dir <NEW_LOCAL_REPORT_DIR>
 ```
 
-次は新しい保存先の例です。工程・日付・試行番号を実際の値に置き換えます。存在確認が失敗したら別の新規名を使い、以前の証拠を上書きしません。
+`verify:stage2` は semantic verification を含みます。レポート保存先は新規 path を使い、古い evidence を上書きしません。
 
-```sh
-fileshape_report_dir='local-reports/task01-20260911-run1'
-test ! -e "$fileshape_report_dir"
-npm run verify:epub -- --epubcheck --report-dir "$fileshape_report_dir"
-```
+## 工程を閉じる条件
 
-成功条件は終了0、9/9 EPUB、5,141ページ、欠落のないsource所有、目次の参照整合、全EPUBCheckレポートのfatal/error/warningが0です。`summary.json`だけでなく各JSONを読み返します。既存のPDF.js `TT: undefined function: 3`とEPUBCheck警告は区別し、新しい抽出診断は原因を確認します。合格後の再実行は、実装変更・失敗修正・未解決の懸念が生じた場合に行います。
+各 checkpoint で以下を明示します。
 
-## 工程を閉じる手順
+- start SHA / end SHA
+- 変更した契約と変更していない契約
+- 実行した test / verifier と exit code
+- private corpus の aggregate だけを公開し、private source は公開しない
+- 未実施、保留、既知制限
+- GitHub Actions の結果
+- `docs/continuation-status.md` とこの status table の更新
 
-1. 個別指示書の成果物と完了条件を確認し、[レビュー書式](review-template.md) で差分をレビューします。コマンド、対象SHA、終了コード、実測値、未実施項目、残る制限を記録します。
-2. `docs/continuation-status.md` とこの一覧の対象行を更新します。調査だけなら「調査完了・実装未着手」と記録し、工程全体を完了にしません。
-3. `git diff --check` と `git diff --stat`、新規ファイルも含む差分を確認します。ローカルPDF、検証EPUB、本文の抜粋、秘密情報、インストール済みバイナリが含まれていないことを確認します。
-4. author/committerの双方をnoreplyにして、対象ファイルだけを明示して `git add`、通常の `git commit` を行います。このリポジトリの確認済みemailは `136544580+BKrepublic@users.noreply.github.com` です。公開済み履歴の書き換えはしません。
+「調査用コードを push した」「fixture が PASS した」「production feature が accepted になった」は別物として報告してください。
 
-   ```sh
-   git var GIT_AUTHOR_IDENT
-   git var GIT_COMMITTER_IDENT
-   git log -1 --format='%H %an <%ae> %cn <%ce>'
-   ```
+## この手順書は完成までの道のりか
 
-5. 今回のfv1環境で承認済みのpush経路は以下です。他環境では承認済みの認証経路を確認します。Bitwardenがロックされている場合は認証工程だけを保留し、鍵を取り出したりSSH設定を変更したりしません。
+**CLI版については Yes です。** Task 1〜5 が完成までの道筋で、Task 6 はその後の browser/Android 製品化工程です。
 
-   ```sh
-   SSH_AUTH_SOCK=/home/nut/.bitwarden-ssh-agent.sock git -c core.sshCommand='ssh -o BatchMode=yes -o StrictHostKeyChecking=yes' push git@github.com:BKrepublic/fileshape.git main:main
-   git fetch origin main
-   git rev-parse HEAD origin/main
-   git ls-remote origin refs/heads/main
-   git status --short --branch
-   ```
-
-   pushが拒否されたら止めてリモート差分を確認します。URLへのpushでは追跡参照が更新されない場合があるためfetchを挟み、3つのSHAの一致を確認します。mainを使うのは当該工程でmainへの公開が承認されている場合です。
-6. そのコミットのGitHub Actionsを確認します。公開fixtureのCI成功と、非公開9 PDFのローカル成功を分けて記録します。中間保存のpushは可能ですが、CI実行中・失敗中は受け入れ完了と報告しません。
-7. 照合済み集計とレビューを公開したら、その工程が作った一時レポート・EPUB・画像・作業用比較checkoutを削除します。所有者は作業担当、削除条件は検証・レビュー・記録の完了です。失敗調査に必要なものは解除条件付きで残し、他工程のファイルを一括削除しません。validator自体は再利用可能な依存物として残します。
-8. 実行環境の共通知識ルールが要求する場合は、新しいinbox原本へ結果を記録します。共通知識Git正本への直接書き込みやtimerの手動代行はしません。
-
-## 今回の手順書の確認範囲
-
-コードと既存の検証コマンドに照合して作成した実行計画です。工程1〜6の新機能をこの文書作成で実装・再検証したという意味ではありません。新しく必要な調査ツール・fixture・UI操作は各工程で作成または準備し、その実測結果を記録してください。
+ただし、この runbook は最初に Stage 12 時点で作られたため、個別 task の初期記述には古い現状説明が残る場合があります。現在地の正本は常にこの README、`docs/continuation-status.md`、最新 Stage 文書です。Task 文書の未実装手順・完了条件そのものは引き続き有効ですが、Stage 13〜17 で完了した evidence gathering を最初からやり直さないでください。

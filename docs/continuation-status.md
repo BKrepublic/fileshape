@@ -1,95 +1,123 @@
 # FileShape continuation status
 
-Updated after Stage 12a publication and the Stage 12b explicit-structure evidence assessment on 2026-09-11.
+Updated 2026-09-12 after Stage 17 publication and the complete private image-clip / marked-content inventory.
 
-## Historical Stage 10 baseline
+## Current GitHub baseline
 
-Code baseline verified locally:
+Stage 17 production `main` before this documentation refresh:
 
 ```text
-fe60d30d190926693bd1488138934fc3423dd00a
+de07e5c2beda42ad8f2da296a36e637491589016
 ```
 
-Full production-path verification result:
+Stage 17 is merged. The post-merge GitHub Actions CI passed, including typecheck/unit tests and EPUBCheck integration. The 9 private corpus PDFs are not committed; their full-corpus checks remain local-only.
+
+For the next Codex session, start with [codex-handoff-20260912.md](codex-handoff-20260912.md) and the [remaining-work runbook](remaining-work/README.md).
+
+## Proven production baseline
+
+The core PDF -> EPUB path has already been proven over the complete private corpus:
 
 ```text
-FILESHAPE EPUB FULL CORPUS RESULT: PASS
 PDFs: 9/9
 EPUBs: 9/9
 Pages: 5141/5141
 Unresolved annotations preserved: 6387
-Total EPUB bytes: 16623404
-All corpus PDFs completed end-to-end PDF -> EPUB conversion.
-VERIFY_EPUB_EXIT=0
+EPUBCheck 5.3.0: 9/9 passed with 0 fatal / 0 error / 0 warning
 ```
 
-The 9 PDFs in `local-samples/` are intentionally not committed to GitHub. Hosted CI therefore runs typecheck/unit/E2E fixture tests; the full local corpus is verified with `npm run verify:epub`.
+Historical Stage 12a package total was 16,639,748 bytes. Treat this as a historical comparison point, not a value future feature work must preserve byte-for-byte.
 
-## Stage 11 completed: EPUBCheck integration
-
-Continued from GitHub `main` at `f2ebdbb531916586ca8edf8818a64bd8d3352d2c`. The Stage 11 changes add validation tooling, tests, CI configuration, and documentation; production extraction, model, content policy, XHTML, and packaging code are unchanged.
-
-The official EPUBCheck **5.3.0** distribution is pinned by version and ZIP SHA-256. Setup is explicit (`npm run setup:epubcheck`); conversion never downloads or requires Java. The new `npm run verify:epubcheck` command runs real-validator fixture tests in CI, including an intentionally invalid EPUB that must fail.
-
-Locally verified for this continuation:
+Known parser/model regression baseline:
 
 ```text
-npm test: PASS (typecheck + 115 tests; no skipped tests)
-npm run verify:epubcheck: PASS (3 real-validator integration tests; no skipped tests)
-npm run verify:epub -- --epubcheck --report-dir local-reports/epubcheck-stage11: PASS
-PDFs: 9/9
-EPUBs: 9/9
-Pages: 5141/5141
-Unresolved annotations preserved: 6387
-Total EPUB bytes: 16623404
-EPUBCheck 5.3.0: 9/9 passed (0 fatal errors, 0 errors, 0 warnings)
-VERIFY_EPUB_EXIT=0
+ruby: 33 pages; mapped runs 880/880; exact candidates 373;
+      unresolved retained 2; representative exact pairs 11/11
+semantic samples: 7/7
+Stage 2: 9/9 PDFs; 5141 pages; semantic output 5141/5141;
+         font-pair semantic match 223/223
 ```
 
-No standards violations were found in the valid fixtures or full corpus, so no production-output fixes were needed. Page count, unresolved-annotation count and total byte count match the historical baseline; this is not a byte-for-byte comparison to retained historical EPUB files. PDF.js emitted `TT: undefined function: 3` diagnostics during extraction of four corpus PDFs; these are distinct from the zero EPUBCheck warnings.
+## Completed checkpoints after Stage 12
 
-The full JSON reports and summary are local-only under `local-reports/epubcheck-stage11/`. Generated temporary EPUBs were removed. Missing Java/JAR, incorrect options, and attempts to reuse a report directory fail before corpus conversion. Stage 11 was published as `cbe7518764eda5613e849a0fd4375d62c204bd84` using the configured noreply email; exact remote SHA equality was verified. [GitHub Actions](https://github.com/BKrepublic/fileshape/actions/runs/34614178141) passed for that commit. The staged ruby/semantic/Stage 2 figures below remain historical; the parser/model were not changed or separately rerun in Stage 11.
+### Stage 13a: outline destination -> source evidence
 
-The [Stage 11 review](stage11-review.md) found no blocking issues. Its follow-up documentation was published as `683f326b5f785dd46c00d2320e47381bcbc9197f`. A read-only inventory before Stage 12a found 250 outline entries in six PDFs; three have none.
-
-See [Stage 11](stage11-epubcheck.md) for setup, report lifecycle, acceptance rules, and standards references.
-
-## Stage 12a completed: explicit PDF outline navigation
-
-Explicit PDF outlines now reach the typed model with original titles, destinations, hierarchy and source index paths. Resolved destinations link to the existing page XHTML. EPUB navigation retains usable hierarchy and includes a page-list; absent or wholly unusable outlines retain the page TOC. Unresolved entries remain explicit, and their labels are retained without guessed or external links. Body heading roles, section boundaries and precise text anchors are not inferred.
-
-Verified on 2026-09-11:
+All 250 outline entries in six PDFs were analyzed without using titles for body matching. Results:
 
 ```text
-npm test: PASS (typecheck + 124 tests; no skipped tests)
-npm run verify:epubcheck: PASS (4 real-validator integration tests; no skipped tests)
-npm run verify:ruby: PASS (33 pages, 880/880 mapped runs, 373 exact candidates,
-  2 unresolved retained, representative exact pairs 11/11)
-npm run verify:stage2: PASS (includes the semantic sample verifier)
-  PDFs: 9/9; text pages with semantic output: 5141/5141
-  Document-context orientation resolutions: 12; font-pair semantic match: 223/223
-npm run verify:epub -- --epubcheck --report-dir local-reports/epubcheck-stage12a: PASS
-  PDFs: 9/9; EPUBs: 9/9; pages: 5141/5141
-  Unresolved annotations preserved: 6387
-  Total EPUB bytes: 16639748
-  Outline entries: 250/250; outline PDFs: 6/6; unresolved outline entries: 0
-  EPUBCheck 5.3.0: 9/9 passed (0 fatal errors, 0 errors, 0 warnings, 0 usage)
-  Process exit: 0
+unique-position: 0
+ambiguous-position: 0
+page-only: 250
+unmappable: 0
 ```
 
-All nine JSON reports were read back and checked against the successful summary. Page and unresolved-annotation totals match Stage 11. EPUB size increased by 16,344 bytes with the new navigation. A synthetic package comparison proves that adding navigation leaves all other package members byte-identical; the private full-corpus run is not a byte-for-byte comparison against retained Stage 11 EPUBs. Existing PDF.js `TT: undefined function: 3` extraction diagnostics remain separate from EPUBCheck warnings.
+The corpus therefore provides no source-backed body heading/section anchors through outline destinations. Task 1 body heading/section mapping is on hold. Stage 12a page-level outline navigation remains the accepted fallback. Do not add nearest-text, title/body string matching, or outline-depth heading inference to force body anchors.
 
-The [Stage 12a review](stage12a-review.md) found no blocking findings. The implementation was published as `ede8124356a08ba5054eb3fa2d836f499120dddc` with noreply author/committer email; exact remote SHA equality was verified. [GitHub Actions run 34616492986](https://github.com/BKrepublic/fileshape/actions/runs/34616492986) passed for this exact commit. See [Stage 12a](stage12a-outline-navigation.md) for the source contract, unresolved-entry policy, scope and report lifecycle.
+See [Stage 13a](stage13a-outline-source-evidence.md).
 
-## Stage 12b evidence assessment completed; body mapping remains open
+### Stage 14: reading-system CSS/resources
 
-The new read-only `npm run inspect:structure -- PDF_OR_DIRECTORY [--output NEW_FILE]` command inventories every page's PDF.js structure tree. Real tagged-PDF positive controls verify mapped heading roles and ensure the scan still runs when `MarkInfo.Marked` is false; an outline-only PDF is a negative control. The command reports counts and flags, without reading or emitting body text or outline titles.
+Implemented deterministic packaged CSS, manifest registration, XHTML stylesheet links, reflow-safe horizontal/vertical rules, ruby/note styling, explicit page progression direction, and a synthetic reading-system fixture.
 
-The final implementation passed typecheck and **126 automated tests**, with no skipped tests. A complete scan returned nine PDFs and **5,141/5,141 pages**, with zero exposed structure-tree pages or heading nodes; `MarkInfo` was absent in all nine. This is an observation of the pinned PDF.js API over this corpus, not a claim that the documents have no visual headings. See [Stage 12b evidence and review](stage12b-structure-evidence.md).
+Task 2 is **not fully accepted** until real-reader validation is performed on the selected desktop readers. Standards validation is not a substitute for that manual compatibility check.
 
-The inventory was published as `52cf5db80bd0a4d060b2087f92575e251b044543` with noreply author/committer email, and local/remote SHA equality was verified. [GitHub Actions run 34617045723](https://github.com/BKrepublic/fileshape/actions/runs/34617045723) passed for this exact commit, including the public standards tests.
+See [Stage 14](stage14-reading-system-css.md) and [Task 2](remaining-work/02-reading-systems.md).
 
-The inventory adds no production conversion changes, so the Stage 12a EPUB/standards/staged results above remain the applicable production baseline; those expensive verifiers were not rerun locally for this diagnostic-only increment. The Stage 12a/12b private review reports and logs were removed after readback validation and publication of their aggregates. Heading/section mapping is not yet implemented. The next step is destination-to-source-range evidence analysis with rotation/vertical/duplicate-target controls; outline labels alone cannot establish body heading roles or chapter boundaries.
+### Stage 15: image paint evidence
+
+The complete private corpus contains only four image paint occurrences. All are XObject paints, all are supported by the pinned PDF.js adapter, and none is Form-contained in the private corpus.
+
+See [Stage 15](stage15-image-evidence.md).
+
+### Stage 16: decoded image resources
+
+All four known XObjects decode successfully as 800x600 RGB24. They all produce the same deterministic PNG content resource. Occurrences remain four even though content resource identity deduplicates to one.
+
+Observed aggregate:
+
+```text
+IMAGE_PAINTS=4
+XOBJECT_PAINTS=4
+EXTRACTED_RESOURCES=4
+UNSUPPORTED_RESOURCES=0
+UNIQUE_CONTENT_RESOURCES=1
+TOTAL_DECODED_BYTES=5760000
+TOTAL_PNG_BYTES=604156
+MAX_PIXELS=480000
+PIXEL_KIND_COUNTS={"rgb24":4}
+```
+
+See [Stage 16](stage16-image-resources.md).
+
+### Stage 17: content controls, clip evidence, marked-content inventory
+
+Exact ruby now supports conversion-time `rubyMode: "on" | "off"` and CLI `--ruby on|off`. `off` removes only exact ruby annotation markup from the rendered output; it does not mutate source provenance and does not silently discard unresolved ruby candidates.
+
+The final private image-clip scan on all 9 PDFs / 5,141 pages found:
+
+```text
+IMAGE_PAINTS=4
+CLIP_STATUS_COUNTS={"exact-rect":4}
+CLIP_COVERAGE_COUNTS={"contains-image":4}
+IMAGE_ISSUES=0
+```
+
+For every occurrence, the exact rectangular clip equals/contains the transformed image bounds. No current-corpus occurrence requires pixel cropping. This clears the current corpus for ordinary reflowable EPUB image placement, while generic cropped/complex/unknown clip cases must remain fail-closed or explicitly handled in fixtures.
+
+The full marked-content operator inventory found:
+
+```text
+MARKED_OCCURRENCES=0
+TAG_COUNTS={}
+WRAPPER_TAG_COUNTS={}
+POINT_TAG_COUNTS={}
+MAX_MARKED_DEPTH=0
+MARKED_ISSUES=0
+```
+
+Therefore the current private corpus has no PDF marked-content tags requiring a special-effect conversion policy. Keep the generic safe-normalization policy for future inputs, but do not invent special-tag rules for this corpus.
+
+See [Stage 17](stage17-content-controls-image-placement.md).
 
 ## Current pipeline
 
@@ -102,24 +130,26 @@ PDF
   -> exact/unresolved ruby association
   -> typed FileShape Document Model + explicit outline navigation
   -> unresolved-content policy
-  -> EPUB XHTML
+  -> EPUB XHTML + packaged CSS
   -> OPF / nav / container / ZIP package
   -> .epub
 ```
 
-The user-facing CLI is:
+The user-facing CLI remains:
 
 ```text
 npm run convert:epub -- input.pdf [output.epub]
 ```
 
-Unresolved ruby candidates are not guessed. The CLI defaults to preserving their annotation text as page-end notes. Library serialization keeps strict/error behavior available.
+Relevant current options include explicit unresolved-ruby policy, page-progression direction, and `--ruby on|off`.
 
 ## Important invariants
 
 Do not introduce behavior keyed to website, filename, URL, PDF Creator/Producer, generator name, font name, N-code, or particular character appearance. Parser decisions must come from PDF structure, geometry, ordering and provenance.
 
-Do not loosen existing verifiers or change expected values merely to obtain green tests. Preserve original `TextItem.str` and source references as source truth. Never split ligatures or supplementary Unicode by guessed character/glyph widths. Uncertain ruby must remain explicit and source-backed.
+Do not loosen existing verifiers or change expected values merely to obtain green tests. Preserve original `TextItem.str` and source references as source truth. Never split ligatures or supplementary Unicode by guessed character/glyph widths. Uncertain ruby, unsupported images, and ambiguous effects must remain explicit rather than disappearing.
+
+Do not commit private PDFs, extracted private images, source text excerpts, generated private EPUBs, or local reports.
 
 ## Regression commands
 
@@ -129,37 +159,34 @@ During development:
 npm test
 ```
 
-Before merging parser/model changes, also run the relevant staged verifiers. For final local corpus validation:
+For XHTML/CSS/package changes:
+
+```text
+npm test
+npm run verify:epubcheck
+npm run verify:epub -- --epubcheck --report-dir <new-local-report-dir>
+```
+
+For parser/model/ruby/source-ownership changes, also run:
 
 ```text
 npm run verify:ruby
-npm run verify:semantic
 npm run verify:stage2
-npm run verify:epub -- --epubcheck
 ```
 
-Install the pinned validator with `npm run setup:epubcheck` first (Java 17 and `unzip` required). Use `npm run verify:epubcheck` for the public synthetic-fixture standards checks. Plain `npm run verify:epub` remains available for conversion/archive checks without Java.
-
-Known verified historical figures before the final EPUB pass:
-
-- ruby corpus: 33 pages, 880/880 mapped text runs, 373 exact candidates, 2 unresolved retained, representative exact pairs 11/11;
-- semantic samples: 7/7;
-- Stage 2 corpus: 9/9 PDFs, 5,141 pages, 5,141/5,141 text pages with semantic output, 223/223 font-pair semantic match.
+`verify:stage2` includes semantic verification. Install the pinned EPUBCheck distribution with `npm run setup:epubcheck` before standards validation.
 
 ## Next work
 
-The user requested concrete instructions for each remaining task. The [remaining-work runbook (Japanese)](remaining-work/README.md) is the execution entry point, with one instruction document per area, common validation/publication steps, final CLI acceptance, a review template, and a separate browser/Android follow-up. This documentation does not change the implementation status above.
+The [remaining-work runbook](remaining-work/README.md) is the CLI-completion roadmap. Its detailed task documents remain the acceptance contracts, but the status table must be read at the current Stage 17 state rather than its original Stage 12 creation point.
 
-Start with [Task 1: headings and sections](remaining-work/01-headings-and-sections.md), step 1A (destination-to-source evidence). Review and push each bounded checkpoint, and mark a feature complete only after its implementation and acceptance conditions are met. Update the runbook's status table together with this handoff as work progresses.
+Current priority order:
 
-The core PDF-to-EPUB path is now proven over the complete local corpus. Continue from product-quality EPUB output rather than adding new parser heuristics without evidence.
+1. **Task 3 production image integration**: Stage 15-17 evidence gathering for the private corpus is complete enough to proceed. Add typed image resource/occurrence handling, deterministic EPUB image packaging, and source/geometry-backed body placement. Preserve four occurrences while deduplicating identical content resource bytes. Current-corpus clips need no crop. Do not auto-guess a cover.
+2. **Task 2 real-reader acceptance**: Stage 14 implementation exists, but the selected real readers still need explicit compatibility validation. Re-run affected display checks after image integration.
+3. **Task 3 explicit cover policy**: only after ordinary image preservation is stable. Cover choice must be explicit or source-backed, never visual guesswork.
+4. **Task 4 unresolved ruby refinement**: 6,387 unresolved annotations remain a separate improvement area. The Stage 17 ruby on/off control does not complete this task.
+5. **Task 5 CLI final acceptance**: integrate completed/accepted scope, run the full validation matrix, document known limits, and freeze the supported CLI contract.
+6. **Browser/Android adapter** follows CLI acceptance and is not part of the CLI completion condition.
 
-High-value next areas are:
-
-1. Stage 12b continuation: analyze destination-to-source-range correspondence and define a source-backed heading/section mapping contract; the completed explicit-tag inventory found no available heading tags in this corpus;
-2. CSS/resources and reading-system compatibility, especially vertical Japanese text and ruby;
-3. cover/image extraction and packaging;
-4. content-policy refinement for the 6,387 unresolved annotations, using geometry/provenance evidence rather than source-specific rules;
-5. browser/Android adapter only after the conversion core remains deterministic and testable.
-
-For any parser change, compare against this verified baseline and rerun the local corpus. Do not treat the high unresolved-annotation count as permission to guess ruby relationships.
+Task 1 body heading/section mapping remains on hold until genuinely new PDF-native source evidence appears. Do not block independent Tasks 2/3/4 on an evidence source the current corpus does not contain.

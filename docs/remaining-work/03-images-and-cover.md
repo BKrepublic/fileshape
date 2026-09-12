@@ -1,5 +1,30 @@
 # 工程3：表紙・挿絵の抽出と同梱
 
+## 2026-09-12 現在の checkpoint
+
+Stage 15〜17 により、この工程の **3A と 3B の evidence/resource 調査は current private corpus について必要な地点まで完了**しています。最初から棚卸しをやり直さないでください。
+
+確認済み:
+
+```text
+9 PDFs / 5141 pages
+IMAGE_PAINTS=4
+XOBJECT_PAINTS=4
+EXTRACTED_RESOURCES=4
+UNSUPPORTED_RESOURCES=0
+UNIQUE_CONTENT_RESOURCES=1
+all four resources: 800x600 RGB24
+CLIP_STATUS_COUNTS={"exact-rect":4}
+CLIP_COVERAGE_COUNTS={"contains-image":4}
+IMAGE_ISSUES=0
+```
+
+4 occurrence はすべて保持対象です。同じ PNG content hash を持つため resource bytes は1個に dedupe できますが、occurrence provenance を1個に潰してはいけません。4件とも exact rectangular clip が transformed image bounds を包含しており、current corpus では pixel cropping は不要です。
+
+次は **production image integration** です。typed image resource/occurrence、本文内 placement、EPUB manifest/resource/reference を実装し、その後 explicit cover policy へ進みます。cover の自動推測はしません。cropped / complex / unknown clip、mask、unsupported schema は current corpus に無くても fixture で fail closed を維持してください。
+
+詳細な引き継ぎは [Codex handoff](../codex-handoff-20260912.md)、集計は [Stage 17](../stage17-content-controls-image-placement.md) を参照してください。
+
 ## 目的と開始条件
 
 本文中に描画された画像を、その出現位置とsource根拠を保ってEPUBへ入れます。表紙は明示された情報または利用者の指定で選びます。[共通手順](README.md) と工程2の資源管理方式を確認してください。
@@ -13,6 +38,10 @@
 3. 対応できる描画と、mask／clip／色空間などを含む未対応描画を分類します。未対応を0件として消さず、理由とsource参照を残します。候補分類の全件合計を元の描画記録と照合します。
 4. 権利上公開できる自作実PDF fixtureに、単一画像、inline image、同一資源の複数配置、Form内画像、回転・拡大縮小、透明／マスク、切り抜き、画像だけのページ、文字との混在を用意します。元PDFの表示を期待結果として保存します。
 
+### 3A の現在地
+
+Stage 15 で private corpus 全件の image paint evidence を取得済みです。Stage 16/17 で byte decode と clip classification まで進んでいるため、current corpus に対して 3A を再実行する必要はありません。新しい fixture / 新しい operator schema / 新しい corpus を追加したときだけ、必要範囲を再調査します。
+
 ## 3B：画像モデルと取得処理を実装する
 
 1. 画像のbytes／media type／寸法を持つ資源と、sourceページ・operator・描画位置・順序を持つ出現情報を分けます。元資源を共有しても、出現位置を重複排除してはいけません。
@@ -21,6 +50,18 @@
 4. モデルへ画像出現ノードとprovenanceを追加し、本文との順序を既存の幾何とsource順序から決めます。一意に決められない位置は未解決として残します。全画像を単にページ末尾へ付けて位置保存済みとしません。
 5. 画像だけのページを有効な内容として扱えるか [pdf-document-pipeline.ts](../../src/pdf-document-pipeline.ts) と [document-model.ts](../../src/document-model.ts) を確認します。sourceページを除去せず、読み順と空白ページとの区別を保持します。
 6. 画像寸法／総画素数／出力サイズの上限を設計し、超過時は明確に失敗させます。黙って画像を落として成功にしません。上限値は対象データの観測とメモリ測定に基づき、後から変更できる場所に置きます。
+
+### 3B の現在地
+
+Stage 16 で decoded image resource adapter と deterministic PNG resource identity は実装済みです。Stage 17 で current corpus の clip は 4/4 `exact-rect + contains-image` と確認済みです。
+
+したがって次の未完了部分は主に:
+
+- typed document/publication model への image resource / occurrence transport;
+- text/image reading-order placement;
+- resource limits の production contract;
+- cropped/complex/unknown clip の fixture/fail-closed contract;
+- image-only page behavior の production validation。
 
 ## 3C：EPUBへ組み込む
 
