@@ -46,7 +46,10 @@ async function downloadConversion(page: Page, sourcePath: string, sourceBytes: B
     mimeType: "application/pdf",
     buffer: sourceBytes,
   });
-  await page.locator("details.advanced-settings > summary").click();
+  const advancedSettings = page.locator("details.advanced-settings");
+  if ((await advancedSettings.getAttribute("open")) === null) {
+    await advancedSettings.locator("summary").click();
+  }
   await page.locator('[name="modified"]').fill(MODIFIED);
   await page.locator('[name="language"]').fill("ja");
   await page.locator('[name="rubyMode"]').selectOption("on");
