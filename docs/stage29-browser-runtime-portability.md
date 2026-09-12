@@ -25,6 +25,14 @@ GitHub Actions is disabled by project policy. All verification below is local-on
 
 ## Local commands
 
+Install the pinned local Playwright Chromium once after dependency changes:
+
+```sh
+npm run setup:browser
+```
+
+This is a local prerequisite only. Verification does not download browser binaries implicitly and must not fall back to GitHub Actions.
+
 Public verification:
 
 ```sh
@@ -41,15 +49,16 @@ The private browser report is written under `local-reports/`, which is gitignore
 
 ## Acceptance gates still open
 
-1. Run `npm run verify:local` on the current Stage 29 HEAD.
-2. Run `npm run verify:local-private` against the 9 private PDFs and confirm:
+1. Run `npm run setup:browser` if the pinned Playwright executable is not installed locally.
+2. Run `npm run verify:local` on the current Stage 29 HEAD.
+3. Run `npm run verify:local-private` against the 9 private PDFs and confirm:
    - 9 PDFs;
    - 5,141 pages;
    - 6,387 unresolved annotations preserved;
    - every browser EPUB byte-identical to the Node byte API;
    - no external runtime request;
    - measured timing/RSS recorded for every PDF.
-3. Inspect any failure instead of weakening expectations.
-4. Manual Thorium/calibre validation remains a separate unperformed reader gate.
+4. Inspect any failure instead of weakening expectations.
+5. Manual Thorium/calibre validation remains a separate unperformed reader gate.
 
 Do not claim browser corpus parity, a supported maximum file size, or Stage 29 acceptance until the private local run passes.
