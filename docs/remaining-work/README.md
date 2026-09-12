@@ -4,9 +4,9 @@
 
 ## 現在地
 
-2026-09-12、Stage 19 production image integration は independent review の hardening と private 9-PDF acceptance まで完了し、**通常画像 preservation は accepted** になりました。
+2026-09-12、Stage 19 production image integration は independent review の hardening と private 9-PDF acceptance まで完了し、**通常画像 preservation は accepted** です。Stage 20 explicit cover policy は実装とpublic CI、private default full regressionまで完了し、explicit-cover private smokeだけが残っています。
 
-最終 private acceptance:
+Stage 19/20 default private acceptance:
 
 ```text
 PDFs: 9/9
@@ -21,13 +21,15 @@ XHTML/OPF/ZIP references: consistent
 EPUBCheck 5.3.0: 9/9 passed (0 errors, 0 warnings)
 ```
 
+Stage 20 default output total bytes remain 17,959,256, matching the accepted Stage 19 full regression.
+
 ## 完成までの工程
 
 | 順序 | 指示書 | 残っている内容 | 現在 |
 | --- | --- | --- | --- |
 | 1 | [本文見出し・章構造](01-headings-and-sections.md) | 新しいPDF-native evidenceが得られた場合だけ再開 | **保留**。Stage 13aで source-backed body anchor 0。page-level navigationをaccepted fallbackとする |
 | 2 | [縦書き・ルビの表示互換性](02-reading-systems.md) | 実readerでの互換性確認 | **実装済み・manual acceptance待ち** |
-| 3 | [表紙・挿絵](03-images-and-cover.md) | explicit/source-backed cover policy | **通常画像 accepted。次はcover** |
+| 3 | [表紙・挿絵](03-images-and-cover.md) | Stage 20 explicit-cover private smoke | **通常画像 accepted。cover実装済み、最終smoke待ち** |
 | 4 | [未解決ルビの改善](04-ruby-refinement.md) | unresolved 6387件の分類・改善・保存性確認 | **未完了** |
 | 5 | [CLI版の最終受け入れ](05-cli-acceptance.md) | accepted scope統合、CLI/既知制限の凍結、最終validation | **未着手** |
 | 後続 | [ブラウザー／Android](06-browser-android.md) | UI/環境adapter/実機 | **CLI完了後** |
@@ -59,16 +61,21 @@ Stage 18/19 で以下が accepted です。
 - production limitsのpreflight/final validation;
 - full verifierによる XHTML occurrence / OPF image item / PNG ZIP entry / reference整合確認。
 
-次は **cover selectionを別checkpointとして追加**します。
+Stage 20 で explicit cover policy を追加済みです。
 
 Cover rules:
 
 - 既定で自動推測しない;
+- CLIは `--cover-occurrence PAGE:OPERATOR:OCCURRENCE`;
 - page number、画像寸法、位置、filename、appearance、contentから表紙を推測しない;
-- source-backed cover metadataが無い入力はcover未指定のまま成功してよい;
-- user指定を追加するなら exact source occurrence を指定し、存在しない/曖昧な指定はfail closed;
+- exact source occurrence だけを指定し、存在しない/曖昧な指定はfail closed;
+- source-backed cover metadataが無く、user指定も無い入力はcover未指定のまま成功する;
 - cover指定しても元の本文image occurrenceを削除しない;
-- EPUB `cover-image` metadata/manifest propertyだけを付ける方針を優先し、必要性が証明されないsynthetic cover pageを勝手に追加しない。
+- selected existing manifest itemだけに EPUB `properties="cover-image"` を付ける;
+- synthetic cover XHTML/spine itemは追加しない;
+- shared image resourceはcover指定後もdedupeを維持する。
+
+Public CIとprivate default 9-PDF regressionはpass済みです。Task 3を閉じる前に `npm run verify:cover` を実行し、one cover marker / unchanged body occurrences / unchanged PNG resources / EPUBCheck clean を確認します。
 
 ## Ruby
 
@@ -130,6 +137,12 @@ private full acceptance:
 
 ```sh
 npm run verify:epub -- --epubcheck --report-dir <NEW_LOCAL_REPORT_DIR>
+```
+
+Stage 20 explicit-cover smoke:
+
+```sh
+npm run verify:cover
 ```
 
 ## 工程を閉じる条件
