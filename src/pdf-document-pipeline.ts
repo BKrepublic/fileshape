@@ -22,8 +22,6 @@ export type PdfDocumentPipelineResult = {
 };
 
 export type PdfDocumentPipelineControl = {
-  /** Reuse page-local flow analysis already computed during inspection. */
-  precomputedFlows?: ReadonlyMap<number, PageFlowResult>;
   /** Called after each source page has been reduced to document structure. */
   onPageBuilt?: (completedPages: number, totalPages: number) => void;
 };
@@ -31,16 +29,6 @@ export type PdfDocumentPipelineControl = {
 function hasVisibleText(inspection: InspectResult, pageNumber: number): boolean {
   const page = inspection.pages.find((entry) => entry.page === pageNumber);
   return page?.textItems.some((item) => item.text.trim().length > 0) ?? false;
-}
-
-function pageFlow(
-  page: InspectResult["pages"][number],
-  precomputedFlows: ReadonlyMap<number, PageFlowResult> | undefined,
-): PageFlowResult {
-  if (precomputedFlows === undefined) return reconstructPageFlow(page);
-  const flow = precomputedFlows.get(page.page);
-  if (flow === undefined) throw new Error(`missing precomputed page flow for page ${page.page}`);
-  return flow;
 }
 
 /**
@@ -55,7 +43,7 @@ export function buildDocumentFromInspection(
 ): PdfDocumentPipelineResult {
   const flows = inspection.pages.map((page) => ({
     page,
-    flow: pageFlow(page, control?.precomputedFlows),
+    flow: reconstructPageFlow(page),
   }));
 
   const orientations = resolveDocumentOrientations(
