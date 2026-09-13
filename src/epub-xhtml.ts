@@ -74,12 +74,38 @@ function renderInline(inline: InlineNode, rubyMode: EpubRubyMode): string {
   return `<ruby>${escapeXmlText(inline.base.text)}<rt>${escapeXmlText(inline.annotation.text)}</rt></ruby>`;
 }
 
-function renderBlock(block: DocumentTextBlock, rubyMode: EpubRubyMode, headingId?: string): string {
+function inlinePlainText(inline: InlineNode): string {
+  return inline.kind === "text" ? inline.text : inline.base.text;
+}
+
+function blockPlainText(block: DocumentTextBlock): string {
+  return block.inlines.map(inlinePlainText).join("");
+}
+
+type BlockRenderOptions = {
+  headingId?: string;
+  continueFromPrevious?: boolean;
+  continueToNext?: boolean;
+};
+
+function renderBlock(
+  block: DocumentTextBlock,
+  rubyMode: EpubRubyMode,
+  options: BlockRenderOptions = {},
+): string {
   const body = block.inlines.map((inline) => renderInline(inline, rubyMode)).join("");
-  if (headingId !== undefined) {
-    return `    <h1 id="${escapeXmlAttribute(headingId)}" class="fileshape-heading" data-source-page="${block.sourcePage}" data-semantic-block="${block.semanticBlockIndex}" xml:space="preserve">${body}</h1>`;
+  if (options.headingId !== undefined) {
+    return `    <h1 id="${escapeXmlAttribute(options.headingId)}" class="fileshape-heading" data-source-page="${block.sourcePage}" data-semantic-block="${block.semanticBlockIndex}" xml:space="preserve">${body}</h1>`;
   }
-  return `    <p class="fileshape-block" data-source-page="${block.sourcePage}" data-semantic-block="${block.semanticBlockIndex}" xml:space="preserve">${body}</p>`;
+
+  const attrs = `data-source-page="${block.sourcePage}" data-semantic-block="${block.semanticBlockIndex}"`;
+  if (options.continueFromPrevious) {
+    const fragment = `<span class="fileshape-block-continuation" ${attrs}>${body}</span>`;
+    return options.continueToNext ? `    ${fragment}` : `    ${fragment}</p>`;
+  }
+
+  const open = `    <p class="fileshape-block" ${attrs} xml:space="preserve">${body}`;
+  return options.continueToNext ? open : `${open}</p>`;
 }
 
 function renderImage(
@@ -197,12 +223,49 @@ function logicalGroups(pages: DocumentPage[]): Array<{ pages: DocumentPage[]; he
   return groups;
 }
 
+function hasBoundaryImage(previous: DocumentPage, current: DocumentPage): boolean {
+  return previous.imageOccurrences.some((occurrence) => occurrence.placementIndex >= previous.blocks.length) ||
+    current.imageOccurrences.some((occurrence) => occurrence.placementIndex === 0);
+}
+
+/**
+ * A physical PDF page break is not a paragraph break. Join only the conservative
+ * case where the previous page visibly ends mid-sentence and the next page begins
+ * without a paragraph indent/opening quote. This keeps ordinary paragraph starts
+ * separate while repairing wraps such as `一人ぼっちで居る、と` +
+ * `いうのも居心地が悪い。`.
+ */
+function continuesAcrossSourcePage(
+  previous: DocumentPage,
+  current: DocumentPage,
+  previousNotes: PreservedUnresolvedAnnotation[],
+  currentNotes: PreservedUnresolvedAnnotation[],
+): boolean {
+  if (previous.orientation !== current.orientation) return false;
+  if (previousNotes.length > 0 || currentNotes.length > 0) return false;
+  if (hasBoundaryImage(previous, current)) return false;
+  const previousBlock = previous.blocks.at(-1);
+  const currentBlock = current.blocks[0];
+  if (!previousBlock || !currentBlock) return false;
+  if (inferHeading(current) !== undefined) return false;
+
+  const before = blockPlainText(previousBlock).trimEnd();
+  const after = blockPlainText(currentBlock);
+  if (before.length === 0 || after.trim().length === 0) return false;
+  if (/^[\u3000\t ]/u.test(after)) return false;
+  if (/^[「『（【〔［〈《]/u.test(after.trimStart())) return false;
+  if (/[。！？!?」』）】〕］〉》]$/u.test(before)) return false;
+  return true;
+}
+
 function renderSourcePageItems(
   document: FileShapeDocument,
   page: DocumentPage,
   notes: PreservedUnresolvedAnnotation[],
   rubyMode: EpubRubyMode,
   heading: EpubInferredHeading | undefined,
+  continueFromPrevious: boolean,
+  continueToNext: boolean,
 ): string[] {
   const resources = new Map(document.imageResources.map((resource) => [resource.id, resource]));
   const imagesByGap = new Map<number, DocumentImageOccurrence[]>();
@@ -233,7 +296,13 @@ function renderSourcePageItems(
     const block = page.blocks[gap];
     if (block) {
       const headingId = heading && gap === 0 ? heading.targetId : undefined;
-      bodyItems.push(renderBlock(block, rubyMode, headingId));
+      const isFirst = gap === 0;
+      const isLast = gap === page.blocks.length - 1;
+      bodyItems.push(renderBlock(block, rubyMode, {
+        ...(headingId === undefined ? {} : { headingId }),
+        ...(isFirst && continueFromPrevious ? { continueFromPrevious: true } : {}),
+        ...(isLast && continueToNext ? { continueToNext: true } : {}),
+      }));
     }
   }
   const preservedNotes = renderPreservedNotes(notes);
@@ -257,14 +326,28 @@ function serializeLogicalXhtml(
   const stylesheet = options.stylesheetHref === undefined
     ? ""
     : `\n    <link rel="stylesheet" type="text/css" href="${escapeXmlAttribute(requireNonEmpty(options.stylesheetHref, "stylesheetHref"))}" />`;
+  const joins: boolean[] = [];
+  for (let index = 1; index < pages.length; index += 1) {
+    const previous = pages[index - 1]!;
+    const current = pages[index]!;
+    joins[index - 1] = continuesAcrossSourcePage(
+      previous,
+      current,
+      notesByPage.get(previous.sourcePage) ?? [],
+      notesByPage.get(current.sourcePage) ?? [],
+    );
+  }
+
   const bodyItems: string[] = [];
-  for (const page of pages) {
+  for (const [index, page] of pages.entries()) {
     bodyItems.push(...renderSourcePageItems(
       document,
       page,
       notesByPage.get(page.sourcePage) ?? [],
       rubyMode,
       heading?.sourcePage === page.sourcePage ? heading : undefined,
+      index > 0 && joins[index - 1] === true,
+      index < pages.length - 1 && joins[index] === true,
     ));
   }
   const body = bodyItems.length === 0 ? "" : `\n${bodyItems.join("\n")}\n  `;
