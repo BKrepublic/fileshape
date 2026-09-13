@@ -280,6 +280,9 @@ export function serializeEpubPackage(
     ...(options.unresolvedRubyPolicy === undefined
       ? {}
       : { unresolvedRubyPolicy: options.unresolvedRubyPolicy }),
+    ...(options.structuralHeadings === undefined
+      ? {}
+      : { structuralHeadings: options.structuralHeadings }),
   });
 
   const navigation = serializeEpubNavigation(document, title, language, xhtml.pages, {
