@@ -35,6 +35,7 @@
         "src/document-model.ts",
         "src/document-navigation.ts",
         "src/document-orientation.ts",
+        "src/epub-navigation-text.ts",
         "src/epub-navigation.ts",
         "src/epub-ncx.ts",
         "src/epub-package.ts",
