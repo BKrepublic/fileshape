@@ -36,6 +36,12 @@ function rangeWeight(text: string): number {
   return Math.max(1, [...text].length);
 }
 
+function sourceBackedBlockText(block: DocumentTextBlock): string {
+  return block.inlines
+    .map((inline) => inline.kind === "text" ? inline.text : inline.base.text)
+    .join("");
+}
+
 function blockStyle(block: DocumentTextBlock, page: InspectPage): BlockStyle | undefined {
   const weights = new Map<string, number>();
   for (const range of block.sourceRanges) {
@@ -145,7 +151,7 @@ export function inferStructuralHeadings(
     if (!first || !sourcePage) continue;
     const style = blockStyle(first, sourcePage);
     if (!style || style.key === bodyStyle) continue;
-    const title = first.semanticText.trim();
+    const title = sourceBackedBlockText(first).trim();
     if (title.length === 0) continue;
     const candidate: Candidate = {
       title,
