@@ -116,11 +116,12 @@ async function handleStart(value: unknown): Promise<void> {
   try {
     setupPdfWorker();
     const source = new Uint8Array(start.buffer);
+    const applicationBase = new URL("../", scope.location.href);
     const result = await convertPdfBytesToEpubWithResources(
       source,
       start.sourceName,
       start.options,
-      browserPdfJsResourceConfig(),
+      browserPdfJsResourceConfig(applicationBase),
       webBinaryRuntime,
       {
         throwIfCancelled: () => throwIfCancelled(request),

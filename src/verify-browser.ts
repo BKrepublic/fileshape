@@ -88,6 +88,8 @@ async function main(): Promise<void> {
   if (/https?:\/\//.test(browserSources)) throw new Error("browser application source contains an HTTP(S) runtime URL");
   requireMatch(browserSources, /isOffscreenCanvasSupported:\s*false/, "browser PDF.js config must keep OffscreenCanvas image conversion disabled for Node parity");
   requireMatch(browserSources, /isImageDecoderSupported:\s*false/, "browser PDF.js config must keep ImageDecoder disabled for Node parity");
+  requireMatch(browserSources, /response\.ok/, "browser PDF.js resource probe must reject failed responses");
+  requireMatch(browserSources, /new URL\("\.\.\/", scope\.location\.href\)/, "conversion worker must resolve PDF.js resources from the application base");
   requireMatch(emitted, /PDFWorker/, "PDF.js browser worker code was not emitted");
   if (/CompressionStream/.test(browserSources)) throw new Error("browser binary runtime contains a CompressionStream fallback");
   requireMatch(browserSources, /url\.origin !== self\.location\.origin/, "zlib-ng WASM runtime must be same-origin");

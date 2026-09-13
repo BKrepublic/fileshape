@@ -81,7 +81,8 @@ export async function probePdfJsRuntime(): Promise<PdfJsProbeResult> {
     return unsupported("PDF.js worker must be served by the current origin.");
   }
 
-  const resources = browserPdfJsResourceConfig();
+  const applicationBase = new URL(import.meta.env.BASE_URL, location.href);
+  const resources = browserPdfJsResourceConfig(applicationBase);
   pdfjsLib.GlobalWorkerOptions.workerSrc = workerLocation.href;
   let workerPort: Worker | undefined;
   let loadingTask: pdfjsLib.PDFDocumentLoadingTask | undefined;

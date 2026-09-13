@@ -50,6 +50,17 @@ function assertLocalRequests(requests: string[], pageUrl: string, sourceNames: s
   expect(requests.every((url) => sourceNames.every((sourceName) => !url.includes(sourceName)) && !url.includes("%PDF"))).toBeTruthy();
 }
 
+function assertPdfJsResourcesUseApplicationBase(requests: string[], pageUrl: string): void {
+  const origin = new URL(pageUrl).origin;
+  for (const directory of ["/pdfjs/cmaps/", "/pdfjs/standard_fonts/", "/pdfjs/wasm/", "/pdfjs/iccs/"]) {
+    expect(requests.some((request) => {
+      const url = new URL(request);
+      return url.origin === origin && url.pathname.includes(directory);
+    })).toBeTruthy();
+  }
+  expect(requests.every((request) => !new URL(request).pathname.includes("/assets/pdfjs/"))).toBeTruthy();
+}
+
 function trackBrowserDiagnostics(page: import("@playwright/test").Page): {
   consoleErrors: string[];
   pageErrors: string[];
@@ -88,6 +99,7 @@ test("browser worker converts the public text fixture byte-identically and remai
   await expectRuntimeSupported(page);
   const onlineBytes = await convertFixture(page, fixture, sourceName);
   expect(Buffer.compare(onlineBytes, Buffer.from(expected.bytes))).toBe(0);
+  assertPdfJsResourcesUseApplicationBase(diagnostics.requests, page.url());
 
   assertLocalRequests(diagnostics.requests, page.url(), [sourceName]);
   expect(diagnostics.httpErrors).toEqual([]);
@@ -101,6 +113,7 @@ test("browser worker converts the public text fixture byte-identically and remai
   await expectRuntimeSupported(page);
   const offlineBytes = await convertFixture(page, fixture, sourceName);
   expect(Buffer.compare(offlineBytes, Buffer.from(expected.bytes))).toBe(0);
+  assertPdfJsResourcesUseApplicationBase(diagnostics.requests, page.url());
   await context.setOffline(false);
 
   expect(diagnostics.httpErrors).toEqual([]);
@@ -119,6 +132,7 @@ test("browser worker exercises production PNG deflate byte-identically", async (
   await expectRuntimeSupported(page);
   const browserBytes = await convertFixture(page, fixture, sourceName);
   expect(Buffer.compare(browserBytes, Buffer.from(expected.bytes))).toBe(0);
+  assertPdfJsResourcesUseApplicationBase(diagnostics.requests, page.url());
   assertLocalRequests(diagnostics.requests, page.url(), [sourceName]);
   expect(diagnostics.httpErrors).toEqual([]);
   expect(diagnostics.consoleErrors).toEqual([]);

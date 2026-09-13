@@ -1,19 +1,19 @@
 import type { PdfJsResourceConfig } from "../src/pdf-inspection-model.js";
 
-function sameOriginDirectory(relative: string): string {
-  const appBase = new URL(import.meta.env.BASE_URL, location.href);
-  const url = new URL(relative, appBase);
+function sameOriginDirectory(relative: string, applicationBase: URL): string {
+  const url = new URL(relative, applicationBase);
   if (url.origin !== location.origin) throw new Error(`PDF.js resource escaped application origin: ${relative}`);
   return url.href.endsWith("/") ? url.href : `${url.href}/`;
 }
 
-export function browserPdfJsResourceConfig(): PdfJsResourceConfig {
+export function browserPdfJsResourceConfig(applicationBase: URL): PdfJsResourceConfig {
+  if (applicationBase.origin !== location.origin) throw new Error("PDF.js application base escaped the application origin");
   return {
-    cMapUrl: sameOriginDirectory("pdfjs/cmaps/"),
+    cMapUrl: sameOriginDirectory("pdfjs/cmaps/", applicationBase),
     cMapPacked: true,
-    standardFontDataUrl: sameOriginDirectory("pdfjs/standard_fonts/"),
-    wasmUrl: sameOriginDirectory("pdfjs/wasm/"),
-    iccUrl: sameOriginDirectory("pdfjs/iccs/"),
+    standardFontDataUrl: sameOriginDirectory("pdfjs/standard_fonts/", applicationBase),
+    wasmUrl: sameOriginDirectory("pdfjs/wasm/", applicationBase),
+    iccUrl: sameOriginDirectory("pdfjs/iccs/", applicationBase),
     useWasm: true,
     useWorkerFetch: true,
     useSystemFonts: false,
