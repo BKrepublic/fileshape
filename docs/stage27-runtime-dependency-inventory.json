@@ -40,6 +40,7 @@
         "src/epub-package.ts",
         "src/epub-styles.ts",
         "src/epub-xhtml.ts",
+        "src/heading-inference.ts",
         "src/pdf-document-pipeline.ts",
         "src/pdf-image-adapter.ts",
         "src/pdf-image-resource-core.ts",
