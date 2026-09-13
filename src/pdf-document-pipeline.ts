@@ -21,9 +21,26 @@ export type PdfDocumentPipelineResult = {
   pages: PdfDocumentPipelinePage[];
 };
 
+export type PdfDocumentPipelineControl = {
+  /** Reuse page-local flow analysis already computed during inspection. */
+  precomputedFlows?: ReadonlyMap<number, PageFlowResult>;
+  /** Called after each source page has been reduced to document structure. */
+  onPageBuilt?: (completedPages: number, totalPages: number) => void;
+};
+
 function hasVisibleText(inspection: InspectResult, pageNumber: number): boolean {
   const page = inspection.pages.find((entry) => entry.page === pageNumber);
   return page?.textItems.some((item) => item.text.trim().length > 0) ?? false;
+}
+
+function pageFlow(
+  page: InspectResult["pages"][number],
+  precomputedFlows: ReadonlyMap<number, PageFlowResult> | undefined,
+): PageFlowResult {
+  if (precomputedFlows === undefined) return reconstructPageFlow(page);
+  const flow = precomputedFlows.get(page.page);
+  if (flow === undefined) throw new Error(`missing precomputed page flow for page ${page.page}`);
+  return flow;
 }
 
 /**
@@ -34,10 +51,11 @@ export function buildDocumentFromInspection(
   inspection: InspectResult,
   documentId: string,
   precomputedRubySpans?: ReadonlyMap<number, RubySpan[]>,
+  control?: PdfDocumentPipelineControl,
 ): PdfDocumentPipelineResult {
   const flows = inspection.pages.map((page) => ({
     page,
-    flow: reconstructPageFlow(page),
+    flow: pageFlow(page, control?.precomputedFlows),
   }));
 
   const orientations = resolveDocumentOrientations(
@@ -46,7 +64,7 @@ export function buildDocumentFromInspection(
   const resolvedByPage = new Map(orientations.map((entry) => [entry.page, entry]));
 
   const pipelinePages: PdfDocumentPipelinePage[] = [];
-  const documentPages = flows.map(({ page, flow }) => {
+  const documentPages = flows.map(({ page, flow }, index) => {
     const resolved = resolvedByPage.get(page.page);
     const orientation = resolved?.resolved ?? flow.orientation;
     const layout = reconstructPhysicalLayout(page, orientation, flow.bodyFontSize);
@@ -58,32 +76,36 @@ export function buildDocumentFromInspection(
       throw new Error(`missing precomputed ruby spans for page ${page.page}`);
     }
 
+    let documentPage;
     if (orientation === "unknown") {
       if (hasVisibleText(inspection, page.page)) {
         throw new Error(`page ${page.page} has visible text but unresolved writing orientation`);
       }
-      return {
+      documentPage = {
         page: page.page,
         orientation,
         layout,
         semantic: buildSemanticBlocks(layout, flow.bodyFontSize),
         rubySpans,
       };
+    } else {
+      const semantic = buildSemanticBlocks(layout, flow.bodyFontSize);
+      if (flow.primaryItemCount > 0 && semantic.blocks.length === 0) {
+        throw new Error(`page ${page.page} has primary text but no semantic output`);
+      }
+
+      pipelinePages.push({ page: page.page, flow, orientation });
+      documentPage = {
+        page: page.page,
+        orientation,
+        layout,
+        semantic,
+        rubySpans,
+      };
     }
 
-    const semantic = buildSemanticBlocks(layout, flow.bodyFontSize);
-    if (flow.primaryItemCount > 0 && semantic.blocks.length === 0) {
-      throw new Error(`page ${page.page} has primary text but no semantic output`);
-    }
-
-    pipelinePages.push({ page: page.page, flow, orientation });
-    return {
-      page: page.page,
-      orientation,
-      layout,
-      semantic,
-      rubySpans,
-    };
+    control?.onPageBuilt?.(index + 1, flows.length);
+    return documentPage;
   });
 
   const document = buildFileShapeDocument({ documentId, inspection, pages: documentPages });
