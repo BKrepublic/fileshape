@@ -6,7 +6,8 @@ function mountSiteFooter(): void {
 
   app.insertAdjacentHTML("beforeend", `
     <footer class="site-footer" aria-label="サイト情報">
-      <nav class="site-footer-nav" aria-label="ポリシーと運営情報">
+      <nav class="site-footer-nav" aria-label="ガイド、ポリシーと運営情報">
+        <a href="./guide/">ガイド</a>
         <a href="./about/">運営情報</a>
         <a href="./terms/">利用規約</a>
         <a href="./privacy/">プライバシー</a>
