@@ -11,6 +11,17 @@ export type EpubNavigationOptions = {
   stylesheetHref?: string;
 };
 
+type NavigationPage = {
+  sourcePage: number;
+  sourcePages?: number[];
+  href: string;
+  heading?: {
+    title: string;
+    sourcePage: number;
+    targetId: string;
+  };
+};
+
 function text(value: string): string {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
@@ -27,10 +38,16 @@ export function serializeEpubNavigation(
   document: FileShapeDocument,
   title: string,
   language: string,
-  pages: Array<{ sourcePage: number; href: string }>,
+  pages: NavigationPage[],
   options: EpubNavigationOptions = {},
 ): { xhtml: string; summary: EpubNavigationSummary } {
-  const pageHrefs = new Map(pages.map((page) => [page.sourcePage, page.href]));
+  const pageTargets = new Map<number, string>();
+  for (const page of pages) {
+    for (const sourcePage of page.sourcePages ?? [page.sourcePage]) {
+      pageTargets.set(sourcePage, `${page.href}#source-page-${sourcePage}`);
+    }
+  }
+
   function render(items: DocumentNavigationItem[]): { html: string; unlinked: DocumentNavigationItem[] } {
     const html: string[] = [];
     const unlinked: DocumentNavigationItem[] = [];
@@ -38,7 +55,7 @@ export function serializeEpubNavigation(
       const children = render(item.children);
       const nested = children.html ? `<ol>${children.html}</ol>` : "";
       if (item.target.status === "resolved") {
-        const href = pageHrefs.get(item.target.sourcePage);
+        const href = pageTargets.get(item.target.sourcePage);
         if (href === undefined) throw new Error(`outline target page ${item.target.sourcePage} has no XHTML`);
         html.push(`<li><a href="${attribute(href)}">${label(item)}</a>${nested}</li>`);
         unlinked.push(...children.unlinked);
@@ -52,15 +69,36 @@ export function serializeEpubNavigation(
     }
     return { html: html.join("\n"), unlinked };
   }
+
   const outline = render(document.navigation ?? []);
-  const pageItems = pages.map((page) => `        <li><a href="${attribute(page.href)}">Page ${page.sourcePage}</a></li>`).join("\n");
-  const mode = outline.html ? "outline" : "pages";
-  const items = outline.html || pageItems;
-  const pageList = mode === "outline"
+  const inferredHeadings = pages
+    .filter((page) => page.heading !== undefined)
+    .map((page) => {
+      const heading = page.heading!;
+      return `<li><a href="${attribute(`${page.href}#${heading.targetId}`)}">${text(heading.title)}</a></li>`;
+    })
+    .join("\n");
+  const sourcePages = pages.flatMap((page) => page.sourcePages ?? [page.sourcePage]);
+  const pageItems = sourcePages
+    .map((sourcePage) => {
+      const href = pageTargets.get(sourcePage);
+      if (href === undefined) throw new Error(`source page ${sourcePage} has no XHTML target`);
+      return `        <li><a href="${attribute(href)}">Page ${sourcePage}</a></li>`;
+    })
+    .join("\n");
+  const hasStructuredToc = outline.html.length > 0 || inferredHeadings.length > 0;
+  const mode: EpubNavigationSummary["mode"] = hasStructuredToc ? "outline" : "pages";
+  const items = outline.html || inferredHeadings || pageItems;
+  const pageList = hasStructuredToc
     ? `\n    <nav epub:type="page-list" id="page-list" hidden="hidden">\n      <h2>Pages</h2>\n      <ol>\n${pageItems}\n      </ol>\n    </nav>` : "";
   const retained = outline.unlinked.length > 0
     ? `\n    <section class="fileshape-unlinked-outline">\n      <h2>Other outline entries</h2>\n      <ul>${outline.unlinked.map((item) => `<li>${label(item)}</li>`).join("")}</ul>\n    </section>` : "";
-  const counts = navigationCounts(document.navigation ?? []);
+  const sourceCounts = navigationCounts(document.navigation ?? []);
+  const counts = outline.html.length > 0
+    ? sourceCounts
+    : inferredHeadings.length > 0
+      ? { total: pages.filter((page) => page.heading !== undefined).length, unresolved: 0 }
+      : sourceCounts;
   const stylesheet = options.stylesheetHref === undefined
     ? ""
     : `\n    <link rel="stylesheet" type="text/css" href="${attribute(options.stylesheetHref)}" />`;
