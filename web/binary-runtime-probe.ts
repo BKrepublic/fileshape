@@ -1,4 +1,4 @@
-import { webBinaryRuntime } from "../src/binary-runtime-web.js";
+import { webBinaryRuntime } from "./zlib-ng-binary-runtime.js";
 
 export type BinaryRuntimeProbeResult = {
   state: "supported" | "unsupported";
@@ -23,9 +23,9 @@ export async function probeBinaryRuntime(): Promise<BinaryRuntimeProbeResult> {
     }
     const compressed = await webBinaryRuntime.deflateZlib(FIXTURE);
     if (hex(compressed) !== EXPECTED_DEFLATE) {
-      return { state: "unsupported", message: "CompressionStream deflate が受理済みzlibバイト列と一致しません。" };
+      return { state: "unsupported", message: "pinned zlib-ng WASM deflate が受理済みzlibバイト列と一致しません。" };
     }
-    return { state: "supported", message: "Web Crypto SHA-256 と CompressionStream deflate を確認しました。" };
+    return { state: "supported", message: "Web Crypto SHA-256 と pinned zlib-ng WASM deflate を確認しました。" };
   } catch (error) {
     return {
       state: "unsupported",

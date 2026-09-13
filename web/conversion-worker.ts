@@ -1,6 +1,6 @@
 import { GlobalWorkerOptions } from "pdfjs-dist/legacy/build/pdf.mjs";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.mjs?url";
-import { webBinaryRuntime } from "../src/binary-runtime-web.js";
+import { webBinaryRuntime } from "./zlib-ng-binary-runtime.js";
 import {
   BrowserContractError,
   BrowserConversionRequestRegistry,
@@ -152,7 +152,7 @@ async function handleStart(value: unknown): Promise<void> {
       post({ kind: "cancelled", requestId: start.requestId });
     } else {
       const message = error instanceof Error ? error.message : String(error);
-      const code: BrowserDiagnosticCode = /Worker|worker|Web Crypto|CompressionStream|PDF\.js resource|origin/.test(message)
+      const code: BrowserDiagnosticCode = /Worker|worker|Web Crypto|zlib-ng WASM|PDF\.js resource|origin/.test(message)
         ? "unsupported-runtime"
         : "unexpected-worker-failure";
       fail(start.requestId, code, message);

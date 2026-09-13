@@ -165,7 +165,7 @@ function renderRuntimeReadiness(): void {
   runtimeBadge.dataset.state = supported ? "supported" : "unsupported";
   runtimeBadge.textContent = supported ? "利用可能" : "要確認";
   runtimeMessage.textContent = supported
-    ? "PDF.js 実ワーカー、same-origin変換資源、Web Crypto SHA-256、CompressionStream deflate を確認しました。"
+    ? "PDF.js 実ワーカー、same-origin変換資源、Web Crypto SHA-256、pinned zlib-ng WASM deflate を確認しました。"
     : [pdfJsReady ? "" : pdfJsMessage, binaryRuntimeReady ? "" : binaryRuntimeMessage].filter(Boolean).join(" ");
   if (selected && conversionStatus && activeWorker === undefined) {
     conversionStatus.textContent = supported ? "変換できます。" : "この環境では変換を開始できません。";
