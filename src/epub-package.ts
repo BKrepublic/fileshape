@@ -1,5 +1,6 @@
 import { sha256HexSync } from "./binary-runtime.js";
 import type { FileShapeDocument } from "./document-model.js";
+import { serializeLegacyNcx } from "./epub-ncx.js";
 import { serializeEpubNavigation, type EpubNavigationSummary } from "./epub-navigation.js";
 import {
   defaultEpubStyles,
@@ -16,6 +17,7 @@ const EPUB_MIMETYPE = "application/epub+zip";
 const CONTAINER_PATH = "META-INF/container.xml";
 const PACKAGE_PATH = "OEBPS/package.opf";
 const NAV_PATH = "OEBPS/nav.xhtml";
+const NCX_PATH = "OEBPS/toc.ncx";
 const STYLES_PATH = `OEBPS/${EPUB_STYLES_PATH}`;
 const UTF8_FLAG = 0x0800;
 
@@ -115,7 +117,7 @@ function packageOpf(options: {
     ? ""
     : ` page-progression-direction="${options.pageProgressionDirection}"`;
 
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="pub-id" xml:lang="${xmlAttr(options.language)}">\n  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">\n    <dc:identifier id="pub-id">${xmlText(options.identifier)}</dc:identifier>\n    <dc:title>${xmlText(options.title)}</dc:title>\n    <dc:language>${xmlText(options.language)}</dc:language>${creator}\n    <meta property="dcterms:modified">${xmlText(options.modified)}</meta>\n  </metadata>\n  <manifest>\n    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>\n    <item id="fileshape-style" href="${EPUB_STYLES_PATH}" media-type="text/css"/>\n${pageManifest}\n  </manifest>\n  <spine${progression}>\n${spine}\n  </spine>\n</package>\n`;
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="pub-id" xml:lang="${xmlAttr(options.language)}">\n  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">\n    <dc:identifier id="pub-id">${xmlText(options.identifier)}</dc:identifier>\n    <dc:title>${xmlText(options.title)}</dc:title>\n    <dc:language>${xmlText(options.language)}</dc:language>${creator}\n    <meta property="dcterms:modified">${xmlText(options.modified)}</meta>\n  </metadata>\n  <manifest>\n    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>\n    <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>\n    <item id="fileshape-style" href="${EPUB_STYLES_PATH}" media-type="text/css"/>\n${pageManifest}\n  </manifest>\n  <spine${progression} toc="ncx">\n${spine}\n  </spine>\n</package>\n`;
 }
 
 function u16(value: number): Uint8Array {
@@ -283,6 +285,7 @@ export function serializeEpubPackage(
   const navigation = serializeEpubNavigation(document, title, language, xhtml.pages, {
     stylesheetHref: EPUB_STYLES_HREF_FROM_NAV,
   });
+  const ncx = serializeLegacyNcx(document, title, identifier, xhtml.pages);
   const files: EpubPackageFile[] = [
     textFile("mimetype", EPUB_MIMETYPE, EPUB_MIMETYPE),
     textFile(CONTAINER_PATH, "application/xml", containerXml()),
@@ -305,6 +308,7 @@ export function serializeEpubPackage(
     })),
     textFile(STYLES_PATH, "text/css", defaultEpubStyles()),
     textFile(NAV_PATH, "application/xhtml+xml", navigation.xhtml),
+    textFile(NCX_PATH, "application/x-dtbncx+xml", ncx),
     ...imageResources.map((resource) => ({
       path: `OEBPS/${imageHref(resource.contentHash)}`,
       mediaType: resource.mediaType,
