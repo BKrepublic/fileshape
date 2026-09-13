@@ -13,7 +13,7 @@ import { inferStructuralHeadings } from "./heading-inference.js";
 import { buildDocumentFromInspection } from "./pdf-document-pipeline.js";
 import { inspectPdfBytes } from "./pdf-inspector-core.js";
 import { associateRubySpans, type RubySpan } from "./ruby-spans.js";
-import { reconstructPageFlow, type PageFlowResult } from "./text-flow.js";
+import { reconstructPageFlow } from "./text-flow.js";
 import type { EpubNavigationSummary } from "./epub-navigation.js";
 import type { EpubRubyMode } from "./epub-xhtml.js";
 import type { PdfJsResourceConfig } from "./pdf-inspection-model.js";
@@ -92,7 +92,6 @@ export async function convertPdfBytesToEpubWithResources(
 
   let totalUnits: number | undefined;
   const precomputedRubySpans = new Map<number, RubySpan[]>();
-  const precomputedFlows = new Map<number, PageFlowResult>();
 
   const inspection = await inspectPdfBytes(
     sourceBytes,
@@ -110,11 +109,10 @@ export async function convertPdfBytesToEpubWithResources(
         control?.onProgress?.({ phase: "inspecting-pages", completedUnits: 1, totalUnits });
       },
       onPageInspected: (completedPages, _totalPages, page) => {
-        // Ruby association and flow reconstruction need page geometry only while
-        // this page is live. Preserve their compact results, then release the
-        // larger transient evidence before inspection advances.
+        // Ruby association needs glyph geometry only while this page is live.
+        // Keep the compact source-backed result and drop the heavy glyph
+        // evidence before inspection advances to the next page.
         const flow = reconstructPageFlow(page);
-        precomputedFlows.set(page.page, flow);
 
         precomputedRubySpans.set(
           page.page,
@@ -164,7 +162,6 @@ export async function convertPdfBytesToEpubWithResources(
     documentId,
     precomputedRubySpans,
     {
-      precomputedFlows,
       onPageBuilt: (completedPages) => {
         control?.throwIfCancelled?.();
         control?.onProgress?.({
