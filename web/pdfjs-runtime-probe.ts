@@ -1,5 +1,5 @@
-import * as pdfjsLib from "pdfjs-dist/build/pdf.mjs";
-import workerUrl from "pdfjs-dist/build/pdf.worker.mjs?url";
+import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
+import workerUrl from "pdfjs-dist/legacy/build/pdf.worker.mjs?url";
 import { browserPdfJsResourceConfig } from "./pdfjs-resource-config.js";
 
 export type PdfJsProbeResult = {
@@ -17,7 +17,7 @@ class ProbeTimeoutError extends Error {
   }
 }
 
-async function within<T>(promise: Promise<T>, stage: string, timeoutMs = 8_000): Promise<T> {
+async function within<T>(promise: Promise<T>, stage: string, timeoutMs = 30_000): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([
@@ -95,9 +95,9 @@ export async function probePdfJsRuntime(): Promise<PdfJsProbeResult> {
       requireResource(new URL("CGATS001Compat-v2-micro.icc", resources.iccUrl!).href, "PDF.js ICC resource"),
     ]);
 
-    // PDF.js's browser entry itself uses GlobalWorkerOptions.workerPort for an
-    // explicitly created module worker. Let getDocument own the PDFWorker
-    // wrapper so the public adapter does not depend on its constructor typing.
+    // Use the same legacy PDF.js browser build and worker used by the real
+    // conversion worker. A readiness probe must not reject a browser through a
+    // different code path from production conversion.
     workerPort = new Worker(workerLocation, { type: "module", name: "fileshape-pdfjs-probe" });
     pdfjsLib.GlobalWorkerOptions.workerPort = workerPort;
     if (pdfjsLib.GlobalWorkerOptions.workerPort !== workerPort) {
