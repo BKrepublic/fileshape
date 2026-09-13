@@ -1,0 +1,28 @@
+.site-footer {
+  width: min(100% - 32px, 760px);
+  margin: 0 auto;
+  padding: 0 0 32px;
+  color: var(--md-on-surface-variant);
+  font-size: 0.78rem;
+}
+
+.site-footer-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding-top: 18px;
+  border-top: 1px solid color-mix(in srgb, var(--md-outline) 20%, transparent);
+}
+
+.site-footer a {
+  color: var(--md-primary);
+  text-decoration: none;
+}
+
+.site-footer a:hover {
+  text-decoration: underline;
+}
+
+.site-footer p {
+  margin: 12px 0 0;
+}
