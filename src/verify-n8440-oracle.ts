@@ -186,7 +186,8 @@ async function main(): Promise<void> {
     structuralFailures.push(`inferred headings too few: ${inferredHeadings.length} < ${EXPECTED_CHAPTERS}`);
   }
 
-  const firstChapter = xhtml.pages.find((page) => page.heading?.title.startsWith("01"));
+  const firstChapter = xhtml.pages.find((page) =>
+    page.heading !== undefined && normalizeComparable(page.heading.title).startsWith("01"));
   if (!firstChapter) {
     structuralFailures.push("chapter 01 logical XHTML not found");
   } else {
@@ -203,9 +204,16 @@ async function main(): Promise<void> {
 
   const epub3Nav = serializeEpubNavigation(document, "N8440FE", "ja", xhtml.pages).xhtml;
   const legacyNcx = serializeLegacyNcx(document, "N8440FE", "urn:fileshape:n8440-oracle", xhtml.pages);
+  const normalizedEpub3Nav = normalizeComparable(epub3Nav);
+  const normalizedLegacyNcx = normalizeComparable(legacyNcx);
   for (const heading of ["01天使様は水も滴るいい女", "02天使様の申し出"]) {
-    if (!epub3Nav.includes(heading)) structuralFailures.push(`EPUB3 nav missing heading: ${heading}`);
-    if (!legacyNcx.includes(heading)) structuralFailures.push(`NCX missing heading: ${heading}`);
+    const normalizedHeading = normalizeComparable(heading);
+    if (!normalizedEpub3Nav.includes(normalizedHeading)) {
+      structuralFailures.push(`EPUB3 nav missing heading: ${heading}`);
+    }
+    if (!normalizedLegacyNcx.includes(normalizedHeading)) {
+      structuralFailures.push(`NCX missing heading: ${heading}`);
+    }
   }
 
   console.log("");
