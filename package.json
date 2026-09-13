@@ -29,6 +29,7 @@
     "compare:flow": "tsx src/pdf-flow-compare.ts",
     "verify:semantic": "tsx src/verify-semantic-samples.ts",
     "verify:stage2": "tsx src/verify-stage2-corpus-v2.ts",
+    "verify:n8440-oracle": "tsx src/verify-n8440-oracle.ts",
     "verify:epub": "tsx src/verify-epub-corpus.ts",
     "setup:epubcheck": "tsx src/setup-epubcheck.ts",
     "verify:epubcheck": "tsx --test test/epubcheck.integration.ts",
