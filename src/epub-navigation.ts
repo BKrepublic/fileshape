@@ -1,5 +1,6 @@
 import type { FileShapeDocument } from "./document-model.js";
 import { navigationCounts, type DocumentNavigationItem } from "./document-navigation.js";
+import { normalizeEpubNavigationText } from "./epub-navigation-text.js";
 
 export type EpubNavigationSummary = {
   mode: "outline" | "pages";
@@ -31,7 +32,8 @@ function attribute(value: string): string {
 }
 
 function label(item: DocumentNavigationItem): string {
-  return text(item.title.trim().length > 0 ? item.title : "Untitled entry");
+  const title = item.title.trim().length > 0 ? item.title : "Untitled entry";
+  return text(normalizeEpubNavigationText(title));
 }
 
 export function serializeEpubNavigation(
@@ -75,7 +77,7 @@ export function serializeEpubNavigation(
     .filter((page) => page.heading !== undefined)
     .map((page) => {
       const heading = page.heading!;
-      return `<li><a href="${attribute(`${page.href}#${heading.targetId}`)}">${text(heading.title)}</a></li>`;
+      return `<li><a href="${attribute(`${page.href}#${heading.targetId}`)}">${text(normalizeEpubNavigationText(heading.title))}</a></li>`;
     })
     .join("\n");
   const sourcePages = pages.flatMap((page) => page.sourcePages ?? [page.sourcePage]);
