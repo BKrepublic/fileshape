@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { DocumentTextBlock, FileShapeDocument } from "../src/document-model.js";
+import { buildDocumentNavigation } from "../src/document-navigation.js";
 import { serializeLegacyNcx } from "../src/epub-ncx.js";
 import { serializeEpubXhtml } from "../src/epub-xhtml.js";
 
@@ -56,30 +57,29 @@ test("legacy NCX mirrors source-backed structural headings for older reading sys
 
 test("NCX reuses playOrder when multiple outline labels resolve to the same target", () => {
   const document = fixture();
-  document.navigation = [
+  const outline = [
     {
-      kind: "outline",
       title: "Parent label",
-      sourceOutlinePath: [0],
-      target: { status: "resolved", sourcePage: 1 },
-      children: [
+      destination: null,
+      target: { status: "resolved" as const, sourcePage: 1 },
+      items: [
         {
-          kind: "outline",
           title: "Child label",
-          sourceOutlinePath: [0, 0],
-          target: { status: "resolved", sourcePage: 1 },
-          children: [],
+          destination: null,
+          target: { status: "resolved" as const, sourcePage: 1 },
+          items: [],
         },
       ],
     },
     {
-      kind: "outline",
       title: "Next label",
-      sourceOutlinePath: [1],
-      target: { status: "resolved", sourcePage: 2 },
-      children: [],
+      destination: null,
+      target: { status: "resolved" as const, sourcePage: 2 },
+      items: [],
     },
   ];
+  document.source.outline = outline;
+  document.navigation = buildDocumentNavigation(outline);
 
   const pages = serializeEpubXhtml(document).pages;
   const ncx = serializeLegacyNcx(document, "Book", "urn:test:ncx", pages);
