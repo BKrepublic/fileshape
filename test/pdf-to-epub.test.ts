@@ -104,19 +104,22 @@ test("document context resolves a short unknown page between matching orientatio
   assert.equal(result.document.pages[1]?.blocks[0]?.inlines[0]?.kind, "text");
 });
 
-test("document build reports source-page progress", () => {
+test("document build reports both flow-analysis and page-build progress", () => {
   const source = inspection([
     page(1, [item("first horizontal line", 100, 700, 180, 10)]),
     page(2, [item("second horizontal line", 100, 700, 190, 10)]),
   ]);
-  const progress: Array<[number, number]> = [];
+  const flowProgress: Array<[number, number]> = [];
+  const pageProgress: Array<[number, number]> = [];
 
   const result = buildDocumentFromInspection(source, "doc:progress", undefined, {
-    onPageBuilt: (completedPages, totalPages) => progress.push([completedPages, totalPages]),
+    onFlowAnalyzed: (completedPages, totalPages) => flowProgress.push([completedPages, totalPages]),
+    onPageBuilt: (completedPages, totalPages) => pageProgress.push([completedPages, totalPages]),
   });
 
   assert.equal(result.document.pages.length, 2);
-  assert.deepEqual(progress, [[1, 2], [2, 2]]);
+  assert.deepEqual(flowProgress, [[1, 2], [2, 2]]);
+  assert.deepEqual(pageProgress, [[1, 2], [2, 2]]);
 });
 
 test("text-bearing page with unresolved orientation fails closed", () => {
