@@ -24,26 +24,27 @@ function median(values: number[]): number {
   return ((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2;
 }
 
-function itemWeight(item: InspectTextItem): number {
-  return Math.max(1, [...item.text].length);
-}
-
 function styleKey(item: InspectTextItem): string {
   // Font names are opaque PDF evidence. Do not interpret words such as Bold or
   // author-specific naming conventions; recurrence within one source document
-  // is the only thing that matters here.
-  return `${item.fontName}\u0000${item.fontSize.toFixed(3)}`;
+  // is the only thing that matters here. A small numeric bucket absorbs harmless
+  // floating-point noise while retaining materially different text sizes.
+  return `${item.fontName}\u0000${item.fontSize.toFixed(2)}`;
+}
+
+function rangeWeight(text: string): number {
+  return Math.max(1, [...text].length);
 }
 
 function blockStyle(block: DocumentTextBlock, page: InspectPage): BlockStyle | undefined {
-  const sourceIndexes = new Set(block.sourceRanges.map((range) => range.itemIndex));
   const weights = new Map<string, number>();
-  for (let index = 0; index < page.textItems.length; index += 1) {
-    if (!sourceIndexes.has(index)) continue;
-    const item = page.textItems[index];
-    if (!item || item.text.trim().length === 0) continue;
+  for (const range of block.sourceRanges) {
+    const item = page.textItems[range.itemIndex];
+    if (!item) continue;
+    const slice = item.text.slice(range.charStart, range.charEnd);
+    if (slice.trim().length === 0) continue;
     const key = styleKey(item);
-    weights.set(key, (weights.get(key) ?? 0) + itemWeight(item));
+    weights.set(key, (weights.get(key) ?? 0) + rangeWeight(slice));
   }
   let best: BlockStyle | undefined;
   for (const [key, weight] of weights) {
@@ -63,8 +64,7 @@ function globalBodyStyle(document: FileShapeDocument, inspection: InspectResult)
     for (const block of page.blocks) {
       const style = blockStyle(block, sourcePage);
       if (!style) continue;
-      const weight = Math.max(style.weight, [...block.semanticText].length);
-      totals.set(style.key, (totals.get(style.key) ?? 0) + weight);
+      totals.set(style.key, (totals.get(style.key) ?? 0) + style.weight);
     }
   }
   let bestKey: string | undefined;
@@ -100,10 +100,11 @@ function selectMajorCandidates(candidates: Candidate[], pageCount: number): Cand
   const medianGap = median(gaps);
   if (!modal || medianGap <= 0) return ordered;
 
-  // Some PDFs use the same visual heading style for short prefatory/afterword
-  // pages and for the real recurring section starts. Detect that only when the
-  // document itself exposes a strong short-gap burst. No title text, numbering,
-  // language, author, filename or site convention participates in this decision.
+  // Some documents reuse one visual heading style for short auxiliary sections
+  // as well as recurring major section starts. Split them only when the source
+  // itself exposes a strong short-gap population. If the cadence is not clearly
+  // separable, retain the structural candidates rather than reading semantics
+  // out of their words.
   const burstMinimum = Math.max(2, Math.ceil(gaps.length * 0.2));
   const hasShortGapBurst = modal.count >= burstMinimum && modal.value < medianGap * 0.75;
   if (!hasShortGapBurst) return ordered;
@@ -126,8 +127,8 @@ function selectMajorCandidates(candidates: Candidate[], pageCount: number): Cand
  *   document-internal cadence split may distinguish the major starts.
  *
  * If a PDF does not encode a repeatable structural distinction, this returns no
- * heading rather than guessing from words such as "Chapter", digits, punctuation,
- * author/site conventions or filenames.
+ * heading rather than guessing from words, digits, punctuation, language,
+ * author/site conventions, filenames or external metadata.
  */
 export function inferStructuralHeadings(
   document: FileShapeDocument,
