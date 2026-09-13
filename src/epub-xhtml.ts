@@ -105,7 +105,9 @@ function renderBlock(
   const attrs = `data-source-page="${block.sourcePage}" data-semantic-block="${block.semanticBlockIndex}"`;
   if (options.continueFromPrevious) {
     const fragment = `<span class="fileshape-block-continuation" ${attrs}>${body}</span>`;
-    return options.continueToNext ? `    ${fragment}` : `    ${fragment}</p>`;
+    // This fragment is emitted inside an already-open <p xml:space="preserve">.
+    // Never add serializer indentation here: it becomes visible EPUB text.
+    return options.continueToNext ? fragment : `${fragment}</p>`;
   }
 
   const open = `    <p class="fileshape-block" ${attrs} xml:space="preserve">${body}`;
@@ -284,9 +286,8 @@ function renderSourcePageItems(
         : left.displayBounds.top - right.displayBounds.top || left.displayBounds.left - right.displayBounds.left) ||
     left.operatorIndex - right.operatorIndex || left.occurrenceIndex - right.occurrenceIndex);
 
-  const bodyItems: string[] = [
-    `    <span id="${pageTargetId(page.sourcePage)}" class="fileshape-source-page-marker" data-source-page="${page.sourcePage}"></span>`,
-  ];
+  const marker = `<span id="${pageTargetId(page.sourcePage)}" class="fileshape-source-page-marker" data-source-page="${page.sourcePage}"></span>`;
+  const bodyItems: string[] = [continueFromPrevious ? marker : `    ${marker}`];
   for (let gap = 0; gap <= page.blocks.length; gap += 1) {
     for (const occurrence of imagesByGap.get(gap) ?? []) {
       const resource = resources.get(occurrence.resourceId);
