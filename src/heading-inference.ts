@@ -122,19 +122,41 @@ function selectMajorCandidates(candidates: Candidate[], pageCount: number): Cand
   });
 }
 
+function dominantRecurringClusters(
+  candidatesByStyle: Map<string, Candidate[]>,
+  minimumRecurrence: number,
+): Candidate[][] {
+  const eligible = [...candidatesByStyle.values()]
+    .filter((cluster) => cluster.length >= minimumRecurrence)
+    .sort((left, right) => right.length - left.length || left[0]!.styleKey.localeCompare(right[0]!.styleKey));
+
+  if (eligible.length <= 1) return eligible;
+  const strongest = eligible[0]!;
+  const runnerUp = eligible[1]!;
+
+  // A few recurring non-body styles are common in PDFs: cover metadata, running
+  // labels, font-subset aliases, notices, and other decoration can all lead a
+  // page. Treating every style that happens three times as a chapter signal is
+  // unsafe. Infer a heading family only when one recurring page-leading style is
+  // clearly dominant within this document. If two families compete at similar
+  // strength, fail closed instead of inventing structure.
+  const clearDominance = strongest.length >= runnerUp.length * 3;
+  return clearDominance ? [strongest] : [];
+}
+
 /**
  * Infer only source-backed, recurring structural headings.
  *
  * Evidence is deliberately content-agnostic:
  * - the block leads a source page;
  * - its dominant PDF font/size style differs from the document body style;
- * - that style recurs across the document;
- * - when the same style is also used for short auxiliary sections, only a
+ * - one recurring page-leading style is clearly dominant within the document;
+ * - when that same style is also used for short auxiliary sections, only a
  *   document-internal cadence split may distinguish the major starts.
  *
- * If a PDF does not encode a repeatable structural distinction, this returns no
- * heading rather than guessing from words, digits, punctuation, language,
- * author/site conventions, filenames or external metadata.
+ * If a PDF does not encode a repeatable and unambiguous structural distinction,
+ * this returns no heading rather than guessing from words, digits, punctuation,
+ * language, author/site conventions, filenames or external metadata.
  */
 export function inferStructuralHeadings(
   document: FileShapeDocument,
@@ -166,8 +188,7 @@ export function inferStructuralHeadings(
 
   const minimumRecurrence = document.pages.length >= 20 ? 3 : 2;
   const selected: Candidate[] = [];
-  for (const cluster of candidatesByStyle.values()) {
-    if (cluster.length < minimumRecurrence) continue;
+  for (const cluster of dominantRecurringClusters(candidatesByStyle, minimumRecurrence)) {
     selected.push(...selectMajorCandidates(cluster, inspection.pageCount));
   }
 
