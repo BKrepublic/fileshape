@@ -150,6 +150,7 @@ export async function convertPdfBytesToEpubWithResources(
   );
   control?.throwIfCancelled?.();
   if (totalUnits === undefined) totalUnits = inspection.pageCount * 3 + 2;
+  const buildTotalUnits = totalUnits;
 
   const buildStartUnits = 1 + inspection.pageCount;
   control?.onProgress?.({
@@ -167,7 +168,7 @@ export async function convertPdfBytesToEpubWithResources(
         control?.onProgress?.({
           phase: "building-document",
           completedUnits: buildStartUnits + completedPages,
-          totalUnits,
+          totalUnits: buildTotalUnits,
         });
       },
       onPageBuilt: (completedPages) => {
@@ -175,7 +176,7 @@ export async function convertPdfBytesToEpubWithResources(
         control?.onProgress?.({
           phase: "building-document",
           completedUnits: buildStartUnits + inspection.pageCount + completedPages,
-          totalUnits,
+          totalUnits: buildTotalUnits,
         });
       },
     },
