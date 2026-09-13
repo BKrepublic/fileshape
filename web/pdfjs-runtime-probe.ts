@@ -1,5 +1,6 @@
 import * as pdfjsLib from "pdfjs-dist/build/pdf.mjs";
 import workerUrl from "pdfjs-dist/build/pdf.worker.mjs?url";
+import { browserPdfJsResourceConfig } from "./pdfjs-resource-config.js";
 
 export type PdfJsProbeResult = {
   state: "supported" | "unsupported";
@@ -65,17 +66,35 @@ function unsupported(message: string, realWorkerPort = false): PdfJsProbeResult 
   return { state: "unsupported", message, realWorkerPort };
 }
 
+async function requireResource(url: string, label: string): Promise<void> {
+  const resource = new URL(url, location.href);
+  if (resource.origin !== location.origin) throw new Error(`${label} escaped the application origin`);
+  const response = await within(fetch(resource.href), `${label} fetch`);
+  if (!response.ok) throw new Error(`${label} returned HTTP ${response.status}`);
+  const bytes = await within(response.arrayBuffer(), `${label} read`);
+  if (bytes.byteLength === 0) throw new Error(`${label} is empty`);
+}
+
 export async function probePdfJsRuntime(): Promise<PdfJsProbeResult> {
   const workerLocation = new URL(workerUrl, location.href);
   if (workerLocation.origin !== location.origin) {
     return unsupported("PDF.js worker must be served by the current origin.");
   }
 
+  const applicationBase = new URL(import.meta.env.BASE_URL, location.href);
+  const resources = browserPdfJsResourceConfig(applicationBase);
   pdfjsLib.GlobalWorkerOptions.workerSrc = workerLocation.href;
   let workerPort: Worker | undefined;
   let loadingTask: pdfjsLib.PDFDocumentLoadingTask | undefined;
   let document: pdfjsLib.PDFDocumentProxy | undefined;
   try {
+    await Promise.all([
+      requireResource(new URL("Adobe-Japan1-UCS2.bcmap", resources.cMapUrl).href, "PDF.js CMap resource"),
+      requireResource(new URL("FoxitSymbol.pfb", resources.standardFontDataUrl).href, "PDF.js standard font resource"),
+      requireResource(new URL("qcms_bg.wasm", resources.wasmUrl!).href, "PDF.js WASM resource"),
+      requireResource(new URL("CGATS001Compat-v2-micro.icc", resources.iccUrl!).href, "PDF.js ICC resource"),
+    ]);
+
     // PDF.js's browser entry itself uses GlobalWorkerOptions.workerPort for an
     // explicitly created module worker. Let getDocument own the PDFWorker
     // wrapper so the public adapter does not depend on its constructor typing.
@@ -86,7 +105,7 @@ export async function probePdfJsRuntime(): Promise<PdfJsProbeResult> {
     }
 
     const data = fixturePdf().slice();
-    loadingTask = pdfjsLib.getDocument({ data, useSystemFonts: false, disableFontFace: true });
+    loadingTask = pdfjsLib.getDocument({ data, ...resources });
     document = await within(loadingTask.promise, "document load");
     if (document.numPages !== 1) return unsupported("PDF.js fixture page count was unexpected.", true);
     const page = await within(document.getPage(1), "page load");
@@ -96,11 +115,17 @@ export async function probePdfJsRuntime(): Promise<PdfJsProbeResult> {
       .join("")
       .trim();
     if (text !== "FileShape browser probe") return unsupported("PDF.js fixture text was unexpected.", true);
-    return { state: "supported", message: "PDF.js の実ワーカーと1ページfixtureを確認しました。", pageCount: 1, text, realWorkerPort: true };
+    return {
+      state: "supported",
+      message: "PDF.js 実ワーカーとsame-origin CMap・標準フォント・WASM・ICC資源を確認しました。",
+      pageCount: 1,
+      text,
+      realWorkerPort: true,
+    };
   } catch (error) {
     const message = error instanceof ProbeTimeoutError
       ? error.message
-      : "PDF.js のブラウザ実行環境を確認できませんでした。";
+      : error instanceof Error ? error.message : "PDF.js のブラウザ実行環境を確認できませんでした。";
     return unsupported(message, workerPort !== undefined);
   } finally {
     if (document) {

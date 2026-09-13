@@ -3,10 +3,10 @@ import { defineConfig } from "@playwright/test";
 const localChromium = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE?.trim();
 
 export default defineConfig({
-  testDir: "./browser-test",
+  testDir: "./browser-private-test",
   fullyParallel: false,
   forbidOnly: true,
-  timeout: 30_000,
+  timeout: 7_200_000,
   reporter: "line",
   use: {
     baseURL: "http://127.0.0.1:4173",

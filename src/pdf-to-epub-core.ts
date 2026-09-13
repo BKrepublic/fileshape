@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { assertSha256Hex, type BinaryRuntime } from "./binary-runtime.js";
 import type { UnresolvedRubyPolicy } from "./content-policy.js";
 import {
   resolveCoverImageResourceId,
@@ -33,13 +33,32 @@ export type PdfBytesToEpubResult = {
   coverImageResourceId?: string;
 };
 
+export type PdfConversionProgressPhase =
+  | "loading-pdf"
+  | "inspecting-pages"
+  | "building-document"
+  | "serializing-epub";
+
+export type PdfConversionProgress = {
+  phase: PdfConversionProgressPhase;
+  completedUnits: number;
+  totalUnits?: number;
+};
+
+export type PdfConversionControl = {
+  /** Progress is monotonic across the complete conversion, not reset per phase. */
+  onProgress?: (progress: PdfConversionProgress) => void;
+  /** Throw to abort at the next source-safe boundary. */
+  throwIfCancelled?: () => void;
+};
+
 function defaultTitle(sourceName: string): string {
   const lastDot = sourceName.lastIndexOf(".");
   return lastDot > 0 ? sourceName.slice(0, lastDot) : sourceName;
 }
 
-function sourceId(bytes: Uint8Array): string {
-  return `urn:sha256:${createHash("sha256").update(bytes).digest("hex")}`;
+async function sourceId(bytes: Uint8Array, runtime: BinaryRuntime): Promise<string> {
+  return `urn:sha256:${assertSha256Hex(await runtime.sha256Hex(bytes))}`;
 }
 
 function validateSourceInput(sourceBytes: Uint8Array, sourceName: string): void {
@@ -55,17 +74,55 @@ export async function convertPdfBytesToEpubWithResources(
   sourceName: string,
   options: PdfToEpubOptions | undefined,
   resources: PdfJsResourceConfig,
+  binaryRuntime: BinaryRuntime,
+  control?: PdfConversionControl,
 ): Promise<PdfBytesToEpubResult> {
   validateSourceInput(sourceBytes, sourceName);
+  control?.throwIfCancelled?.();
   const effectiveOptions = options ?? {};
-  const documentId = sourceId(sourceBytes);
+  control?.onProgress?.({ phase: "loading-pdf", completedUnits: 0 });
+  const documentId = await sourceId(sourceBytes, binaryRuntime);
+  control?.throwIfCancelled?.();
+
+  let totalUnits: number | undefined;
   const inspection = await inspectPdfBytes(
     sourceBytes,
     sourceName,
     { includeGlyphs: true, includeImages: true },
     resources,
+    binaryRuntime,
+    {
+      ...(control?.throwIfCancelled === undefined ? {} : { throwIfCancelled: control.throwIfCancelled }),
+      onDocumentLoaded: (pageCount) => {
+        totalUnits = pageCount + 3;
+        control?.onProgress?.({ phase: "loading-pdf", completedUnits: 1, totalUnits });
+        control?.onProgress?.({ phase: "inspecting-pages", completedUnits: 1, totalUnits });
+      },
+      onPageInspected: (completedPages) => {
+        if (totalUnits === undefined) throw new Error("conversion progress total is unavailable after PDF load");
+        control?.onProgress?.({
+          phase: "inspecting-pages",
+          completedUnits: 1 + completedPages,
+          totalUnits,
+        });
+      },
+    },
   );
+  control?.throwIfCancelled?.();
+  if (totalUnits === undefined) totalUnits = inspection.pageCount + 3;
+
+  control?.onProgress?.({
+    phase: "building-document",
+    completedUnits: 1 + inspection.pageCount,
+    totalUnits,
+  });
   const { document } = buildDocumentFromInspection(inspection, documentId);
+  control?.throwIfCancelled?.();
+  control?.onProgress?.({
+    phase: "building-document",
+    completedUnits: 2 + inspection.pageCount,
+    totalUnits,
+  });
   const unresolvedAnnotationCount = document.pages.reduce(
     (count, page) => count + page.unresolvedRuby.length,
     0,
@@ -76,6 +133,12 @@ export async function convertPdfBytesToEpubWithResources(
     ? undefined
     : resolveCoverImageResourceId(document, effectiveOptions.coverOccurrence);
 
+  control?.throwIfCancelled?.();
+  control?.onProgress?.({
+    phase: "serializing-epub",
+    completedUnits: 2 + inspection.pageCount,
+    totalUnits,
+  });
   const epub = serializeEpubPackage(document, {
     title: effectiveOptions.title ?? defaultTitle(sourceName),
     identifier: effectiveOptions.identifier ?? documentId,
@@ -89,6 +152,12 @@ export async function convertPdfBytesToEpubWithResources(
       : { pageProgressionDirection: effectiveOptions.pageProgressionDirection as EpubPageProgressionDirection }),
     ...(coverImageResourceId === undefined ? {} : { coverImageResourceId }),
     unresolvedRubyPolicy: effectiveUnresolvedPolicy,
+  });
+  control?.throwIfCancelled?.();
+  control?.onProgress?.({
+    phase: "serializing-epub",
+    completedUnits: 3 + inspection.pageCount,
+    totalUnits,
   });
 
   const outputBytes = new Uint8Array(epub.bytes);

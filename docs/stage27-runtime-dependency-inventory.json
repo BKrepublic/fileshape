@@ -4,17 +4,15 @@
     {
       "path": "src/pdf-inspector-core.ts",
       "directNodeBuiltins": [],
-      "transitiveNodeBuiltins": [
-        "node:crypto",
-        "node:zlib"
-      ],
+      "transitiveNodeBuiltins": [],
       "externalPackages": [
         "pdfjs-dist"
       ],
       "reachableLocalModules": [
+        "src/binary-runtime.ts",
         "src/display-geometry.ts",
         "src/pdf-image-adapter.ts",
-        "src/pdf-image-resource-adapter.ts",
+        "src/pdf-image-resource-core.ts",
         "src/pdf-inspector-core.ts",
         "src/pdf-outline.ts",
         "src/pdf-production-images.ts",
@@ -24,17 +22,13 @@
     },
     {
       "path": "src/pdf-to-epub-core.ts",
-      "directNodeBuiltins": [
-        "node:crypto"
-      ],
-      "transitiveNodeBuiltins": [
-        "node:crypto",
-        "node:zlib"
-      ],
+      "directNodeBuiltins": [],
+      "transitiveNodeBuiltins": [],
       "externalPackages": [
         "pdfjs-dist"
       ],
       "reachableLocalModules": [
+        "src/binary-runtime.ts",
         "src/content-policy.ts",
         "src/cover-policy.ts",
         "src/display-geometry.ts",
@@ -47,7 +41,7 @@
         "src/epub-xhtml.ts",
         "src/pdf-document-pipeline.ts",
         "src/pdf-image-adapter.ts",
-        "src/pdf-image-resource-adapter.ts",
+        "src/pdf-image-resource-core.ts",
         "src/pdf-inspector-core.ts",
         "src/pdf-outline.ts",
         "src/pdf-production-images.ts",

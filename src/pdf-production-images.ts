@@ -1,4 +1,5 @@
 import { OPS } from "pdfjs-dist/legacy/build/pdf.mjs";
+import type { BinaryRuntime } from "./binary-runtime.js";
 import type {
   DisplayRect,
   ImageClipCoverage,
@@ -6,9 +7,9 @@ import type {
 } from "./pdf-image-adapter.js";
 import { extractImagePaintEvidence } from "./pdf-image-adapter.js";
 import {
-  extractPdfImageResource,
+  extractPdfImageResourceWithRuntime,
   type PdfImagePixelKind,
-} from "./pdf-image-resource-adapter.js";
+} from "./pdf-image-resource-core.js";
 
 export type InspectedImageResource = {
   /** Deterministic EPUB-facing identity derived only from the PNG content bytes. */
@@ -261,12 +262,13 @@ function preflightRawImageResource(value: unknown, occurrence: ImageOccurrenceLo
  * boundary. Only decoded XObjects whose visible unit square is not cropped and
  * whose PDF compositing state is proven to be the default are accepted here.
  */
-export function extractProductionPageImages(
+export async function extractProductionPageImages(
   page: number,
   operators: OperatorList,
   viewport: number[],
   store: PdfObjects,
-): { resources: InspectedImageResource[]; occurrences: InspectedImageOccurrence[] } {
+  runtime: BinaryRuntime,
+): Promise<{ resources: InspectedImageResource[]; occurrences: InspectedImageOccurrence[] }> {
   const evidence = extractImagePaintEvidence(page, operators, viewport);
   if (evidence.issues.length > 0) {
     throw new Error(`page ${page} image operator replay failed: ${evidence.issues.join(", ")}`);
@@ -307,7 +309,7 @@ export function extractProductionPageImages(
         operatorIndex: paint.operatorIndex,
         occurrenceIndex: paint.occurrenceIndex,
       });
-      const extracted = extractPdfImageResource(paint.resourceId, raw);
+      const extracted = await extractPdfImageResourceWithRuntime(paint.resourceId, raw, runtime);
       if ("status" in extracted) {
         throw new Error(`${label} resource extraction failed: ${extracted.reason}`);
       }

@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { sha256HexSync } from "./binary-runtime.js";
 import type { InspectResult } from "./pdf-inspection-model.js";
 import type { RubySpan } from "./ruby-spans.js";
 import type { SemanticBlock, SemanticPageBlocks } from "./semantic-blocks.js";
@@ -7,7 +7,7 @@ import type { WritingOrientation } from "./text-flow.js";
 import type { PhysicalPageLayout } from "./physical-layout.js";
 import { assignImagePlacements, validateImageDisplayTransform } from "./production-image-placement.js";
 import { validateProductionImageLimits } from "./pdf-production-images.js";
-import type { PdfImagePixelKind } from "./pdf-image-resource-adapter.js";
+import type { PdfImagePixelKind } from "./pdf-image-resource-core.js";
 import {
   buildDocumentNavigation,
   validateDocumentNavigation,
@@ -480,7 +480,7 @@ export function validateDocumentModel(document: FileShapeDocument): string[] {
     if (!Number.isInteger(resource.width) || resource.width <= 0 ||
         !Number.isInteger(resource.height) || resource.height <= 0) errors.push(`${label} has invalid dimensions`);
     if (resource.bytes.byteLength === 0) errors.push(`${label} has no bytes`);
-    else if (createHash("sha256").update(resource.bytes).digest("hex") !== resource.contentHash) {
+    else if (sha256HexSync(resource.bytes) !== resource.contentHash) {
       errors.push(`${label} bytes do not match content hash`);
     }
   }

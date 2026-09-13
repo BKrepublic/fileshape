@@ -1,6 +1,6 @@
 # FileShape continuation status
 
-Updated 2026-09-12 after Stage 28 browser/PWA foundation acceptance and merge.
+Updated 2026-09-13 after Stage 29 browser runtime and private parity acceptance.
 
 ## Current GitHub baseline
 
@@ -14,9 +14,9 @@ Accepted Stage 25 merge commit:
 
 The 9 private corpus PDFs are not committed; their full-corpus checks remain local-only.
 
-Stage 26 is the first accepted Task 6A checkpoint. It adds byte-input inspection/conversion seams, makes the PDF.js resource configuration explicit, and changes the Node CLI adapter to read the source once. PR #19 was merged as `fca44cf7e4fee433951801cbb243668af671cd52`; its PR CI and merge-commit `main` CI both passed.
+Stage 26 is the first accepted Task 6A checkpoint. It adds byte-input inspection/conversion seams, makes the PDF.js resource configuration explicit, and changes the Node CLI adapter to read the source once. PR #19 was merged as `fca44cf7e4fee433951801cbb243668af671cd52`.
 
-Stage 27 physically separates the inspection model, byte inspection core, byte conversion core, and Node adapters. A deterministic TypeScript-scanned dependency artifact records direct/transitive Node imports, PDF.js, the Node resource provider, unreachable Java validation tooling, and missing browser contracts. PR #20 was merged as `d2329fd35b2b4960d052dbb6d42be3c10e428e40`; its PR CI and merge-commit `main` CI both passed.
+Stage 27 physically separates the inspection model, byte inspection core, byte conversion core, and Node adapters. A deterministic TypeScript-scanned dependency artifact records direct/transitive Node imports, PDF.js, the Node resource provider, unreachable Java validation tooling, and missing browser contracts. PR #20 was merged as `d2329fd35b2b4960d052dbb6d42be3c10e428e40`.
 
 Stage 28 establishes the accepted browser/PWA foundation. PR #21 was squash-merged as:
 
@@ -24,9 +24,13 @@ Stage 28 establishes the accepted browser/PWA foundation. PR #21 was squash-merg
 b5100164d95d623c7c8631e6ff265686f10320a3
 ```
 
-Stage 28 provides a framework-free mobile-first static PWA shell, same-origin/offline service worker, explicit browser conversion message contract, pinned Vite/Playwright verification, and a real PDF.js module-worker probe. GitHub Actions PR run #143 and merge-commit `main` run #144 both passed. Browser conversion remains deliberately disabled; Stage 28 does not claim CLI/browser parity.
+Stage 28 provides a framework-free mobile-first static PWA shell, same-origin/offline service worker, explicit browser conversion message contract, pinned Vite/Playwright verification, and a real PDF.js module-worker probe. Browser conversion remained deliberately disabled at that checkpoint; Stage 28 itself did not claim CLI/browser parity.
 
-A documentation-only Stage 28 acceptance record follows the merge commit. Any continuation must start from the latest `main`, not reset to an earlier implementation SHA.
+A documentation-only Stage 28 acceptance record follows the merge commit. Stage
+29 is accepted on PR #22 implementation head
+`2e68168f17f44f4b11396c341028df5217fb79db`; its final documentation and merge
+remain the current repository operation. Any continuation must use the latest
+remote state and must not reset to an earlier implementation SHA.
 
 ## Accepted CLI checkpoint
 
@@ -102,19 +106,39 @@ Stages 22–24 found no generic source-backed production rule that could safely 
 
 ## Browser checkpoint accepted result
 
-Stage 28 public acceptance on PR head `dfacd55017011f95a7f3c6edddb541c4b87d8185` and merge commit `b5100164d95d623c7c8631e6ff265686f10320a3`:
+Stage 29 public local acceptance on implementation head
+`2e68168f17f44f4b11396c341028df5217fb79db`:
 
 ```text
-npm test                         PASS (212/212)
+npm test                         PASS (217/217)
 npm run verify:runtime-deps      PASS
-npm run verify:browser           PASS
+npm run verify:browser           PASS (2/2)
 npm run verify:epubcheck         PASS (5/5)
 git diff --check                 PASS
-PR CI #143                       PASS
-main CI #144                     PASS
+WASM reproducible rebuild        PASS
+WASM SHA-256                     90bc26f8c73322492510a9438e04d41c5ab7badcf76d0ae1e70d1aae4d9176f1
 ```
 
-`verify:browser` covers a production Vite build, deterministic static PWA checks, a real PDF.js module worker in pinned Chromium, online-to-offline service-worker reload, and local-only network behavior. It does **not** run the FileShape conversion core.
+Private local browser acceptance on the same implementation:
+
+```text
+PRIVATE_BROWSER_ACCEPTANCE=PASS
+PRIVATE_BROWSER_PDFS=9
+PRIVATE_BROWSER_PAGES=5141
+PRIVATE_BROWSER_UNRESOLVED=6387
+PRIVATE_BROWSER_BYTE_IDENTICAL=yes
+elapsed=2.9m
+```
+
+`verify:browser` covers a production Vite build, deterministic static PWA
+checks, a real PDF.js worker, the real FileShape conversion core, exact public
+text/image EPUB equality, application-base PDF.js resources, same-origin
+requests, and online-to-offline conversion using system Chrome. The private
+harness extends that proof to all nine corpus PDFs and records per-PDF elapsed
+time and Linux Chromium RSS in a gitignored report.
+
+GitHub Actions are disabled by project policy and were not used as Stage 29
+evidence.
 
 ## Accepted / held scope
 
@@ -123,7 +147,10 @@ main CI #144                     PASS
 - Complete private corpus has zero marked-content occurrences.
 - The automated CLI checkpoint is accepted and merged.
 - Manual Thorium/calibre reading-system validation remains **not yet performed**. EPUBCheck green is not a substitute for real-reader validation.
-- Browser/PWA delivery now has an accepted shell, worker/runtime probe, offline behavior, and conversion-message contract. There is still no browser EPUB conversion, result download, browser corpus parity, supported-size claim, or Android/device acceptance.
+- Browser/PWA delivery now has accepted end-to-end EPUB conversion, result
+  download, offline operation, and exact 9-PDF browser/Node corpus parity.
+  Stage 29 does not make a universal supported-size claim, and Android/device
+  acceptance remains open.
 
 ## Important invariants
 
@@ -138,12 +165,17 @@ main CI #144                     PASS
 
 ## Next work
 
-1. Start Stage 29 from the latest `main` after the Stage 28 acceptance documentation commit.
-2. Replace/inject the Node-only SHA-256 and PNG deflate seams with environment-neutral interfaces and browser implementations without changing CLI output semantics.
-3. Package and configure the PDF.js browser resources actually required by conversion, including CMap/standard-font/WASM handling where the parser requests them. Do not claim full resource coverage from the Stage 28 one-page probe.
-4. Connect one deterministic public PDF fixture through the dedicated conversion worker contract to real EPUB bytes, with operational progress, cancel, cleanup, and download only when the core is genuinely reachable in the browser bundle.
-5. Compare that public-fixture browser output against the accepted byte API/CLI semantics and run real EPUBCheck in CI. After the public path is stable, run the 9 private corpus PDFs locally before claiming browser parity or input-size support.
-6. Measure browser memory/elapsed behavior before choosing a maximum file size. Do not invent an upload-style limit for a local app.
-7. Manual Thorium/calibre reading-system acceptance remains the only open CLI-adjacent validation and must stay marked unperformed until actually done.
-8. Android remains deferred until the browser conversion path has an end-to-end accepted result.
-9. Do not reopen Task 4 or widen ruby thresholds without new generic source-backed evidence.
+1. Finish the PR #22 documentation/review checkpoint and merge Stage 29 without
+   enabling GitHub Actions.
+2. Keep manual Thorium/calibre reading-system acceptance marked unperformed
+   until it is actually completed.
+3. Review the recorded Stage 29 elapsed/RSS evidence before making any browser
+   maximum-input or support claim. Add target-device measurements rather than
+   inventing an upload-style limit for this local app.
+4. Start Android architecture evaluation from the accepted browser/core path:
+   compare installed PWA, WebView wrapper, and native adapter constraints before
+   selecting a framework or packaging route.
+5. Validate Android file selection/save, lifecycle, cancellation, memory, and
+   output equality on a real device before claiming device acceptance.
+6. Do not reopen Task 4 or widen ruby thresholds without new generic
+   source-backed evidence.

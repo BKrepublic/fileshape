@@ -1,4 +1,5 @@
 import { getDocument, OPS } from "pdfjs-dist/legacy/build/pdf.mjs";
+import type { BinaryRuntime } from "./binary-runtime.js";
 import { itemDisplayGeometry } from "./display-geometry.js";
 import { fullTextRef } from "./source-text.js";
 import { bindGlyphSources, extractOperatorGlyphs } from "./pdfjs-glyph-adapter.js";
@@ -15,6 +16,15 @@ import type {
   PdfInspectionOptions,
   PdfJsResourceConfig,
 } from "./pdf-inspection-model.js";
+
+export type PdfInspectionControl = {
+  /** Throw to abort at the next source-safe async boundary. */
+  throwIfCancelled?: () => void;
+  /** Called only after PDF.js has loaded a real document and page count is known. */
+  onDocumentLoaded?: (pageCount: number) => void;
+  /** Called after a complete page has been inspected and committed to the result. */
+  onPageInspected?: (completedPages: number, totalPages: number) => void;
+};
 
 function validateSourceName(sourceName: string): void {
   if (sourceName.length === 0) throw new Error("sourceName must not be empty");
@@ -65,9 +75,12 @@ export async function inspectPdfBytes(
   sourceName: string,
   options: PdfInspectionOptions,
   resources: PdfJsResourceConfig,
+  binaryRuntime: BinaryRuntime,
+  control?: PdfInspectionControl,
 ): Promise<InspectResult> {
   validateSourceName(sourceName);
   if (sourceBytes.byteLength === 0) throw new Error("PDF input must not be empty");
+  control?.throwIfCancelled?.();
   const byteLength = sourceBytes.byteLength;
   // PDF.js may detach the supplied buffer while loading. Keep ownership of the
   // caller's bytes at this boundary and hand PDF.js an independent copy.
@@ -80,19 +93,26 @@ export async function inspectPdfBytes(
 
   try {
     const pdf = await loadingTask.promise;
+    control?.throwIfCancelled?.();
     const pageCount = pdf.numPages;
+    control?.onDocumentLoaded?.(pageCount);
     const outline = await readPdfOutline(pdf);
+    control?.throwIfCancelled?.();
     const pages: InspectPage[] = [];
     const imageResources = new Map<string, InspectedImageResource>();
 
     for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
+      control?.throwIfCancelled?.();
       const page = await pdf.getPage(pageNumber);
+      control?.throwIfCancelled?.();
       const viewport = page.getViewport({ scale: 1 });
       const textContent = await page.getTextContent({
         includeMarkedContent: true,
         disableNormalization: false,
       });
+      control?.throwIfCancelled?.();
       const operatorList = await page.getOperatorList();
+      control?.throwIfCancelled?.();
       const textItems: InspectTextItem[] = [];
 
       for (const item of textContent.items) {
@@ -126,13 +146,15 @@ export async function inspectPdfBytes(
         : undefined;
       if (extracted) bindGlyphSources(textItems, extracted.glyphs, pageNumber);
       const productionImages = options.includeImages
-        ? extractProductionPageImages(
+        ? await extractProductionPageImages(
           pageNumber,
           { fnArray: operatorList.fnArray, argsArray: operatorList.argsArray },
           [...viewport.transform],
           (page as unknown as { objs: { get(id: string): unknown } }).objs,
+          binaryRuntime,
         )
         : undefined;
+      control?.throwIfCancelled?.();
       for (const resource of productionImages?.resources ?? []) {
         const existing = imageResources.get(resource.id);
         if (existing && (existing.width !== resource.width || existing.height !== resource.height ||
@@ -156,8 +178,10 @@ export async function inspectPdfBytes(
         textItems,
         ...(productionImages === undefined ? {} : { imageOccurrences: productionImages.occurrences }),
       });
+      control?.onPageInspected?.(pageNumber, pageCount);
     }
 
+    control?.throwIfCancelled?.();
     if (options.includeImages) {
       validateProductionImageLimits(
         [...imageResources.values()],

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { readFile, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { nodeBinaryRuntime } from "./binary-runtime-node.js";
 import type { UnresolvedRubyPolicy } from "./content-policy.js";
 import {
   parseCoverOccurrenceSelector,
@@ -57,7 +58,13 @@ export async function convertPdfBytesToEpub(
   sourceName: string,
   options: PdfToEpubOptions = {},
 ): Promise<PdfBytesToEpubResult> {
-  return convertPdfBytesToEpubWithResources(sourceBytes, sourceName, options, nodePdfJsResourceConfig);
+  return convertPdfBytesToEpubWithResources(
+    sourceBytes,
+    sourceName,
+    options,
+    nodePdfJsResourceConfig,
+    nodeBinaryRuntime,
+  );
 }
 
 export async function convertPdfToEpub(

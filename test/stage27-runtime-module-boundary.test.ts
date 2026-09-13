@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { nodeBinaryRuntime } from "../src/binary-runtime-node.js";
 import { nodePdfJsResourceConfig } from "../src/pdf-inspector.js";
 import { inspectPdfBytes } from "../src/pdf-inspector-core.js";
 import { convertPdfBytesToEpub } from "../src/pdf-to-epub.js";
@@ -19,21 +20,20 @@ test("core modules keep the reviewed Node boundary", async () => {
   ]);
   assert.doesNotMatch(model, /from\s+["']node:/u);
   assert.doesNotMatch(inspector, /from\s+["']node:/u);
-  assert.doesNotMatch(converter, /from\s+["']node:(?:fs|path|url)["']/u);
+  assert.doesNotMatch(converter, /from\s+["']node:/u);
   assert.doesNotMatch(converter, /\b(?:process|console|randomUUID)\b/u);
-  assert.match(converter, /from\s+["']node:crypto["']/u);
 });
 
 test("resource-aware conversion preserves the Stage 26 byte contract", async () => {
   const source = new Uint8Array(pdfBytes());
   const options = { title: "Stage 27", modified: "2026-09-12T00:00:00Z" } as const;
   const [core, adapter] = await Promise.all([
-    convertPdfBytesToEpubWithResources(source, "fixture.pdf", options, nodePdfJsResourceConfig),
+    convertPdfBytesToEpubWithResources(source, "fixture.pdf", options, nodePdfJsResourceConfig, nodeBinaryRuntime),
     convertPdfBytesToEpub(source, "fixture.pdf", options),
   ]);
   assert.deepEqual(core.bytes, adapter.bytes);
   assert.deepEqual({ ...core, bytes: undefined }, { ...adapter, bytes: undefined });
-  const inspected = await inspectPdfBytes(source, "fixture.pdf", {}, nodePdfJsResourceConfig);
+  const inspected = await inspectPdfBytes(source, "fixture.pdf", {}, nodePdfJsResourceConfig, nodeBinaryRuntime);
   assert.equal(inspected.file, "fixture.pdf");
   assert.equal(inspected.byteLength, source.byteLength);
 });
@@ -50,8 +50,9 @@ test("the committed dependency inventory is deterministic and fail-closed", asyn
   const inspection = inventory.entrypoints.find((entry) => entry.path === "src/pdf-inspector-core.ts")!;
   const conversion = inventory.entrypoints.find((entry) => entry.path === "src/pdf-to-epub-core.ts")!;
   assert.deepEqual(inspection.directNodeBuiltins, []);
-  assert.deepEqual(conversion.directNodeBuiltins, ["node:crypto"]);
-  assert.deepEqual(conversion.transitiveNodeBuiltins, ["node:crypto", "node:zlib"]);
+  assert.deepEqual(inspection.transitiveNodeBuiltins, []);
+  assert.deepEqual(conversion.directNodeBuiltins, []);
+  assert.deepEqual(conversion.transitiveNodeBuiltins, []);
   assert.deepEqual(inventory.nodeAdapterProviders, [{
     path: "src/pdf-inspector.ts",
     exportName: "nodePdfJsResourceConfig",

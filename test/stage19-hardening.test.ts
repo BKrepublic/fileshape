@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
 import { OPS } from "pdfjs-dist/legacy/build/pdf.mjs";
+import { nodeBinaryRuntime } from "../src/binary-runtime-node.js";
 import type { DocumentImageOccurrence, FileShapeDocument } from "../src/document-model.js";
 import { validateEpubImagePackage } from "../src/epub-image-package-validation.js";
 import { serializeEpubPackage } from "../src/epub-package.js";
@@ -37,6 +38,7 @@ function productionImage(
     { fnArray, argsArray },
     [1, 0, 0, -1, 0, 1],
     { get: () => object },
+    nodeBinaryRuntime,
   );
 }
 
@@ -98,36 +100,36 @@ function imageDocument(interpolate = false): FileShapeDocument {
   };
 }
 
-test("production images reject non-default PDF compositing state", () => {
+test("production images reject non-default PDF compositing state", async () => {
   for (const [state, pattern] of [
     [["ca", 0.5], /unsupported fill alpha/],
     [["BM", "multiply"], /unsupported blend mode/],
     [["SMask", true], /unsupported soft mask/],
     [["TR", [1, 2, 3]], /unsupported transfer map/],
   ] as Array<[unknown[], RegExp]>) {
-    assert.throws(() => productionImage(
+    await assert.rejects(() => productionImage(
       [op("setGState"), op("paintImageXObject")],
       [[[state]], ["image", 1, 1]],
     ), pattern);
   }
 
-  const accepted = productionImage(
+  const accepted = await productionImage(
     [op("setGState"), op("paintImageXObject")],
     [[[ ["ca", 1], ["BM", "source-over"], ["SMask", false], ["TR", null] ]], ["image", 1, 1]],
   );
   assert.equal(accepted.occurrences.length, 1);
 });
 
-test("production images reject non-uniform display scaling", () => {
-  assert.throws(() => productionImage(
+test("production images reject non-uniform display scaling", async () => {
+  await assert.rejects(() => productionImage(
     [op("transform"), op("paintImageXObject")],
     [[2, 0, 0, 1, 0, 0], ["image", 1, 1]],
   ), /unsupported non-uniform image scaling/);
 });
 
-test("production image limits are enforced before PNG construction", () => {
+test("production image limits are enforced before PNG construction", async () => {
   const oversized = imageObject({ width: PRODUCTION_IMAGE_LIMITS.maxWidth + 1, height: 1 });
-  assert.throws(() => productionImage(
+  await assert.rejects(() => productionImage(
     [op("paintImageXObject")],
     [["image", oversized.width, oversized.height]],
     oversized,

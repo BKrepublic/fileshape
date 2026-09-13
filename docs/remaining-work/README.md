@@ -4,7 +4,10 @@
 
 ## 現在地
 
-Stages 19–20 の通常画像 preservation / explicit cover policy、Stages 21–24 のruby evidence、Stage 25 のCLI自動受け入れはacceptedです。Stage 26からTask 6Aの環境境界分離を開始し、Stage 27でruntime module graphを可視化しました。
+Stages 19–20 の通常画像 preservation / explicit cover policy、Stages
+21–24 のruby evidence、Stage 25 のCLI自動受け入れはacceptedです。Stages
+26–28でbrowser向け環境境界とPWA foundationを作り、Stage 29でlocal-only
+browser変換と9-PDFのNode byte parityをacceptedにしました。
 
 ```text
 RUBY_CANDIDATES=23097
@@ -24,7 +27,7 @@ NO_BASE_CROSS_DISTANCE_GE_2_BODY_WIDTHS=3662
 | 3 | [表紙・挿絵](03-images-and-cover.md) | なし | **accepted** |
 | 4 | [未解決ルビの改善](04-ruby-refinement.md) | 新しいgeneric source-backed evidenceがある場合だけ再開 | **accepted**。production rule変更なし |
 | 5 | [CLI版の最終受け入れ](05-cli-acceptance.md) | なし | **accepted・merged** |
-| 後続 | [ブラウザー／Android](06-browser-android.md) | browser runtime置換、worker/操作契約、adapter/UI、Android方式、実機 | **Task 6A実装中**。Stage 27 runtime module boundary |
+| 後続 | [ブラウザー／Android](06-browser-android.md) | browser性能・対応範囲、Android方式、実機 | **browser Stage 29 accepted**。Android architecture/実機は未着手 |
 
 ## Ruby方針
 

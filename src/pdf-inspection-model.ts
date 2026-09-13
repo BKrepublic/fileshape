@@ -65,4 +65,12 @@ export type PdfJsResourceConfig = {
   standardFontDataUrl: string;
   useSystemFonts: boolean;
   disableFontFace: boolean;
+  /** Browser conversion resources; omitted by the accepted Node adapter unless needed. */
+  wasmUrl?: string;
+  iccUrl?: string;
+  useWasm?: boolean;
+  useWorkerFetch?: boolean;
+  /** Keep browser image object representation aligned with Node when byte parity is required. */
+  isOffscreenCanvasSupported?: boolean;
+  isImageDecoderSupported?: boolean;
 };

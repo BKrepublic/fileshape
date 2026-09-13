@@ -1,5 +1,12 @@
 import "./styles.css";
+import ConversionWorker from "./conversion-worker.ts?worker";
+import { probeBinaryRuntime, type BinaryRuntimeProbeResult } from "./binary-runtime-probe.js";
 import { probePdfJsRuntime, type PdfJsProbeResult } from "./pdfjs-runtime-probe.js";
+import {
+  BrowserConversionEventTracker,
+  type BrowserConversionOptions,
+  type BrowserStartMessage,
+} from "../src/browser-conversion-contract.js";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("FileShape app root is missing");
@@ -14,7 +21,7 @@ app.innerHTML = `
     <section class="intro" aria-labelledby="page-title">
       <p class="eyebrow">BROWSER / PWA</p>
       <h1 id="page-title">PDFを、手元でEPUBへ。</h1>
-      <p>ファイルはこのブラウザのメモリだけで扱います。変換機能は現在準備中です。</p>
+      <p>ファイルはこのブラウザのメモリだけで扱います。変換処理も端末内の専用workerで実行します。</p>
     </section>
     <section class="surface file-surface" aria-labelledby="file-title">
       <div class="section-heading"><div><h2 id="file-title">PDFを選択</h2><p>読み込むファイルを1つ選んでください。</p></div><span class="surface-icon" aria-hidden="true">↥</span></div>
@@ -24,26 +31,30 @@ app.innerHTML = `
       <button id="reset-file" class="text-button" type="button" hidden>選択を解除</button>
     </section>
     <details class="surface advanced-settings">
-      <summary>詳細設定 <span>CLIで使える項目</span></summary>
+      <summary>詳細設定 <span>CLIと同じ変換オプション</span></summary>
       <div class="advanced-grid">
         <label>タイトル<input type="text" name="title" placeholder="PDFのファイル名を使用" /></label>
         <label>作成者<input type="text" name="creator" placeholder="任意" /></label>
         <label>言語<input type="text" name="language" value="ja" /></label>
         <label>ルビ<select name="rubyMode"><option value="on">保持</option><option value="off">表示しない</option></select></label>
+        <label>更新日時<input type="text" name="modified" placeholder="YYYY-MM-DDTHH:MM:SSZ（任意）" /></label>
       </div>
-      <p class="supporting-text">設定項目は変換worker接続後に有効になります。</p>
+      <p class="supporting-text">未指定項目はCLIと同じ既定値を使います。</p>
     </details>
     <section class="surface runtime-surface" aria-labelledby="runtime-title">
       <div class="section-heading"><div><h2 id="runtime-title">実行環境</h2><p>変換前にブラウザの準備状態を確認します。</p></div><span id="runtime-badge" class="state-badge" data-state="checking">確認中</span></div>
       <div class="runtime-row"><span>PDF.js 実ワーカー</span><strong id="pdfjs-status" aria-live="polite">確認中…</strong></div>
+      <div class="runtime-row"><span>SHA-256 / zlib deflate</span><strong id="binary-runtime-status" aria-live="polite">確認中…</strong></div>
       <div class="runtime-row"><span>PWA オフラインshell</span><strong id="pwa-status" aria-live="polite">確認中…</strong></div>
       <p id="runtime-message" class="runtime-message" aria-live="polite">ブラウザ機能を確認しています。</p>
-      <div class="blocker-box"><strong>残っている準備</strong><ul><li>ブラウザ向けSHA-256とPNG deflateの接続</li><li>PDF.jsのCMap・標準フォント・WASM resource package</li><li>専用workerへの実変換接続と取消・保存</li></ul></div>
+      <div class="blocker-box"><strong>残っている検証</strong><ul><li>private corpusでのbrowser parityとpeak memory計測</li><li>Thorium/calibre実reader確認</li></ul></div>
     </section>
     <section class="action-area" aria-labelledby="action-title">
       <h2 id="action-title" class="visually-hidden">変換</h2>
       <button id="convert-button" class="primary-button" type="button" disabled>EPUBに変換</button>
-      <p id="conversion-explanation" class="action-explanation">実変換workerの接続が完了するまで利用できません。</p>
+      <button id="cancel-button" class="text-button" type="button" hidden>キャンセル</button>
+      <p id="conversion-status" class="action-explanation" aria-live="polite">PDFを選択すると変換できます。</p>
+      <a id="download-link" class="text-button" hidden>変換したEPUBを保存</a>
     </section>
   </main>
 `;
@@ -51,25 +62,66 @@ app.innerHTML = `
 const input = document.querySelector<HTMLInputElement>("#pdf-input");
 const selectedFile = document.querySelector<HTMLParagraphElement>("#selected-file");
 const resetButton = document.querySelector<HTMLButtonElement>("#reset-file");
+const convertButton = document.querySelector<HTMLButtonElement>("#convert-button");
+const cancelButton = document.querySelector<HTMLButtonElement>("#cancel-button");
+const conversionStatus = document.querySelector<HTMLParagraphElement>("#conversion-status");
+const downloadLink = document.querySelector<HTMLAnchorElement>("#download-link");
 const pdfjsStatus = document.querySelector<HTMLElement>("#pdfjs-status");
+const binaryRuntimeStatus = document.querySelector<HTMLElement>("#binary-runtime-status");
 const pwaStatus = document.querySelector<HTMLElement>("#pwa-status");
 const runtimeMessage = document.querySelector<HTMLElement>("#runtime-message");
 const runtimeBadge = document.querySelector<HTMLElement>("#runtime-badge");
 const formatBytes = (bytes: number): string => `${bytes.toLocaleString("ja-JP")} bytes`;
 
+let pdfJsReady: boolean | undefined;
+let binaryRuntimeReady: boolean | undefined;
+let pdfJsMessage = "PDF.js 実ワーカーを確認中です。";
+let binaryRuntimeMessage = "SHA-256 / zlib deflate を確認中です。";
+let selected: File | undefined;
+let activeWorker: Worker | undefined;
+let activeTracker: BrowserConversionEventTracker | undefined;
+let activeRequestId: string | undefined;
+let downloadUrl: string | undefined;
+let requestCounter = 0;
+
+function runtimeReady(): boolean {
+  return pdfJsReady === true && binaryRuntimeReady === true;
+}
+
+function updateConvertAvailability(): void {
+  if (!convertButton) return;
+  convertButton.disabled = !runtimeReady() || selected === undefined || activeWorker !== undefined;
+}
+
+function clearDownload(): void {
+  if (downloadUrl !== undefined) URL.revokeObjectURL(downloadUrl);
+  downloadUrl = undefined;
+  if (downloadLink) {
+    downloadLink.hidden = true;
+    downloadLink.removeAttribute("href");
+    downloadLink.removeAttribute("download");
+  }
+}
+
 function showFile(file: File | undefined): void {
+  selected = file;
   if (!selectedFile || !resetButton) return;
   if (!file) {
     selectedFile.textContent = "ファイルはまだ選択されていません。";
     resetButton.hidden = true;
+    if (conversionStatus) conversionStatus.textContent = "PDFを選択すると変換できます。";
+    updateConvertAvailability();
     return;
   }
   selectedFile.textContent = `${file.name} — ${formatBytes(file.size)}`;
   resetButton.hidden = false;
+  if (conversionStatus) conversionStatus.textContent = runtimeReady() ? "変換できます。" : "実行環境の確認完了を待っています。";
+  updateConvertAvailability();
 }
 
 input?.addEventListener("change", () => {
   const file = input.files?.[0];
+  clearDownload();
   if (file && (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"))) showFile(file);
   else {
     input.value = "";
@@ -77,7 +129,9 @@ input?.addEventListener("change", () => {
   }
 });
 resetButton?.addEventListener("click", () => {
+  if (activeWorker) return;
   if (input) input.value = "";
+  clearDownload();
   showFile(undefined);
   input?.focus();
 });
@@ -98,20 +152,179 @@ async function registerOfflineShell(): Promise<void> {
   }
 }
 
-function showProbe(result: PdfJsProbeResult): void {
-  if (!pdfjsStatus || !runtimeMessage || !runtimeBadge) return;
-  const supported = result.state === "supported" && result.realWorkerPort;
-  pdfjsStatus.textContent = supported ? "確認済み" : "要確認";
+function renderRuntimeReadiness(): void {
+  if (!runtimeMessage || !runtimeBadge) return;
+  if (pdfJsReady === undefined || binaryRuntimeReady === undefined) {
+    runtimeBadge.dataset.state = "checking";
+    runtimeBadge.textContent = "確認中";
+    runtimeMessage.textContent = [pdfJsMessage, binaryRuntimeMessage].join(" ");
+    updateConvertAvailability();
+    return;
+  }
+  const supported = runtimeReady();
   runtimeBadge.dataset.state = supported ? "supported" : "unsupported";
   runtimeBadge.textContent = supported ? "利用可能" : "要確認";
-  runtimeMessage.textContent = result.message;
+  runtimeMessage.textContent = supported
+    ? "PDF.js 実ワーカー、same-origin変換資源、Web Crypto SHA-256、pinned zlib-ng WASM deflate を確認しました。"
+    : [pdfJsReady ? "" : pdfJsMessage, binaryRuntimeReady ? "" : binaryRuntimeMessage].filter(Boolean).join(" ");
+  if (selected && conversionStatus && activeWorker === undefined) {
+    conversionStatus.textContent = supported ? "変換できます。" : "この環境では変換を開始できません。";
+  }
+  updateConvertAvailability();
 }
 
+function showPdfProbe(result: PdfJsProbeResult): void {
+  if (!pdfjsStatus) return;
+  pdfJsReady = result.state === "supported" && result.realWorkerPort;
+  pdfJsMessage = result.message;
+  pdfjsStatus.textContent = pdfJsReady ? "確認済み" : "要確認";
+  renderRuntimeReadiness();
+}
+
+function showBinaryProbe(result: BinaryRuntimeProbeResult): void {
+  if (!binaryRuntimeStatus) return;
+  binaryRuntimeReady = result.state === "supported";
+  binaryRuntimeMessage = result.message;
+  binaryRuntimeStatus.textContent = binaryRuntimeReady ? "確認済み" : "要確認";
+  renderRuntimeReadiness();
+}
+
+function readOptions(): BrowserConversionOptions {
+  const options: BrowserConversionOptions = {};
+  const value = (name: string): string => document.querySelector<HTMLInputElement>(`[name="${name}"]`)?.value ?? "";
+  const title = value("title");
+  const creator = value("creator");
+  const language = value("language");
+  const modified = value("modified");
+  const rubyMode = document.querySelector<HTMLSelectElement>('[name="rubyMode"]')?.value;
+  if (title.trim().length > 0) options.title = title;
+  if (creator.trim().length > 0) options.creator = creator;
+  if (language.trim().length > 0) options.language = language;
+  if (modified.trim().length > 0) options.modified = modified;
+  if (rubyMode === "on" || rubyMode === "off") options.rubyMode = rubyMode;
+  return options;
+}
+
+function cleanupWorker(): void {
+  activeWorker?.terminate();
+  activeWorker = undefined;
+  activeTracker = undefined;
+  activeRequestId = undefined;
+  if (cancelButton) cancelButton.hidden = true;
+  updateConvertAvailability();
+}
+
+function progressLabel(phase: string): string {
+  switch (phase) {
+    case "loading-pdf": return "PDFを読み込み中";
+    case "inspecting-pages": return "ページを解析中";
+    case "building-document": return "文書構造を構築中";
+    case "serializing-epub": return "EPUBを生成中";
+    default: return "変換中";
+  }
+}
+
+convertButton?.addEventListener("click", async () => {
+  const file = selected;
+  if (!file || !runtimeReady() || activeWorker) return;
+  clearDownload();
+  convertButton.disabled = true;
+  if (conversionStatus) conversionStatus.textContent = "PDFを読み込んでいます。";
+
+  try {
+    const buffer = await file.arrayBuffer();
+    const requestId = `request-${Date.now()}-${++requestCounter}`;
+    const tracker = new BrowserConversionEventTracker(requestId);
+    const worker = new ConversionWorker({ name: "fileshape-conversion" });
+    activeWorker = worker;
+    activeTracker = tracker;
+    activeRequestId = requestId;
+    if (cancelButton) cancelButton.hidden = false;
+
+    worker.addEventListener("message", (message: MessageEvent<unknown>) => {
+      if (worker !== activeWorker || tracker !== activeTracker) return;
+      try {
+        const event = tracker.apply(message.data);
+        if (event.kind === "accepted") {
+          if (conversionStatus) conversionStatus.textContent = "変換を開始しました。";
+          return;
+        }
+        if (event.kind === "progress") {
+          const total = event.totalUnits === undefined ? "" : ` ${event.completedUnits}/${event.totalUnits}`;
+          if (conversionStatus) conversionStatus.textContent = `${progressLabel(event.phase)}${total}`;
+          return;
+        }
+        if (event.kind === "succeeded") {
+          const blob = new Blob([event.epub], { type: "application/epub+zip" });
+          downloadUrl = URL.createObjectURL(blob);
+          if (downloadLink) {
+            downloadLink.href = downloadUrl;
+            downloadLink.download = event.outputName;
+            downloadLink.hidden = false;
+          }
+          if (conversionStatus) conversionStatus.textContent = `${event.pageCount}ページをEPUBへ変換しました（${formatBytes(event.byteLength)}）。`;
+          cleanupWorker();
+          return;
+        }
+        if (event.kind === "cancelled") {
+          if (conversionStatus) conversionStatus.textContent = "変換をキャンセルしました。";
+          cleanupWorker();
+          return;
+        }
+        if (event.kind === "failed") {
+          if (conversionStatus) conversionStatus.textContent = `変換できませんでした: ${event.message}`;
+          cleanupWorker();
+        }
+      } catch (error) {
+        if (conversionStatus) conversionStatus.textContent = `worker応答を検証できませんでした: ${error instanceof Error ? error.message : String(error)}`;
+        cleanupWorker();
+      }
+    });
+    worker.addEventListener("error", (event) => {
+      if (worker !== activeWorker) return;
+      if (conversionStatus) conversionStatus.textContent = `変換workerでエラーが発生しました: ${event.message}`;
+      cleanupWorker();
+    });
+
+    const start: BrowserStartMessage = {
+      kind: "start",
+      requestId,
+      sourceName: file.name,
+      buffer,
+      options: readOptions(),
+    };
+    worker.postMessage(start, [buffer]);
+  } catch (error) {
+    if (conversionStatus) conversionStatus.textContent = `変換を開始できませんでした: ${error instanceof Error ? error.message : String(error)}`;
+    cleanupWorker();
+  }
+});
+
+cancelButton?.addEventListener("click", () => {
+  if (!activeWorker || !activeTracker || !activeRequestId) return;
+  activeTracker.requestCancel();
+  activeWorker.postMessage({ kind: "cancel", requestId: activeRequestId });
+  cancelButton.hidden = true;
+  if (conversionStatus) conversionStatus.textContent = "キャンセル処理中です。";
+});
+
+window.addEventListener("beforeunload", () => {
+  activeWorker?.terminate();
+  if (downloadUrl !== undefined) URL.revokeObjectURL(downloadUrl);
+});
+
+renderRuntimeReadiness();
 void registerOfflineShell();
-void probePdfJsRuntime().then(showProbe, () => {
-  showProbe({
+void probePdfJsRuntime().then(showPdfProbe, () => {
+  showPdfProbe({
     state: "unsupported",
     message: "PDF.js のブラウザ実行環境を確認できませんでした。",
     realWorkerPort: false,
+  });
+});
+void probeBinaryRuntime().then(showBinaryProbe, () => {
+  showBinaryProbe({
+    state: "unsupported",
+    message: "ブラウザ向けbinary runtimeを確認できませんでした。",
   });
 });

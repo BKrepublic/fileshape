@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { OPS } from "pdfjs-dist/legacy/build/pdf.mjs";
+import { nodeBinaryRuntime } from "../src/binary-runtime-node.js";
 import { assertDocumentModel, validateDocumentModel } from "../src/document-model.js";
 import { buildDocumentFromInspection } from "../src/pdf-document-pipeline.js";
 import { inspectPdf } from "../src/pdf-inspector.js";
@@ -64,38 +65,38 @@ test("production inspection deduplicates PNG content while preserving every XObj
   }
 });
 
-test("production image boundary fails closed for inline, cropped, complex and unresolved resources", () => {
+test("production image boundary fails closed for inline, cropped, complex and unresolved resources", async () => {
   const store = { get: (id: string) => id === "missing" ? undefined : imageObject() };
   const viewport = [1, 0, 0, 1, 0, 0];
 
-  assert.throws(() => extractProductionPageImages(1, {
+  await assert.rejects(() => extractProductionPageImages(1, {
     fnArray: [op("paintInlineImageXObject")],
     argsArray: [[imageObject()]],
-  }, viewport, store), /unsupported production image kind: inline/);
+  }, viewport, store, nodeBinaryRuntime), /unsupported production image kind: inline/);
 
-  assert.throws(() => extractProductionPageImages(1, {
+  await assert.rejects(() => extractProductionPageImages(1, {
     fnArray: [op("clip"), op("constructPath"), op("paintImageXObject")],
     argsArray: [[], rectangularClipPath(0, 0, 0.5, 1), ["image", 1, 1]],
-  }, viewport, store), /unsupported clip: exact-rect\/crops-image/);
+  }, viewport, store, nodeBinaryRuntime), /unsupported clip: exact-rect\/crops-image/);
 
-  assert.throws(() => extractProductionPageImages(1, {
+  await assert.rejects(() => extractProductionPageImages(1, {
     fnArray: [op("clip"), op("constructPath"), op("paintImageXObject")],
     argsArray: [[], [op("endPath"), [new Float32Array([0, 0, 0, 1, 1, 1])], [0, 0, 1, 1]], ["image", 1, 1]],
-  }, viewport, store), /unsupported clip: complex-or-unknown\/unknown/);
+  }, viewport, store, nodeBinaryRuntime), /unsupported clip: complex-or-unknown\/unknown/);
 
-  assert.throws(() => extractProductionPageImages(1, {
+  await assert.rejects(() => extractProductionPageImages(1, {
     fnArray: [op("paintImageXObject")],
     argsArray: [["missing", 1, 1]],
-  }, viewport, store), /resource extraction failed: image-object-not-object/);
+  }, viewport, store, nodeBinaryRuntime), /resource extraction failed: image-object-not-object/);
 });
 
-test("content dedupe retains per-occurrence interpolation evidence", () => {
-  const result = extractProductionPageImages(1, {
+test("content dedupe retains per-occurrence interpolation evidence", async () => {
+  const result = await extractProductionPageImages(1, {
     fnArray: [op("paintImageXObject"), op("paintImageXObject")],
     argsArray: [["plain", 1, 1], ["smooth", 1, 1]],
   }, [1, 0, 0, 1, 0, 0], {
     get: (id: string) => ({ ...imageObject(), interpolate: id === "smooth" }),
-  });
+  }, nodeBinaryRuntime);
 
   assert.equal(result.resources.length, 1);
   assert.deepEqual(result.occurrences.map((occurrence) => occurrence.interpolate), [false, true]);
