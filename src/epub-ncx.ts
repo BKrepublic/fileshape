@@ -1,4 +1,5 @@
 import type { FileShapeDocument } from "./document-model.js";
+import { normalizeEpubNavigationText } from "./epub-navigation-text.js";
 import type { EpubXhtmlPage } from "./epub-xhtml.js";
 
 function xmlText(value: string): string {
@@ -73,7 +74,7 @@ export function serializeLegacyNcx(
       nextPlayOrder += 1;
       playOrderByHref.set(entry.href, playOrder);
     }
-    return `    <navPoint id="navPoint-${index + 1}" playOrder="${playOrder}">\n      <navLabel><text>${xmlText(entry.title)}</text></navLabel>\n      <content src="${xmlAttr(entry.href)}"/>\n    </navPoint>`;
+    return `    <navPoint id="navPoint-${index + 1}" playOrder="${playOrder}">\n      <navLabel><text>${xmlText(normalizeEpubNavigationText(entry.title))}</text></navLabel>\n      <content src="${xmlAttr(entry.href)}"/>\n    </navPoint>`;
   }).join("\n");
 
   return `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE ncx PUBLIC "-//NISO//DTD ncx 2005-1//EN" "http://www.daisy.org/z3986/2005/ncx-2005-1.dtd">\n<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">\n  <head>\n    <meta name="dtb:uid" content="${xmlAttr(identifier)}"/>\n    <meta name="dtb:depth" content="1"/>\n    <meta name="dtb:totalPageCount" content="0"/>\n    <meta name="dtb:maxPageNumber" content="0"/>\n  </head>\n  <docTitle><text>${xmlText(title)}</text></docTitle>\n  <navMap>\n${navPoints}\n  </navMap>\n</ncx>\n`;
