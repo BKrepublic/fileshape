@@ -17,9 +17,9 @@ function block(page: number, index: number, text: string): DocumentTextBlock {
 }
 
 function fixture(): FileShapeDocument {
-  const h1 = "01　第一話";
+  const h1 = "Opening";
   const body1 = "　本文。";
-  const h2 = "02　第二話";
+  const h2 = "第二幕";
   const body2 = "　続き。";
   return {
     kind: "document",
@@ -39,12 +39,17 @@ function fixture(): FileShapeDocument {
   };
 }
 
-test("legacy NCX mirrors inferred EPUB3 chapter headings for older reading systems", () => {
+test("legacy NCX mirrors source-backed structural headings for older reading systems", () => {
   const document = fixture();
-  const pages = serializeEpubXhtml(document).pages;
+  const pages = serializeEpubXhtml(document, {
+    structuralHeadings: [
+      { title: "Opening", sourcePage: 1, semanticBlockIndex: 0 },
+      { title: "第二幕", sourcePage: 2, semanticBlockIndex: 0 },
+    ],
+  }).pages;
   const ncx = serializeLegacyNcx(document, "Book", "urn:test:ncx", pages);
-  assert.match(ncx, /<text>01第一話<\/text>/);
-  assert.match(ncx, /<content src="text\/page-0001\.xhtml#heading-page-1"\/>/);
-  assert.match(ncx, /<text>02第二話<\/text>/);
-  assert.match(ncx, /<content src="text\/page-0002\.xhtml#heading-page-2"\/>/);
+  assert.match(ncx, /<text>Opening<\/text>/);
+  assert.match(ncx, /<content src="text\/page-0001\.xhtml#heading-page-1-block-0"\/>/);
+  assert.match(ncx, /<text>第二幕<\/text>/);
+  assert.match(ncx, /<content src="text\/page-0002\.xhtml#heading-page-2-block-0"\/>/);
 });
