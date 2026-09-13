@@ -52,6 +52,7 @@ app.innerHTML = `
     <section class="action-area" aria-labelledby="action-title">
       <h2 id="action-title" class="visually-hidden">変換</h2>
       <button id="convert-button" class="primary-button" type="button" disabled>EPUBに変換</button>
+      <progress id="conversion-progress" class="conversion-progress" max="1" value="0" hidden aria-label="変換の進捗"></progress>
       <button id="cancel-button" class="text-button" type="button" hidden>キャンセル</button>
       <p id="conversion-status" class="action-explanation" aria-live="polite">PDFを選択すると変換できます。</p>
       <a id="download-link" class="text-button" hidden>変換したEPUBを保存</a>
@@ -64,6 +65,7 @@ const selectedFile = document.querySelector<HTMLParagraphElement>("#selected-fil
 const resetButton = document.querySelector<HTMLButtonElement>("#reset-file");
 const convertButton = document.querySelector<HTMLButtonElement>("#convert-button");
 const cancelButton = document.querySelector<HTMLButtonElement>("#cancel-button");
+const conversionProgress = document.querySelector<HTMLProgressElement>("#conversion-progress");
 const conversionStatus = document.querySelector<HTMLParagraphElement>("#conversion-status");
 const downloadLink = document.querySelector<HTMLAnchorElement>("#download-link");
 const pdfjsStatus = document.querySelector<HTMLElement>("#pdfjs-status");
@@ -103,6 +105,31 @@ function clearDownload(): void {
   }
 }
 
+function hideConversionProgress(): void {
+  if (!conversionProgress) return;
+  conversionProgress.hidden = true;
+  conversionProgress.max = 1;
+  conversionProgress.value = 0;
+  conversionProgress.setAttribute("value", "0");
+  conversionProgress.setAttribute("aria-label", "変換の進捗");
+}
+
+function showIndeterminateProgress(label: string): void {
+  if (!conversionProgress) return;
+  conversionProgress.hidden = false;
+  conversionProgress.removeAttribute("value");
+  conversionProgress.setAttribute("aria-label", label);
+}
+
+function showDeterminateProgress(completed: number, total: number, label: string): void {
+  if (!conversionProgress) return;
+  const safeTotal = Math.max(1, total);
+  conversionProgress.hidden = false;
+  conversionProgress.max = safeTotal;
+  conversionProgress.value = Math.min(safeTotal, Math.max(0, completed));
+  conversionProgress.setAttribute("aria-label", label);
+}
+
 function showFile(file: File | undefined): void {
   selected = file;
   if (!selectedFile || !resetButton) return;
@@ -122,6 +149,7 @@ function showFile(file: File | undefined): void {
 input?.addEventListener("change", () => {
   const file = input.files?.[0];
   clearDownload();
+  hideConversionProgress();
   if (file && (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"))) showFile(file);
   else {
     input.value = "";
@@ -132,6 +160,7 @@ resetButton?.addEventListener("click", () => {
   if (activeWorker) return;
   if (input) input.value = "";
   clearDownload();
+  hideConversionProgress();
   showFile(undefined);
   input?.focus();
 });
@@ -211,6 +240,7 @@ function cleanupWorker(): void {
   activeTracker = undefined;
   activeRequestId = undefined;
   if (cancelButton) cancelButton.hidden = true;
+  hideConversionProgress();
   updateConvertAvailability();
 }
 
@@ -224,11 +254,38 @@ function progressLabel(phase: string): string {
   }
 }
 
+function renderProgress(
+  phase: string,
+  completedUnits: number,
+  totalUnits: number | undefined,
+): void {
+  const label = progressLabel(phase);
+
+  if (phase === "inspecting-pages" && totalUnits !== undefined && totalUnits >= 3) {
+    const totalPages = Math.max(0, totalUnits - 3);
+    const completedPages = Math.min(totalPages, Math.max(0, completedUnits - 1));
+    showDeterminateProgress(completedPages, totalPages, `${label} ${completedPages}/${totalPages}ページ`);
+    if (conversionStatus) {
+      conversionStatus.textContent = `${label} ${completedPages.toLocaleString("ja-JP")}/${totalPages.toLocaleString("ja-JP")}ページ`;
+    }
+    return;
+  }
+
+  showIndeterminateProgress(label);
+  if (conversionStatus) {
+    const longPhase = phase === "building-document" || phase === "serializing-epub";
+    conversionStatus.textContent = longPhase
+      ? `${label}。大きなPDFでは数分かかることがあります。`
+      : label;
+  }
+}
+
 convertButton?.addEventListener("click", async () => {
   const file = selected;
   if (!file || !runtimeReady() || activeWorker) return;
   clearDownload();
   convertButton.disabled = true;
+  showIndeterminateProgress("PDFを読み込み中");
   if (conversionStatus) conversionStatus.textContent = "PDFを読み込んでいます。";
 
   try {
@@ -246,12 +303,12 @@ convertButton?.addEventListener("click", async () => {
       try {
         const event = tracker.apply(message.data);
         if (event.kind === "accepted") {
+          showIndeterminateProgress("変換を開始");
           if (conversionStatus) conversionStatus.textContent = "変換を開始しました。";
           return;
         }
         if (event.kind === "progress") {
-          const total = event.totalUnits === undefined ? "" : ` ${event.completedUnits}/${event.totalUnits}`;
-          if (conversionStatus) conversionStatus.textContent = `${progressLabel(event.phase)}${total}`;
+          renderProgress(event.phase, event.completedUnits, event.totalUnits);
           return;
         }
         if (event.kind === "succeeded") {
@@ -305,6 +362,7 @@ cancelButton?.addEventListener("click", () => {
   activeTracker.requestCancel();
   activeWorker.postMessage({ kind: "cancel", requestId: activeRequestId });
   cancelButton.hidden = true;
+  showIndeterminateProgress("キャンセル処理中");
   if (conversionStatus) conversionStatus.textContent = "キャンセル処理中です。";
 });
 
