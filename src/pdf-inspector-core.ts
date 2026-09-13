@@ -104,6 +104,7 @@ export async function inspectPdfBytes(
     for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
       control?.throwIfCancelled?.();
       const page = await pdf.getPage(pageNumber);
+      try {
       control?.throwIfCancelled?.();
       const viewport = page.getViewport({ scale: 1 });
       const textContent = await page.getTextContent({
@@ -179,6 +180,13 @@ export async function inspectPdfBytes(
         ...(productionImages === undefined ? {} : { imageOccurrences: productionImages.occurrences }),
       });
       control?.onPageInspected?.(pageNumber, pageCount);
+      } finally {
+        // PDF.js retains page-local operator/font/image caches unless the page
+        // proxy is explicitly cleaned. The extracted FileShape evidence above
+        // owns independent data by this point, so release PDF.js state before
+        // advancing to the next page.
+        page.cleanup();
+      }
     }
 
     control?.throwIfCancelled?.();
