@@ -6,6 +6,7 @@ import test from "node:test";
 import { buildDocumentFromInspection } from "../src/pdf-document-pipeline.js";
 import { convertPdfToEpub } from "../src/pdf-to-epub.js";
 import type { InspectPage, InspectResult, InspectTextItem } from "../src/pdf-inspector.js";
+import { reconstructPageFlow } from "../src/text-flow.js";
 import { pdfBytes } from "./pdf-fixture.js";
 
 function firstZipEntry(bytes: Uint8Array): { name: string; method: number; data: Uint8Array } {
@@ -102,6 +103,23 @@ test("document context resolves a short unknown page between matching orientatio
   const result = buildDocumentFromInspection(inspection(pages), "doc:context");
   assert.equal(result.document.pages[1]?.orientation, "horizontal");
   assert.equal(result.document.pages[1]?.blocks[0]?.inlines[0]?.kind, "text");
+});
+
+test("document build reuses precomputed flows and reports source-page progress", () => {
+  const source = inspection([
+    page(1, [item("first horizontal line", 100, 700, 180, 10)]),
+    page(2, [item("second horizontal line", 100, 700, 190, 10)]),
+  ]);
+  const precomputedFlows = new Map(source.pages.map((entry) => [entry.page, reconstructPageFlow(entry)]));
+  const progress: Array<[number, number]> = [];
+
+  const result = buildDocumentFromInspection(source, "doc:progress", undefined, {
+    precomputedFlows,
+    onPageBuilt: (completedPages, totalPages) => progress.push([completedPages, totalPages]),
+  });
+
+  assert.equal(result.document.pages.length, 2);
+  assert.deepEqual(progress, [[1, 2], [2, 2]]);
 });
 
 test("text-bearing page with unresolved orientation fails closed", () => {
