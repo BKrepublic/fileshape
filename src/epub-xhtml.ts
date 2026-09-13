@@ -11,10 +11,9 @@ import type {
   FileShapeDocument,
   InlineNode,
 } from "./document-model.js";
+import type { StructuralHeading } from "./heading-inference.js";
 
-export type EpubInferredHeading = {
-  title: string;
-  sourcePage: number;
+export type EpubInferredHeading = StructuralHeading & {
   targetId: string;
 };
 
@@ -26,7 +25,7 @@ export type EpubXhtmlPage = {
   href: string;
   mediaType: "application/xhtml+xml";
   xhtml: string;
-  /** Heading inferred from source text/geometry when the PDF has no usable outline. */
+  /** Source-backed structural heading selected before EPUB serialization. */
   heading?: EpubInferredHeading;
 };
 
@@ -48,6 +47,11 @@ export type EpubXhtmlOptions = {
   rubyMode?: EpubRubyMode;
   /** Fail closed by default; optionally preserve unresolved annotation text as page-end notes. */
   unresolvedRubyPolicy?: UnresolvedRubyPolicy;
+  /**
+   * Optional structural headings inferred upstream from PDF layout/style evidence.
+   * The renderer never guesses headings from title words, digits or punctuation.
+   */
+  structuralHeadings?: StructuralHeading[];
 };
 
 function escapeXmlText(value: string): string {
@@ -155,52 +159,55 @@ function pageTargetId(page: number): string {
   return `source-page-${page}`;
 }
 
-function headingTargetId(page: number): string {
-  return `heading-page-${page}`;
+function headingTargetId(heading: StructuralHeading): string {
+  return `heading-page-${heading.sourcePage}-block-${heading.semanticBlockIndex}`;
 }
 
-/**
- * Syosetu-style PDFs place chapter labels such as `０２　天使様の申し出`
- * as the first semantic block of the source page. PDF.js does not expose a
- * heading semantic, so infer only a deliberately narrow, source-backed form:
- * 2-4 leading digits followed by a short title and no sentence-final mark.
- * This avoids treating ordinary body paragraphs as headings.
- */
-function inferHeading(page: DocumentPage): EpubInferredHeading | undefined {
-  const first = page.blocks[0];
-  if (!first) return undefined;
-  const normalized = first.semanticText.replace(/[\s\u3000]+/gu, "").trim();
-  if (normalized.length < 3 || normalized.length > 64) return undefined;
-  if (!/^[0-9０-９]{2,4}[^0-9０-９].+/u.test(normalized)) return undefined;
-  if (/[。！？!?」』]$/u.test(normalized)) return undefined;
-  return {
-    title: normalized,
-    sourcePage: page.sourcePage,
-    targetId: headingTargetId(page.sourcePage),
-  };
+function validateStructuralHeadings(
+  document: FileShapeDocument,
+  headings: StructuralHeading[],
+): EpubInferredHeading[] {
+  const pages = new Map(document.pages.map((page) => [page.sourcePage, page]));
+  const seen = new Set<string>();
+  const validated: EpubInferredHeading[] = [];
+  for (const heading of headings) {
+    const key = `${heading.sourcePage}:${heading.semanticBlockIndex}`;
+    if (seen.has(key)) throw new Error(`duplicate structural heading ${key}`);
+    seen.add(key);
+    const page = pages.get(heading.sourcePage);
+    if (!page) throw new Error(`structural heading references missing page ${heading.sourcePage}`);
+    const block = page.blocks.find((candidate) => candidate.semanticBlockIndex === heading.semanticBlockIndex);
+    if (!block) throw new Error(`structural heading references missing block ${key}`);
+    const sourceTitle = blockPlainText(block).trim();
+    if (heading.title !== sourceTitle) {
+      throw new Error(`structural heading title differs from source block ${key}`);
+    }
+    validated.push({ ...heading, targetId: headingTargetId(heading) });
+  }
+  return validated.sort((a, b) =>
+    a.sourcePage - b.sourcePage || a.semanticBlockIndex - b.semanticBlockIndex);
 }
 
-function logicalGroups(pages: DocumentPage[]): Array<{ pages: DocumentPage[]; heading?: EpubInferredHeading }> {
-  const headings = new Map<number, EpubInferredHeading>();
-  for (const page of pages) {
-    const heading = inferHeading(page);
-    if (heading) headings.set(page.sourcePage, heading);
+function logicalGroups(
+  pages: DocumentPage[],
+  headings: EpubInferredHeading[],
+): Array<{ pages: DocumentPage[]; heading?: EpubInferredHeading }> {
+  const headingByPage = new Map<number, EpubInferredHeading>();
+  for (const heading of headings) {
+    if (headingByPage.has(heading.sourcePage)) {
+      throw new Error(`multiple structural headings on source page ${heading.sourcePage} are not yet supported`);
+    }
+    headingByPage.set(heading.sourcePage, heading);
   }
 
-  // Preserve the old one-PDF-page-per-XHTML behavior for documents where no
-  // chapter signal can be inferred. Once headings are present, source PDF page
-  // boundaries inside a chapter become provenance markers only, not EPUB
-  // pagination boundaries.
-  if (headings.size === 0) {
-    return pages.map((page) => ({ pages: [page] }));
-  }
+  if (headingByPage.size === 0) return pages.map((page) => ({ pages: [page] }));
 
   const groups: Array<{ pages: DocumentPage[]; heading?: EpubInferredHeading }> = [];
   let current: { pages: DocumentPage[]; heading?: EpubInferredHeading } | undefined;
   let chapterFlowStarted = false;
 
   for (const page of pages) {
-    const heading = headings.get(page.sourcePage);
+    const heading = headingByPage.get(page.sourcePage);
     if (heading) {
       if (current) groups.push(current);
       current = { pages: [page], heading };
@@ -213,9 +220,6 @@ function logicalGroups(pages: DocumentPage[]): Array<{ pages: DocumentPage[]; he
       continue;
     }
 
-    // Front matter before the first inferred chapter keeps its original page
-    // boundaries. This avoids joining title/copyright/introduction layouts that
-    // can legitimately use different writing directions.
     groups.push({ pages: [page] });
   }
 
@@ -228,18 +232,12 @@ function hasBoundaryImage(previous: DocumentPage, current: DocumentPage): boolea
     current.imageOccurrences.some((occurrence) => occurrence.placementIndex === 0);
 }
 
-/**
- * A physical PDF page break is not a paragraph break. Join only the conservative
- * case where the previous page visibly ends mid-sentence and the next page begins
- * without a paragraph indent/opening quote. This keeps ordinary paragraph starts
- * separate while repairing wraps such as `一人ぼっちで居る、と` +
- * `いうのも居心地が悪い。`.
- */
 function continuesAcrossSourcePage(
   previous: DocumentPage,
   current: DocumentPage,
   previousNotes: PreservedUnresolvedAnnotation[],
   currentNotes: PreservedUnresolvedAnnotation[],
+  headingByPage: Map<number, EpubInferredHeading>,
 ): boolean {
   if (previous.orientation !== current.orientation) return false;
   if (previousNotes.length > 0 || currentNotes.length > 0) return false;
@@ -247,8 +245,9 @@ function continuesAcrossSourcePage(
   const previousBlock = previous.blocks.at(-1);
   const currentBlock = current.blocks[0];
   if (!previousBlock || !currentBlock) return false;
-  if (inferHeading(current) !== undefined) return false;
-  if (inferHeading(previous) !== undefined && previous.blocks.length === 1) return false;
+  if (headingByPage.has(current.sourcePage)) return false;
+  const previousHeading = headingByPage.get(previous.sourcePage);
+  if (previousHeading && previous.blocks.length === 1) return false;
 
   const before = blockPlainText(previousBlock).trimEnd();
   const after = blockPlainText(currentBlock);
@@ -281,8 +280,8 @@ function renderSourcePageItems(
     (page.orientation === "unknown"
       ? 0
       : page.orientation === "vertical"
-      ? right.displayBounds.right - left.displayBounds.right || left.displayBounds.top - right.displayBounds.top
-      : left.displayBounds.top - right.displayBounds.top || left.displayBounds.left - right.displayBounds.left) ||
+        ? right.displayBounds.right - left.displayBounds.right || left.displayBounds.top - right.displayBounds.top
+        : left.displayBounds.top - right.displayBounds.top || left.displayBounds.left - right.displayBounds.left) ||
     left.operatorIndex - right.operatorIndex || left.occurrenceIndex - right.occurrenceIndex);
 
   const bodyItems: string[] = [
@@ -295,16 +294,17 @@ function renderSourcePageItems(
       bodyItems.push(renderImage(occurrence, resource));
     }
     const block = page.blocks[gap];
-    if (block) {
-      const headingId = heading && gap === 0 ? heading.targetId : undefined;
-      const isFirst = gap === 0;
-      const isLast = gap === page.blocks.length - 1;
-      bodyItems.push(renderBlock(block, rubyMode, {
-        ...(headingId === undefined ? {} : { headingId }),
-        ...(isFirst && continueFromPrevious ? { continueFromPrevious: true } : {}),
-        ...(isLast && continueToNext ? { continueToNext: true } : {}),
-      }));
-    }
+    if (!block) continue;
+    const headingId = heading?.semanticBlockIndex === block.semanticBlockIndex
+      ? heading.targetId
+      : undefined;
+    const isFirst = gap === 0;
+    const isLast = gap === page.blocks.length - 1;
+    bodyItems.push(renderBlock(block, rubyMode, {
+      ...(headingId === undefined ? {} : { headingId }),
+      ...(isFirst && continueFromPrevious ? { continueFromPrevious: true } : {}),
+      ...(isLast && continueToNext ? { continueToNext: true } : {}),
+    }));
   }
   const preservedNotes = renderPreservedNotes(notes);
   if (preservedNotes.length > 0) bodyItems.push(preservedNotes);
@@ -316,6 +316,7 @@ function serializeLogicalXhtml(
   pages: DocumentPage[],
   notesByPage: Map<number, PreservedUnresolvedAnnotation[]>,
   heading: EpubInferredHeading | undefined,
+  headingByPage: Map<number, EpubInferredHeading>,
   options: EpubXhtmlOptions,
 ): string {
   const firstPage = pages[0];
@@ -327,6 +328,7 @@ function serializeLogicalXhtml(
   const stylesheet = options.stylesheetHref === undefined
     ? ""
     : `\n    <link rel="stylesheet" type="text/css" href="${escapeXmlAttribute(requireNonEmpty(options.stylesheetHref, "stylesheetHref"))}" />`;
+
   const joins: boolean[] = [];
   for (let index = 1; index < pages.length; index += 1) {
     const previous = pages[index - 1]!;
@@ -336,6 +338,7 @@ function serializeLogicalXhtml(
       current,
       notesByPage.get(previous.sourcePage) ?? [],
       notesByPage.get(current.sourcePage) ?? [],
+      headingByPage,
     );
   }
 
@@ -351,11 +354,10 @@ function serializeLogicalXhtml(
       index < pages.length - 1 && joins[index] === true,
     ));
   }
-  // Deliberately avoid pretty-print whitespace between fragments: when a
-  // paragraph spans a source PDF page, an inserted newline would become a text
-  // node inside the still-open paragraph and could render as an unwanted gap.
-  const body = bodyItems.length === 0 ? "" : `\n${bodyItems.join("")}\n  `;
 
+  // Do not inject formatting whitespace between fragments: a paragraph may
+  // remain open across a physical PDF page boundary.
+  const body = bodyItems.length === 0 ? "" : `\n${bodyItems.join("")}\n  `;
   return `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE html>\n<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="${escapeXmlAttribute(language)}" lang="${escapeXmlAttribute(language)}">\n  <head>\n    <meta charset="utf-8" />\n    <title>${escapeXmlText(title)}</title>${stylesheet}\n  </head>\n  <body ${orientationAttributes(firstPage)}>${body}</body>\n</html>\n`;
 }
 
@@ -370,10 +372,12 @@ export function serializeEpubXhtml(
       : { unresolvedRuby: options.unresolvedRubyPolicy },
   );
   const notesByPage = new Map(policy.pages.map((page) => [page.sourcePage, page.notes]));
+  const headings = validateStructuralHeadings(document, options.structuralHeadings ?? []);
+  const headingByPage = new Map(headings.map((heading) => [heading.sourcePage, heading]));
 
   return {
     documentId: document.id,
-    pages: logicalGroups(document.pages).map((group) => {
+    pages: logicalGroups(document.pages, headings).map((group) => {
       const firstPage = group.pages[0];
       if (!firstPage) throw new Error("logical EPUB group is empty");
       return {
@@ -381,7 +385,14 @@ export function serializeEpubXhtml(
         sourcePages: group.pages.map((page) => page.sourcePage),
         href: pageHref(firstPage.sourcePage),
         mediaType: "application/xhtml+xml" as const,
-        xhtml: serializeLogicalXhtml(document, group.pages, notesByPage, group.heading, options),
+        xhtml: serializeLogicalXhtml(
+          document,
+          group.pages,
+          notesByPage,
+          group.heading,
+          headingByPage,
+          options,
+        ),
         ...(group.heading === undefined ? {} : { heading: group.heading }),
       };
     }),
