@@ -58,7 +58,23 @@ export function serializeLegacyNcx(
   const outline = resolvedOutlineEntries(document, pages);
   const inferred = inferredHeadingEntries(pages);
   const entries = outline.length > 0 ? outline : inferred.length > 0 ? inferred : fallbackPageEntries(pages);
-  const navPoints = entries.map((entry, index) => `    <navPoint id="navPoint-${index + 1}" playOrder="${index + 1}">\n      <navLabel><text>${xmlText(entry.title)}</text></navLabel>\n      <content src="${xmlAttr(entry.href)}"/>\n    </navPoint>`).join("\n");
+
+  // NCX requires references to the same content target to carry the same
+  // playOrder value. PDF outlines can legitimately contain several labels that
+  // resolve to one source page (for example a parent and child bookmark on the
+  // same page). Preserve every source label, but allocate playOrder per unique
+  // target rather than per navPoint.
+  const playOrderByHref = new Map<string, number>();
+  let nextPlayOrder = 1;
+  const navPoints = entries.map((entry, index) => {
+    let playOrder = playOrderByHref.get(entry.href);
+    if (playOrder === undefined) {
+      playOrder = nextPlayOrder;
+      nextPlayOrder += 1;
+      playOrderByHref.set(entry.href, playOrder);
+    }
+    return `    <navPoint id="navPoint-${index + 1}" playOrder="${playOrder}">\n      <navLabel><text>${xmlText(entry.title)}</text></navLabel>\n      <content src="${xmlAttr(entry.href)}"/>\n    </navPoint>`;
+  }).join("\n");
 
   return `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE ncx PUBLIC "-//NISO//DTD ncx 2005-1//EN" "http://www.daisy.org/z3986/2005/ncx-2005-1.dtd">\n<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">\n  <head>\n    <meta name="dtb:uid" content="${xmlAttr(identifier)}"/>\n    <meta name="dtb:depth" content="1"/>\n    <meta name="dtb:totalPageCount" content="0"/>\n    <meta name="dtb:maxPageNumber" content="0"/>\n  </head>\n  <docTitle><text>${xmlText(title)}</text></docTitle>\n  <navMap>\n${navPoints}\n  </navMap>\n</ncx>\n`;
 }
