@@ -9,13 +9,17 @@ import {
   type EpubPackageOptions,
   type EpubPageProgressionDirection,
 } from "./epub-package.js";
+import { inferStructuralHeadings } from "./heading-inference.js";
 import { buildDocumentFromInspection } from "./pdf-document-pipeline.js";
 import { inspectPdfBytes } from "./pdf-inspector-core.js";
 import type { EpubNavigationSummary } from "./epub-navigation.js";
 import type { EpubRubyMode } from "./epub-xhtml.js";
 import type { PdfJsResourceConfig } from "./pdf-inspection-model.js";
 
-export type PdfToEpubOptions = Omit<EpubPackageOptions, "title" | "identifier" | "coverImageResourceId"> & {
+export type PdfToEpubOptions = Omit<
+  EpubPackageOptions,
+  "title" | "identifier" | "coverImageResourceId" | "structuralHeadings"
+> & {
   title?: string;
   identifier?: string;
   /** Exact source occurrence selected as cover. Omitted means no cover designation. */
@@ -117,6 +121,9 @@ export async function convertPdfBytesToEpubWithResources(
     totalUnits,
   });
   const { document } = buildDocumentFromInspection(inspection, documentId);
+  const structuralHeadings = inspection.outline && inspection.outline.length > 0
+    ? []
+    : inferStructuralHeadings(document, inspection);
   control?.throwIfCancelled?.();
   control?.onProgress?.({
     phase: "building-document",
@@ -151,6 +158,7 @@ export async function convertPdfBytesToEpubWithResources(
       ? {}
       : { pageProgressionDirection: effectiveOptions.pageProgressionDirection as EpubPageProgressionDirection }),
     ...(coverImageResourceId === undefined ? {} : { coverImageResourceId }),
+    ...(structuralHeadings.length === 0 ? {} : { structuralHeadings }),
     unresolvedRubyPolicy: effectiveUnresolvedPolicy,
   });
   control?.throwIfCancelled?.();
