@@ -11,6 +11,7 @@ import type {
   FileShapeDocument,
   InlineNode,
 } from "./document-model.js";
+import { normalizeEpubPresentationText } from "./epub-navigation-text.js";
 import type { StructuralHeading } from "./heading-inference.js";
 
 export type EpubInferredHeading = StructuralHeading & {
@@ -55,7 +56,7 @@ export type EpubXhtmlOptions = {
 };
 
 function escapeXmlText(value: string): string {
-  return value
+  return normalizeEpubPresentationText(value)
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
@@ -251,8 +252,8 @@ function continuesAcrossSourcePage(
   const previousHeading = headingByPage.get(previous.sourcePage);
   if (previousHeading && previous.blocks.length === 1) return false;
 
-  const before = blockPlainText(previousBlock).trimEnd();
-  const after = blockPlainText(currentBlock);
+  const before = normalizeEpubPresentationText(blockPlainText(previousBlock)).trimEnd();
+  const after = normalizeEpubPresentationText(blockPlainText(currentBlock));
   if (before.length === 0 || after.trim().length === 0) return false;
   if (/^[\u3000\t ]/u.test(after)) return false;
   if (/^[「『（【〔［〈《]/u.test(after.trimStart())) return false;

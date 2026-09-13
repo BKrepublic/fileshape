@@ -16,6 +16,9 @@ export function defaultEpubStyles(): string {
 body {
   font-family: serif;
   line-height: 1.7;
+  line-break: strict;
+  word-break: normal;
+  overflow-wrap: normal;
 }
 
 .fileshape-page {
