@@ -12,6 +12,8 @@ import {
 import { inferStructuralHeadings } from "./heading-inference.js";
 import { buildDocumentFromInspection } from "./pdf-document-pipeline.js";
 import { inspectPdfBytes } from "./pdf-inspector-core.js";
+import { associateRubySpans, type RubySpan } from "./ruby-spans.js";
+import { reconstructPageFlow } from "./text-flow.js";
 import type { EpubNavigationSummary } from "./epub-navigation.js";
 import type { EpubRubyMode } from "./epub-xhtml.js";
 import type { PdfJsResourceConfig } from "./pdf-inspection-model.js";
@@ -89,6 +91,8 @@ export async function convertPdfBytesToEpubWithResources(
   control?.throwIfCancelled?.();
 
   let totalUnits: number | undefined;
+  const precomputedRubySpans = new Map<number, RubySpan[]>();
+
   const inspection = await inspectPdfBytes(
     sourceBytes,
     sourceName,
@@ -102,8 +106,38 @@ export async function convertPdfBytesToEpubWithResources(
         control?.onProgress?.({ phase: "loading-pdf", completedUnits: 1, totalUnits });
         control?.onProgress?.({ phase: "inspecting-pages", completedUnits: 1, totalUnits });
       },
-      onPageInspected: (completedPages) => {
-        if (totalUnits === undefined) throw new Error("conversion progress total is unavailable after PDF load");
+      onPageInspected: (completedPages, _totalPages, page) => {
+        // Ruby association needs glyph geometry only while this page is live.
+        // Keep the compact source-backed result and drop the heavy glyph
+        // evidence before inspection advances to the next page.
+        const flow = reconstructPageFlow(page);
+
+        precomputedRubySpans.set(
+          page.page,
+          associateRubySpans(page, flow.bodyFontSize),
+        );
+
+        delete page.operatorGlyphs;
+        delete page.glyphIssues;
+
+        // The original PDF transform and ruby-only display geometry are no
+        // longer needed after flow/ruby extraction. Later layout reconstruction
+        // uses displayX/displayY/width/height/fontSize and displayTransform.
+        // Share one empty vector instead of retaining a six-number array for
+        // every text item in the document.
+        const releasedTransform: number[] = [];
+
+        for (const item of page.textItems) {
+          delete item.glyphs;
+          delete item.glyphMapping;
+          delete item.displayGeometry;
+          item.transform = releasedTransform;
+        }
+
+        if (totalUnits === undefined) {
+          throw new Error("conversion progress total is unavailable after PDF load");
+        }
+
         control?.onProgress?.({
           phase: "inspecting-pages",
           completedUnits: 1 + completedPages,
@@ -120,7 +154,11 @@ export async function convertPdfBytesToEpubWithResources(
     completedUnits: 1 + inspection.pageCount,
     totalUnits,
   });
-  const { document } = buildDocumentFromInspection(inspection, documentId);
+  const { document } = buildDocumentFromInspection(
+    inspection,
+    documentId,
+    precomputedRubySpans,
+  );
   const structuralHeadings = inspection.outline && inspection.outline.length > 0
     ? []
     : inferStructuralHeadings(document, inspection);

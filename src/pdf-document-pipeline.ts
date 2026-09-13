@@ -6,7 +6,7 @@ import {
 import { resolveDocumentOrientations } from "./document-orientation.js";
 import type { InspectResult } from "./pdf-inspection-model.js";
 import { reconstructPhysicalLayout } from "./physical-layout.js";
-import { associateRubySpans } from "./ruby-spans.js";
+import { associateRubySpans, type RubySpan } from "./ruby-spans.js";
 import { buildSemanticBlocks } from "./semantic-blocks.js";
 import { reconstructPageFlow, type PageFlowResult } from "./text-flow.js";
 
@@ -33,6 +33,7 @@ function hasVisibleText(inspection: InspectResult, pageNumber: number): boolean 
 export function buildDocumentFromInspection(
   inspection: InspectResult,
   documentId: string,
+  precomputedRubySpans?: ReadonlyMap<number, RubySpan[]>,
 ): PdfDocumentPipelineResult {
   const flows = inspection.pages.map((page) => ({
     page,
@@ -49,6 +50,13 @@ export function buildDocumentFromInspection(
     const resolved = resolvedByPage.get(page.page);
     const orientation = resolved?.resolved ?? flow.orientation;
     const layout = reconstructPhysicalLayout(page, orientation, flow.bodyFontSize);
+    const rubySpans = precomputedRubySpans === undefined
+      ? associateRubySpans(page, flow.bodyFontSize)
+      : precomputedRubySpans.get(page.page);
+
+    if (rubySpans === undefined) {
+      throw new Error(`missing precomputed ruby spans for page ${page.page}`);
+    }
 
     if (orientation === "unknown") {
       if (hasVisibleText(inspection, page.page)) {
@@ -59,7 +67,7 @@ export function buildDocumentFromInspection(
         orientation,
         layout,
         semantic: buildSemanticBlocks(layout, flow.bodyFontSize),
-        rubySpans: associateRubySpans(page, flow.bodyFontSize),
+        rubySpans,
       };
     }
 
@@ -74,7 +82,7 @@ export function buildDocumentFromInspection(
       orientation,
       layout,
       semantic,
-      rubySpans: associateRubySpans(page, flow.bodyFontSize),
+      rubySpans,
     };
   });
 
