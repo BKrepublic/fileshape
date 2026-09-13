@@ -13,7 +13,7 @@ import { inferStructuralHeadings } from "./heading-inference.js";
 import { buildDocumentFromInspection } from "./pdf-document-pipeline.js";
 import { inspectPdfBytes } from "./pdf-inspector-core.js";
 import { associateRubySpans, type RubySpan } from "./ruby-spans.js";
-import { reconstructPageFlow } from "./text-flow.js";
+import { reconstructPageFlow, type PageFlowResult } from "./text-flow.js";
 import type { EpubNavigationSummary } from "./epub-navigation.js";
 import type { EpubRubyMode } from "./epub-xhtml.js";
 import type { PdfJsResourceConfig } from "./pdf-inspection-model.js";
@@ -92,6 +92,7 @@ export async function convertPdfBytesToEpubWithResources(
 
   let totalUnits: number | undefined;
   const precomputedRubySpans = new Map<number, RubySpan[]>();
+  const precomputedFlows = new Map<number, PageFlowResult>();
 
   const inspection = await inspectPdfBytes(
     sourceBytes,
@@ -102,15 +103,18 @@ export async function convertPdfBytesToEpubWithResources(
     {
       ...(control?.throwIfCancelled === undefined ? {} : { throwIfCancelled: control.throwIfCancelled }),
       onDocumentLoaded: (pageCount) => {
-        totalUnits = pageCount + 3;
+        // One unit for loading, one per inspected page, one per document-build
+        // page, then one unit for EPUB serialization.
+        totalUnits = pageCount * 2 + 2;
         control?.onProgress?.({ phase: "loading-pdf", completedUnits: 1, totalUnits });
         control?.onProgress?.({ phase: "inspecting-pages", completedUnits: 1, totalUnits });
       },
       onPageInspected: (completedPages, _totalPages, page) => {
-        // Ruby association needs glyph geometry only while this page is live.
-        // Keep the compact source-backed result and drop the heavy glyph
-        // evidence before inspection advances to the next page.
+        // Ruby association and flow reconstruction need page geometry only while
+        // this page is live. Preserve their compact results, then release the
+        // larger transient evidence before inspection advances.
         const flow = reconstructPageFlow(page);
+        precomputedFlows.set(page.page, flow);
 
         precomputedRubySpans.set(
           page.page,
@@ -147,25 +151,38 @@ export async function convertPdfBytesToEpubWithResources(
     },
   );
   control?.throwIfCancelled?.();
-  if (totalUnits === undefined) totalUnits = inspection.pageCount + 3;
+  if (totalUnits === undefined) totalUnits = inspection.pageCount * 2 + 2;
 
+  const buildStartUnits = 1 + inspection.pageCount;
   control?.onProgress?.({
     phase: "building-document",
-    completedUnits: 1 + inspection.pageCount,
+    completedUnits: buildStartUnits,
     totalUnits,
   });
   const { document } = buildDocumentFromInspection(
     inspection,
     documentId,
     precomputedRubySpans,
+    {
+      precomputedFlows,
+      onPageBuilt: (completedPages) => {
+        control?.throwIfCancelled?.();
+        control?.onProgress?.({
+          phase: "building-document",
+          completedUnits: buildStartUnits + completedPages,
+          totalUnits,
+        });
+      },
+    },
   );
   const structuralHeadings = inspection.outline && inspection.outline.length > 0
     ? []
     : inferStructuralHeadings(document, inspection);
   control?.throwIfCancelled?.();
+  const serializationStartUnits = 1 + inspection.pageCount * 2;
   control?.onProgress?.({
     phase: "building-document",
-    completedUnits: 2 + inspection.pageCount,
+    completedUnits: serializationStartUnits,
     totalUnits,
   });
   const unresolvedAnnotationCount = document.pages.reduce(
@@ -181,7 +198,7 @@ export async function convertPdfBytesToEpubWithResources(
   control?.throwIfCancelled?.();
   control?.onProgress?.({
     phase: "serializing-epub",
-    completedUnits: 2 + inspection.pageCount,
+    completedUnits: serializationStartUnits,
     totalUnits,
   });
   const epub = serializeEpubPackage(document, {
@@ -202,7 +219,7 @@ export async function convertPdfBytesToEpubWithResources(
   control?.throwIfCancelled?.();
   control?.onProgress?.({
     phase: "serializing-epub",
-    completedUnits: 3 + inspection.pageCount,
+    completedUnits: totalUnits,
     totalUnits,
   });
 
