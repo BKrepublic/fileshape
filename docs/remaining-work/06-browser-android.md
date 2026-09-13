@@ -14,7 +14,8 @@
 
 Stage 28時点ではブラウザー変換を完成扱いしていませんでした。Stage 29
 implementation head `2e68168f17f44f4b11396c341028df5217fb79db` でその残件を
-実装し、公開local gateとprivate 9-PDF gateをacceptedにしました。
+実装し、公開local gateとprivate 9-PDF gateをacceptedにしました。PR #22は
+`1bb9c226d3fa3e2dcf427086127d8fe860b36f61`としてsquash-mergedです。
 
 Stage 29はWeb Crypto SHA-256、Node v26.7.0の16 KiB出力呼び出しを再現する
 pinned zlib-ng 2.3.3 WASM、application-base配下のPDF.js resources、dedicated

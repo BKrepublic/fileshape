@@ -6,8 +6,12 @@ and the remaining work after it.
 ## Repository state
 
 - Repository: `BKrepublic/fileshape`
-- Branch: `stage29-browser-runtime-portability`
-- PR: #22
+- Branch: `main`
+- PR: #22, squash-merged
+- Accepted merge commit:
+  `1bb9c226d3fa3e2dcf427086127d8fe860b36f61`
+- Merge-ready branch head:
+  `e2bb50bbd0559fa4ba9e8693bcd9687aa5c29be1`
 - Accepted implementation head:
   `2e68168f17f44f4b11396c341028df5217fb79db`
 - Local worktree: `/data/experiment/fileshape`
@@ -112,7 +116,9 @@ Do not change PDF interpretation or font policy to address resource failures.
 
 ## Acceptance evidence
 
-Public local gate on the accepted implementation head:
+Public local gate rerun on merge-ready head
+`e2bb50bbd0559fa4ba9e8693bcd9687aa5c29be1` (tree-identical to accepted merge
+`1bb9c226d3fa3e2dcf427086127d8fe860b36f61`):
 
 ```text
 npm test=PASS (217/217)
@@ -140,17 +146,15 @@ evidence only and must not be committed.
 
 ## Remaining work
 
-1. Merge PR #22 after the documentation/review checkpoint, using local
-   verification as evidence. Do not enable GitHub Actions.
-2. Keep manual Thorium/calibre reader validation pending until it is actually
+1. Keep manual Thorium/calibre reader validation pending until it is actually
    performed.
-3. Derive any browser size/support statement from the recorded RSS/elapsed
+2. Derive any browser size/support statement from the recorded RSS/elapsed
    evidence and representative target-device runs. Stage 29 does not define a
    universal maximum input size.
-4. Begin Android architecture evaluation only from the accepted browser/core
+3. Begin Android architecture evaluation only from the accepted browser/core
    path. Compare installed PWA, WebView wrapper, and native adapter constraints
    before choosing a framework.
-5. Do not reopen Task 4 or weaken ruby, image, navigation, EPUB, or byte-equality
+4. Do not reopen Task 4 or weaken ruby, image, navigation, EPUB, or byte-equality
    rules without new generic source-backed evidence.
 
 ## Local commands

@@ -27,10 +27,18 @@ b5100164d95d623c7c8631e6ff265686f10320a3
 Stage 28 provides a framework-free mobile-first static PWA shell, same-origin/offline service worker, explicit browser conversion message contract, pinned Vite/Playwright verification, and a real PDF.js module-worker probe. Browser conversion remained deliberately disabled at that checkpoint; Stage 28 itself did not claim CLI/browser parity.
 
 A documentation-only Stage 28 acceptance record follows the merge commit. Stage
-29 is accepted on PR #22 implementation head
-`2e68168f17f44f4b11396c341028df5217fb79db`; its final documentation and merge
-remain the current repository operation. Any continuation must use the latest
-remote state and must not reset to an earlier implementation SHA.
+29 was accepted on implementation head
+`2e68168f17f44f4b11396c341028df5217fb79db`, reconciled with the local-only
+verification policy on merge-ready branch head
+`e2bb50bbd0559fa4ba9e8693bcd9687aa5c29be1`, and squash-merged through PR #22 as:
+
+```text
+1bb9c226d3fa3e2dcf427086127d8fe860b36f61
+```
+
+The merge commit tree is identical to the locally verified merge-ready branch
+head. Any continuation must use the latest remote `main` and must not reset to
+an earlier implementation SHA.
 
 ## Accepted CLI checkpoint
 
@@ -106,8 +114,8 @@ Stages 22–24 found no generic source-backed production rule that could safely 
 
 ## Browser checkpoint accepted result
 
-Stage 29 public local acceptance on implementation head
-`2e68168f17f44f4b11396c341028df5217fb79db`:
+Stage 29 public local acceptance was rerun on merge-ready head
+`e2bb50bbd0559fa4ba9e8693bcd9687aa5c29be1`:
 
 ```text
 npm test                         PASS (217/217)
@@ -119,7 +127,10 @@ WASM reproducible rebuild        PASS
 WASM SHA-256                     90bc26f8c73322492510a9438e04d41c5ab7badcf76d0ae1e70d1aae4d9176f1
 ```
 
-Private local browser acceptance on the same implementation:
+Private local browser acceptance was completed on implementation head
+`2e68168f17f44f4b11396c341028df5217fb79db`, after the committed WASM mode and
+application resource base corrections. The later commits only completed
+documentation and reconciled the already-equivalent local-only policy:
 
 ```text
 PRIVATE_BROWSER_ACCEPTANCE=PASS
@@ -165,17 +176,15 @@ evidence.
 
 ## Next work
 
-1. Finish the PR #22 documentation/review checkpoint and merge Stage 29 without
-   enabling GitHub Actions.
-2. Keep manual Thorium/calibre reading-system acceptance marked unperformed
+1. Keep manual Thorium/calibre reading-system acceptance marked unperformed
    until it is actually completed.
-3. Review the recorded Stage 29 elapsed/RSS evidence before making any browser
+2. Review the recorded Stage 29 elapsed/RSS evidence before making any browser
    maximum-input or support claim. Add target-device measurements rather than
    inventing an upload-style limit for this local app.
-4. Start Android architecture evaluation from the accepted browser/core path:
+3. Start Android architecture evaluation from the accepted browser/core path:
    compare installed PWA, WebView wrapper, and native adapter constraints before
    selecting a framework or packaging route.
-5. Validate Android file selection/save, lifecycle, cancellation, memory, and
+4. Validate Android file selection/save, lifecycle, cancellation, memory, and
    output equality on a real device before claiming device acceptance.
-6. Do not reopen Task 4 or widen ruby thresholds without new generic
+5. Do not reopen Task 4 or widen ruby thresholds without new generic
    source-backed evidence.
