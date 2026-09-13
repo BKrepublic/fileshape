@@ -71,3 +71,25 @@ test("keeps shifted punctuation and horizontal-looking symbols in the same physi
   assert.equal(layout.units.length, 1);
   assert.equal(layout.units[0]?.text, "ムード．");
 });
+
+test("reconstructs vertical glyph columns from geometry when PDF source order is interleaved", () => {
+  const items = [
+    item({ text: "縦", displayX: 700, displayY: 100 }),
+    item({ text: "次", displayX: 676, displayY: 100 }),
+    item({ text: "書", displayX: 700, displayY: 114 }),
+    item({ text: "の", displayX: 676, displayY: 114 }),
+    item({ text: "き", displayX: 700, displayY: 128 }),
+    item({ text: "列", displayX: 676, displayY: 128 }),
+  ];
+
+  const layout = reconstructPhysicalLayout(page(items), "vertical", 14);
+
+  assert.deepEqual(
+    layout.units.map((unit) => unit.text),
+    ["縦書き", "次の列"],
+  );
+  assert.deepEqual(
+    layout.units.map((unit) => unit.itemCount),
+    [3, 3],
+  );
+});
