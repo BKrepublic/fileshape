@@ -33,7 +33,7 @@ h1 { margin: 0 0 10px; font-size: clamp(1.8rem, 7vw, 2.35rem); line-height: 1.2;
 .page-footer a { text-decoration: none; }
 .page-footer a:hover { text-decoration: underline; }
 .page-footer p { margin: 12px 0 0; }
-.notice { padding: 14px 16px; border-left: 4px solid var(--primary); background: color-mix(in srgb, var(--surface) 72%, transparent); border-radius: 8px; }
+.notice { margin: 0 0 16px; padding: 20px; border-radius: 16px; background: var(--surface); }
 :focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
 
 @media (prefers-color-scheme: dark) {
