@@ -65,6 +65,7 @@ emcc "$script_dir/fileshape-zlib-wrapper.c" "$build_dir/libz.a" \
   -o "$output"
 
 [[ -s "$output" ]] || { printf 'Emscripten produced an empty artifact: %s\n' "$output" >&2; exit 1; }
+chmod 0644 "$output"
 artifact_hash=$(sha256sum "$output" | awk '{print $1}')
 recorded_hash=$(awk '/`fileshape-zlib-ng-2\.3\.3\.wasm` SHA-256:/{getline; gsub(/`/, ""); print}' "$script_dir/README.md")
 if [[ -n "$recorded_hash" && "$artifact_hash" != "$recorded_hash" ]]; then
