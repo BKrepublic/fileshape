@@ -53,3 +53,38 @@ test("legacy NCX mirrors source-backed structural headings for older reading sys
   assert.match(ncx, /<text>第二幕<\/text>/);
   assert.match(ncx, /<content src="text\/page-0002\.xhtml#heading-page-2-block-0"\/>/);
 });
+
+test("NCX reuses playOrder when multiple outline labels resolve to the same target", () => {
+  const document = fixture();
+  document.navigation = [
+    {
+      kind: "outline",
+      title: "Parent label",
+      sourceOutlinePath: [0],
+      target: { status: "resolved", sourcePage: 1 },
+      children: [
+        {
+          kind: "outline",
+          title: "Child label",
+          sourceOutlinePath: [0, 0],
+          target: { status: "resolved", sourcePage: 1 },
+          children: [],
+        },
+      ],
+    },
+    {
+      kind: "outline",
+      title: "Next label",
+      sourceOutlinePath: [1],
+      target: { status: "resolved", sourcePage: 2 },
+      children: [],
+    },
+  ];
+
+  const pages = serializeEpubXhtml(document).pages;
+  const ncx = serializeLegacyNcx(document, "Book", "urn:test:ncx", pages);
+
+  assert.match(ncx, /navPoint-1" playOrder="1"[\s\S]*?<text>Parent label<\/text>[\s\S]*?page-0001\.xhtml#source-page-1/);
+  assert.match(ncx, /navPoint-2" playOrder="1"[\s\S]*?<text>Child label<\/text>[\s\S]*?page-0001\.xhtml#source-page-1/);
+  assert.match(ncx, /navPoint-3" playOrder="2"[\s\S]*?<text>Next label<\/text>[\s\S]*?page-0002\.xhtml#source-page-2/);
+});
