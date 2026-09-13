@@ -52,7 +52,9 @@ app.innerHTML = `
     <section class="action-area" aria-labelledby="action-title">
       <h2 id="action-title" class="visually-hidden">変換</h2>
       <button id="convert-button" class="primary-button" type="button" disabled>EPUBに変換</button>
-      <progress id="conversion-progress" class="conversion-progress" max="1" value="0" hidden aria-label="変換の進捗"></progress>
+      <div id="conversion-progress" class="conversion-progress" role="progressbar" aria-label="変換の進捗" hidden>
+        <span class="conversion-progress-bar" aria-hidden="true"></span>
+      </div>
       <p id="conversion-continuity" class="conversion-continuity" hidden>変換が完了するまで、このページを閉じたり再読み込みしたりせず、そのままお待ちください。ページを離れると処理は中断され、最初からやり直しになります。</p>
       <button id="cancel-button" class="text-button" type="button" hidden>キャンセル</button>
       <p id="conversion-status" class="action-explanation" aria-live="polite">PDFを選択すると変換できます。</p>
@@ -66,7 +68,8 @@ const selectedFile = document.querySelector<HTMLParagraphElement>("#selected-fil
 const resetButton = document.querySelector<HTMLButtonElement>("#reset-file");
 const convertButton = document.querySelector<HTMLButtonElement>("#convert-button");
 const cancelButton = document.querySelector<HTMLButtonElement>("#cancel-button");
-const conversionProgress = document.querySelector<HTMLProgressElement>("#conversion-progress");
+const conversionProgress = document.querySelector<HTMLDivElement>("#conversion-progress");
+const conversionProgressBar = conversionProgress?.querySelector<HTMLSpanElement>(".conversion-progress-bar");
 const conversionContinuity = document.querySelector<HTMLParagraphElement>("#conversion-continuity");
 const conversionStatus = document.querySelector<HTMLParagraphElement>("#conversion-status");
 const downloadLink = document.querySelector<HTMLAnchorElement>("#download-link");
@@ -110,26 +113,36 @@ function clearDownload(): void {
 function hideConversionProgress(): void {
   if (!conversionProgress) return;
   conversionProgress.hidden = true;
-  conversionProgress.max = 1;
-  conversionProgress.value = 0;
-  conversionProgress.setAttribute("value", "0");
+  conversionProgress.classList.remove("is-indeterminate");
+  conversionProgress.removeAttribute("aria-valuemin");
+  conversionProgress.removeAttribute("aria-valuemax");
+  conversionProgress.removeAttribute("aria-valuenow");
   conversionProgress.setAttribute("aria-label", "変換の進捗");
+  if (conversionProgressBar) conversionProgressBar.style.width = "0%";
 }
 
 function showIndeterminateProgress(label: string): void {
   if (!conversionProgress) return;
   conversionProgress.hidden = false;
-  conversionProgress.removeAttribute("value");
+  conversionProgress.classList.add("is-indeterminate");
+  conversionProgress.removeAttribute("aria-valuemin");
+  conversionProgress.removeAttribute("aria-valuemax");
+  conversionProgress.removeAttribute("aria-valuenow");
   conversionProgress.setAttribute("aria-label", label);
+  if (conversionProgressBar) conversionProgressBar.style.removeProperty("width");
 }
 
 function showDeterminateProgress(completed: number, total: number, label: string): void {
   if (!conversionProgress) return;
   const safeTotal = Math.max(1, total);
+  const safeCompleted = Math.min(safeTotal, Math.max(0, completed));
   conversionProgress.hidden = false;
-  conversionProgress.max = safeTotal;
-  conversionProgress.value = Math.min(safeTotal, Math.max(0, completed));
+  conversionProgress.classList.remove("is-indeterminate");
+  conversionProgress.setAttribute("aria-valuemin", "0");
+  conversionProgress.setAttribute("aria-valuemax", String(safeTotal));
+  conversionProgress.setAttribute("aria-valuenow", String(safeCompleted));
   conversionProgress.setAttribute("aria-label", label);
+  if (conversionProgressBar) conversionProgressBar.style.width = `${(safeCompleted / safeTotal) * 100}%`;
 }
 
 function showConversionContinuity(show: boolean): void {
@@ -289,6 +302,14 @@ function renderProgress(
   if (phase === "building-document" && totalPages !== undefined) {
     const buildStartUnits = 1 + totalPages;
     const completedBuildUnits = Math.min(totalPages * 2, Math.max(0, completedUnits - buildStartUnits));
+
+    if (completedBuildUnits >= totalPages * 2) {
+      const status = "文書構造を仕上げ中。大きなPDFでは数分かかることがあります。";
+      showIndeterminateProgress("文書構造を仕上げ中");
+      if (conversionStatus) conversionStatus.textContent = status;
+      return;
+    }
+
     let status: string;
     if (completedBuildUnits <= totalPages) {
       const analyzedPages = completedBuildUnits;
