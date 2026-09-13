@@ -71,3 +71,40 @@ test("keeps shifted punctuation and horizontal-looking symbols in the same physi
   assert.equal(layout.units.length, 1);
   assert.equal(layout.units[0]?.text, "ムード．");
 });
+
+test("reconstructs vertical glyph columns from geometry when PDF source order is interleaved", () => {
+  const items = [
+    item({ text: "縦", displayX: 700, displayY: 100 }),
+    item({ text: "次", displayX: 676, displayY: 100 }),
+    item({ text: "書", displayX: 700, displayY: 114 }),
+    item({ text: "の", displayX: 676, displayY: 114 }),
+    item({ text: "き", displayX: 700, displayY: 128 }),
+    item({ text: "列", displayX: 676, displayY: 128 }),
+  ];
+
+  const layout = reconstructPhysicalLayout(page(items), "vertical", 14);
+
+  assert.deepEqual(
+    layout.units.map((unit) => unit.text),
+    ["縦書き", "次の列"],
+  );
+  assert.deepEqual(
+    layout.units.map((unit) => unit.itemCount),
+    [3, 3],
+  );
+});
+
+test("excludes a smaller lower-margin page number before it can merge into a body column", () => {
+  const items = [
+    item({ text: "本", displayX: 410, displayY: 100 }),
+    item({ text: "文", displayX: 410, displayY: 114 }),
+    // Mirrors N8440FE-style pagination: about 89% down the page and close
+    // enough in X that it would otherwise be clustered into the body column.
+    item({ text: "3", displayX: 400, displayY: 534, fontSize: 12, width: 8, height: 12 }),
+  ];
+
+  const layout = reconstructPhysicalLayout(page(items), "vertical", 14);
+
+  assert.deepEqual(layout.units.map((unit) => unit.text), ["本文"]);
+  assert.equal(layout.units[0]?.itemCount, 2);
+});

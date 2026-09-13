@@ -4,6 +4,7 @@ dist/
 .DS_Store
 
 local-samples/
+local-oracles/
 .cache/epubcheck/
 local-reports/
 test-results/

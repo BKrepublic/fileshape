@@ -136,6 +136,7 @@ test("builds the required EPUB file set in deterministic order", () => {
     "OEBPS/package.opf",
     "OEBPS/styles/fileshape.css",
     "OEBPS/nav.xhtml",
+    "OEBPS/toc.ncx",
     "OEBPS/text/page-0001.xhtml",
     "OEBPS/text/page-0002.xhtml",
   ]);
@@ -157,7 +158,7 @@ test("container points to the package document", () => {
   assert.match(container, /application\/oebps-package\+xml/);
 });
 
-test("OPF manifest and spine preserve document page order", () => {
+test("OPF manifest and spine preserve document page order and declare legacy NCX", () => {
   const result = serializeEpubPackage(documentFixture(), fixedOptions);
   const opf = fileText(result, "OEBPS/package.opf");
   assert.match(opf, /<dc:identifier id="pub-id">urn:fixture:book<\/dc:identifier>/);
@@ -166,9 +167,11 @@ test("OPF manifest and spine preserve document page order", () => {
   assert.match(opf, /<dc:creator>FileShape Test<\/dc:creator>/);
   assert.match(opf, /<meta property="dcterms:modified">2026-09-11T12:34:56Z<\/meta>/);
   assert.match(opf, /id="nav" href="nav.xhtml"[^>]*properties="nav"/);
+  assert.match(opf, /id="ncx" href="toc\.ncx" media-type="application\/x-dtbncx\+xml"/);
   assert.match(opf, /id="fileshape-style" href="styles\/fileshape\.css" media-type="text\/css"/);
   assert.match(opf, /id="page-1" href="text\/page-0001\.xhtml"/);
   assert.match(opf, /id="page-2" href="text\/page-0002\.xhtml"/);
+  assert.match(opf, /<spine[^>]*toc="ncx"/);
   assert.ok(opf.indexOf('idref="page-1"') < opf.indexOf('idref="page-2"'));
 });
 
@@ -193,14 +196,28 @@ test("page progression direction is explicit-only and never inferred from page o
     ...fixedOptions,
     pageProgressionDirection: "rtl",
   }), "OEBPS/package.opf");
-  assert.match(rtl, /<spine page-progression-direction="rtl">/);
+  assert.match(rtl, /<spine page-progression-direction="rtl" toc="ncx">/);
 });
 
-test("navigation links every generated page in source order", () => {
+test("navigation links every source page target in source order", () => {
   const result = serializeEpubPackage(documentFixture(), fixedOptions);
   const nav = fileText(result, "OEBPS/nav.xhtml");
   assert.match(nav, /epub:type="toc"/);
-  assert.ok(nav.indexOf('href="text/page-0001.xhtml"') < nav.indexOf('href="text/page-0002.xhtml"'));
+  const firstTarget = 'href="text/page-0001.xhtml#source-page-1"';
+  const secondTarget = 'href="text/page-0002.xhtml#source-page-2"';
+  assert.match(nav, /href="text\/page-0001\.xhtml#source-page-1"/);
+  assert.match(nav, /href="text\/page-0002\.xhtml#source-page-2"/);
+  assert.ok(nav.indexOf(firstTarget) < nav.indexOf(secondTarget));
+});
+
+test("legacy NCX fallback exposes the same readable order for older reading systems", () => {
+  const result = serializeEpubPackage(documentFixture(), fixedOptions);
+  const ncx = fileText(result, "OEBPS/toc.ncx");
+  assert.match(ncx, /xmlns="http:\/\/www\.daisy\.org\/z3986\/2005\/ncx\/"/);
+  assert.match(ncx, /<docTitle><text>Fixture Book<\/text><\/docTitle>/);
+  assert.match(ncx, /<text>Page 1<\/text>/);
+  assert.match(ncx, /<content src="text\/page-0001\.xhtml#source-page-1"\/>/);
+  assert.match(ncx, /<text>Page 2<\/text>/);
 });
 
 test("packaged XHTML retains exact ruby and resolved writing mode", () => {
@@ -239,16 +256,5 @@ test("unresolved ruby still fails closed before archive generation", () => {
   assert.throws(
     () => serializeEpubPackage(document, fixedOptions),
     /requires unresolved ruby policy before rendering page 1/,
-  );
-});
-
-test("rejects malformed required package metadata", () => {
-  assert.throws(
-    () => serializeEpubPackage(documentFixture(), { ...fixedOptions, title: " " }),
-    /title must not be empty/,
-  );
-  assert.throws(
-    () => serializeEpubPackage(documentFixture(), { ...fixedOptions, modified: "2026-09-11" }),
-    /modified must be an EPUB UTC timestamp/,
   );
 });

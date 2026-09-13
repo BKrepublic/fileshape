@@ -53,7 +53,12 @@ function isMarginNoise(item: InspectTextItem, page: InspectPage, bodyFontSize: n
   const count = charCount(item.text);
   if (count === 0 || count > 8) return false;
   const nearTop = item.displayY < page.height * 0.08;
-  const nearBottom = item.displayY > page.height * 0.9;
+  // N8440FE and similar official Narou PDF exports place the page number at
+  // roughly 88.9% of page height, while body glyphs can legitimately extend
+  // to about 87%. The old 90% cutoff therefore allowed the smaller page number
+  // to survive and, because its X coordinate can be close to a body column,
+  // merge into that column as if it were story text.
+  const nearBottom = item.displayY > page.height * 0.88;
   const smallerThanBody = bodyFontSize > 0 && item.fontSize < bodyFontSize * 0.98;
   return (nearTop || nearBottom) && smallerThanBody;
 }
@@ -176,58 +181,23 @@ function buildVerticalGlyphUnits(
 ): PhysicalTextUnit[] {
   if (items.length === 0) return [];
 
-  const shiftThreshold = Math.max(8, bodyFontSize * 1.25);
-  const columns: Array<{
-    anchorX: number;
-    positions: number[];
-    startY: number;
-    items: InspectTextItem[];
-  }> = [];
-
-  let current = columns[0];
-  let previous: InspectTextItem | undefined;
-
-  for (const item of items) {
-    if (!current) {
-      current = {
-        anchorX: item.displayX,
-        positions: [item.displayX],
-        startY: item.displayY,
-        items: [item],
+  // Single-glyph PDFs do not guarantee that PDF.js emits text items grouped by
+  // visual column. Some producers interleave glyph operators by row or drawing
+  // order. Reconstruct columns from display geometry first, then establish the
+  // Japanese vertical reading order explicitly: columns right-to-left and glyphs
+  // top-to-bottom. The wider tolerance keeps shifted punctuation in its body
+  // column while still separating ordinary neighbouring columns.
+  const tolerance = Math.max(8, bodyFontSize * 1.25);
+  return clusterByAxis(items, "x", tolerance)
+    .map((unit) => {
+      const orderedItems = [...unit.items].sort((a, b) =>
+        a.displayY - b.displayY || a.displayX - b.displayX);
+      return {
+        position: median(unit.positions),
+        items: orderedItems,
+        text: orderedItems.map((item) => item.text.trim()).join(""),
       };
-      columns.push(current);
-      previous = item;
-      continue;
-    }
-
-    const xShift = Math.abs(item.displayX - current.anchorX);
-    const yRestart = previous
-      ? item.displayY < previous.displayY - bodyFontSize * 0.5 ||
-        item.displayY <= current.startY + bodyFontSize * 1.5
-      : false;
-
-    if (xShift > shiftThreshold && yRestart) {
-      current = {
-        anchorX: item.displayX,
-        positions: [item.displayX],
-        startY: item.displayY,
-        items: [item],
-      };
-      columns.push(current);
-    } else {
-      current.positions.push(item.displayX);
-      current.items.push(item);
-    }
-
-    previous = item;
-  }
-
-  return columns
-    .map((column) => ({
-      position: median(column.positions),
-      items: column.items,
-      text: column.items.map((item) => item.text.trim()).join(""),
-    }))
+    })
     .filter((column) => column.text.length > 0)
     .sort((a, b) => b.position - a.position)
     .map((column, index) =>

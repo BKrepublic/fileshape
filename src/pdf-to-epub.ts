@@ -14,6 +14,8 @@ import { nodePdfJsResourceConfig } from "./pdf-inspector.js";
 import {
   convertPdfBytesToEpubWithResources,
   type PdfBytesToEpubResult,
+  type PdfConversionControl,
+  type PdfConversionProgress,
   type PdfToEpubOptions,
 } from "./pdf-to-epub-core.js";
 
@@ -53,10 +55,44 @@ function pageProgressionDirection(value: string): EpubPageProgressionDirection {
   throw new Error("--page-progression-direction must be ltr or rtl");
 }
 
+function progressLabel(phase: PdfConversionProgress["phase"]): string {
+  switch (phase) {
+    case "loading-pdf": return "PDF読み込み";
+    case "inspecting-pages": return "ページ解析";
+    case "building-document": return "文書構築";
+    case "serializing-epub": return "EPUB生成";
+  }
+}
+
+function createCliProgressReporter(): (progress: PdfConversionProgress) => void {
+  let previousPhase: PdfConversionProgress["phase"] | undefined;
+  let previousBucket = -1;
+
+  return (progress) => {
+    const label = progressLabel(progress.phase);
+    if (progress.totalUnits === undefined) {
+      if (progress.phase !== previousPhase) console.error(`[progress] ${label}...`);
+      previousPhase = progress.phase;
+      return;
+    }
+
+    const percent = Math.max(0, Math.min(100, Math.floor((progress.completedUnits / progress.totalUnits) * 100)));
+    const bucket = Math.floor(percent / 5);
+    const phaseChanged = progress.phase !== previousPhase;
+    const completed = progress.completedUnits >= progress.totalUnits;
+    if (phaseChanged || completed || bucket > previousBucket) {
+      console.error(`[progress] ${label} ${progress.completedUnits}/${progress.totalUnits} (${percent}%)`);
+      previousPhase = progress.phase;
+      previousBucket = Math.max(previousBucket, bucket);
+    }
+  };
+}
+
 export async function convertPdfBytesToEpub(
   sourceBytes: Uint8Array,
   sourceName: string,
   options: PdfToEpubOptions = {},
+  control?: PdfConversionControl,
 ): Promise<PdfBytesToEpubResult> {
   return convertPdfBytesToEpubWithResources(
     sourceBytes,
@@ -64,6 +100,7 @@ export async function convertPdfBytesToEpub(
     options,
     nodePdfJsResourceConfig,
     nodeBinaryRuntime,
+    control,
   );
 }
 
@@ -71,6 +108,7 @@ export async function convertPdfToEpub(
   inputPath: string,
   outputPath = defaultOutputPath(inputPath),
   options: PdfToEpubOptions = {},
+  control?: PdfConversionControl,
 ): Promise<PdfToEpubResult> {
   const absoluteInput = path.resolve(inputPath);
   const absoluteOutput = path.resolve(outputPath);
@@ -78,7 +116,12 @@ export async function convertPdfToEpub(
     throw new Error("output path must differ from input PDF path");
   }
   const sourceBytes = new Uint8Array(await readFile(absoluteInput));
-  const converted = await convertPdfBytesToEpub(sourceBytes, path.basename(absoluteInput), options);
+  const converted = await convertPdfBytesToEpub(
+    sourceBytes,
+    path.basename(absoluteInput),
+    options,
+    control,
+  );
 
   const temporaryOutput = path.join(
     path.dirname(absoluteOutput),
@@ -157,7 +200,14 @@ async function main(): Promise<void> {
     return;
   }
   const parsed = parseCliArguments(argv);
-  const result = await convertPdfToEpub(parsed.inputPath, parsed.outputPath, parsed.options);
+  console.error(`[progress] input=${path.resolve(parsed.inputPath)}`);
+  console.error("[progress] 変換を開始します");
+  const result = await convertPdfToEpub(
+    parsed.inputPath,
+    parsed.outputPath,
+    parsed.options,
+    { onProgress: createCliProgressReporter() },
+  );
   console.log(`EPUB=${result.outputPath}`);
   console.log(`PAGES=${result.pageCount}`);
   console.log(`UNRESOLVED_ANNOTATIONS=${result.unresolvedAnnotationCount}`);
