@@ -22,6 +22,8 @@ export type PdfDocumentPipelineResult = {
 };
 
 export type PdfDocumentPipelineControl = {
+  /** Called after each source page flow has been reconstructed. */
+  onFlowAnalyzed?: (completedPages: number, totalPages: number) => void;
   /** Called after each source page has been reduced to document structure. */
   onPageBuilt?: (completedPages: number, totalPages: number) => void;
 };
@@ -41,10 +43,12 @@ export function buildDocumentFromInspection(
   precomputedRubySpans?: ReadonlyMap<number, RubySpan[]>,
   control?: PdfDocumentPipelineControl,
 ): PdfDocumentPipelineResult {
-  const flows = inspection.pages.map((page) => ({
-    page,
-    flow: reconstructPageFlow(page),
-  }));
+  const totalPages = inspection.pages.length;
+  const flows = inspection.pages.map((page, index) => {
+    const flow = reconstructPageFlow(page);
+    control?.onFlowAnalyzed?.(index + 1, totalPages);
+    return { page, flow };
+  });
 
   const orientations = resolveDocumentOrientations(
     flows.map(({ page, flow }) => ({ page: page.page, orientation: flow.orientation })),
@@ -92,7 +96,7 @@ export function buildDocumentFromInspection(
       };
     }
 
-    control?.onPageBuilt?.(index + 1, flows.length);
+    control?.onPageBuilt?.(index + 1, totalPages);
     return documentPage;
   });
 
