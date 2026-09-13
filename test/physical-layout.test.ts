@@ -93,3 +93,18 @@ test("reconstructs vertical glyph columns from geometry when PDF source order is
     [3, 3],
   );
 });
+
+test("excludes a smaller lower-margin page number before it can merge into a body column", () => {
+  const items = [
+    item({ text: "本", displayX: 410, displayY: 100 }),
+    item({ text: "文", displayX: 410, displayY: 114 }),
+    // Mirrors N8440FE-style pagination: about 89% down the page and close
+    // enough in X that it would otherwise be clustered into the body column.
+    item({ text: "3", displayX: 400, displayY: 534, fontSize: 12, width: 8, height: 12 }),
+  ];
+
+  const layout = reconstructPhysicalLayout(page(items), "vertical", 14);
+
+  assert.deepEqual(layout.units.map((unit) => unit.text), ["本文"]);
+  assert.equal(layout.units[0]?.itemCount, 2);
+});
