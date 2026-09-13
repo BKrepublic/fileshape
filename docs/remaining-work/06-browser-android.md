@@ -6,24 +6,34 @@
 
 ## 現在のcheckpoint
 
-[Stage 26 byte-oriented conversion boundary](../stage26-byte-core-boundary.md) で、byte入力のinspection/conversion API、明示的なPDF.js resource config、Node CLIの一回読込、byte ownership、固定metadataでのpath/byte出力一致を実装しました。PR #19とmerge後の`main` CIまでacceptedです。
+[Stage 26 byte-oriented conversion boundary](../stage26-byte-core-boundary.md) で、byte入力のinspection/conversion API、明示的なPDF.js resource config、Node CLIの一回読込、byte ownership、固定metadataでのpath/byte出力一致を実装しました。PR #19としてaccepted・mergedです。
 
-[Stage 27 runtime module boundary](../stage27-runtime-module-boundary.md) ではinspection model、byte inspection core、byte conversion core、Node adapterを物理moduleとして分離し、[決定的なdependency inventory](../stage27-runtime-dependency-inventory.json) を追加しました。PR #20とmerge後の`main` CIまでacceptedです。
+[Stage 27 runtime module boundary](../stage27-runtime-module-boundary.md) ではinspection model、byte inspection core、byte conversion core、Node adapterを物理moduleとして分離し、[決定的なdependency inventory](../stage27-runtime-dependency-inventory.json) を追加しました。PR #20としてaccepted・mergedです。
 
-[Stage 28 browser/PWA foundation](../stage28-browser-pwa-foundation.md) では、framework-freeのmobile-first PWA shell、relative-base対応service worker、browser conversion message contract、real PDF.js module worker probe、Vite/Playwright検証を実装しました。PR #21は`b5100164d95d623c7c8631e6ff265686f10320a3`としてmergeされ、PR CI #143と`main` CI #144が成功しています。
+[Stage 28 browser/PWA foundation](../stage28-browser-pwa-foundation.md) では、framework-freeのmobile-first PWA shell、relative-base対応service worker、browser conversion message contract、real PDF.js module worker probe、Vite/Playwright検証を実装しました。PR #21は`b5100164d95d623c7c8631e6ff265686f10320a3`としてaccepted・mergedです。
 
-Stage 28はブラウザー変換そのものを完成扱いしていません。変換ボタンはdisabledのままです。Node SHA-256、Node zlib/PNG deflate、PDF.js conversion resource供給、real conversion worker、保存、実運用cancel/progress、browser corpus parity、対応ファイル上限は未完了です。
+Stage 28時点ではブラウザー変換を完成扱いしていませんでした。Stage 29
+implementation head `2e68168f17f44f4b11396c341028df5217fb79db` でその残件を
+実装し、公開local gateとprivate 9-PDF gateをacceptedにしました。
 
-次checkpointはStage 29です。目的は「ブラウザーから共通conversion coreへ実際に到達し、公開fixture 1件をEPUBまで変換する」ことです。そのために必要なruntime portabilityとresource providerを先に解決します。
+Stage 29はWeb Crypto SHA-256、Node v26.7.0の16 KiB出力呼び出しを再現する
+pinned zlib-ng 2.3.3 WASM、application-base配下のPDF.js resources、dedicated
+conversion worker、進捗・cancel・保存・cleanupを接続しています。private結果は
+9 PDFs、5,141 pages、6,387 unresolved preserved、browser/Node EPUB bytes全件一致
+です。GitHub Actionsは使用せず、system Chromeでlocal検証しました。
+
+ブラウザーで未確定なのは一般化した対応ファイル上限です。Stage 29の各PDF
+elapsed/RSSは記録済みですが、対象端末の測定なしに最大値を宣言しません。
+次の製品化工程はその性能方針とAndroid architecture/実機検証です。
 
 ## 6A：共通コアと環境依存処理を分離する
 
 Stage 26–27で基本分離はacceptedです。Stage 29以降では既存分離を崩さず、残った環境依存だけをinterface/providerへ押し出します。
 
 1. `node:crypto`のSHA-256利用箇所を列挙し、同期／非同期の呼び出し契約を確認します。browser実装のためだけにsource identityやresource IDの意味を変えません。
-2. `node:zlib`のPNG deflate利用箇所を列挙し、決定性・byte一致・圧縮レベルが既存検証に与える影響を測定します。browser側で別PNG表現になる場合は意味的同一性だけで済ませず、なぜbyte差が必要かを記録します。
+2. `node:zlib`のPNG deflate利用箇所を列挙し、決定性・byte一致・圧縮レベルが既存検証に与える影響を測定します。Stage 29でbrowser側もNodeと同じPNG bytesを生成する契約をacceptedにしたため、意味的同一性だけへ弱めません。
 3. PDF.jsのCMap、standard fonts、WASM/ICC等をNode path前提からproviderへ分離し、ブラウザーではbundle/static asset URLとして明示供給します。必要な資源だけをfixtureと実コーパスで実測します。
-4. Java／EPUBCheckは引き続き開発・CI側の検証器です。利用者ブラウザーにJavaを要求しません。
+4. Java／EPUBCheckは引き続き開発側のlocal検証器です。利用者ブラウザーにJavaを要求せず、GitHub Actionsも使用しません。
 5. CLI adapterとNode providerはaccepted behaviorを維持し、Stage 29変更後もCLI/private corpus回帰を必ず通します。
 
 ## Stage 29：ブラウザー変換の最小end-to-end
@@ -54,8 +64,8 @@ Stage 26–27で基本分離はacceptedです。Stage 29以降では既存分離
 
 - repositoryへ置ける自作／公開fixture PDFを1件使い、browser workerでPDF→EPUBを完走させます。
 - 同じsource bytes・同じ明示optionsをNode byte APIへ渡し、document identity、ページ数、unresolved数、semantic content、package validationを比較します。
-- deterministic metadataを固定できる条件ではEPUB bytes一致を最優先します。browser deflate等の正当なruntime差でbyte一致が不可能なら、ZIP entry内容を展開比較し、差を最小化・文書化します。
-- 生成EPUBをCIのpinned EPUBCheckで検証します。
+- deterministic metadataを固定した条件でEPUB bytes一致を必須とします。browser deflate等を理由に意味的比較へ弱めません。
+- 生成EPUBを開発環境のpinned EPUBCheckで検証します。
 
 ### 29E. UI接続
 
@@ -65,11 +75,14 @@ Stage 26–27で基本分離はacceptedです。Stage 29以降では既存分離
 
 ## 6B：ブラウザー版の完了条件
 
+Stage 29で1〜6と8はacceptedです。7の一般的な対応範囲は、記録済みの
+desktop Chrome測定に加えて対象端末の証拠が得られるまで保留します。
+
 1. 実ブラウザーでPDF.jsと必要資源が動作し、bundleへNode専用依存が混入していない。
 2. ファイル選択 → 設定 → 変換開始 → 進捗 → 保存、失敗時の再試行、キャンセルが実動作する。
 3. サーバー送信を行わず、変換結果をユーザー操作で保存できる。object URL、worker、入力bytes、途中結果を完了／取消／失敗で解放する。
-4. 公開fixtureでCLI/byte APIとの意味的・可能ならbyte-level整合が証明され、EPUBCheckに合格する。
-5. 次に9冊のprivate corpusをローカルブラウザーで実行し、5141 pagesを未実行のままbrowser parityと呼ばない。
+4. 公開fixtureでCLI/byte APIとのbyte-level整合が証明され、EPUBCheckに合格する。
+5. 9冊のprivate corpusをローカルブラウザーで実行し、5141 pagesすべてでbrowser parityを確認する。
 6. private corpusでCLIと同じsource ownership、ruby unresolved preservation、outline、image/cover semantics、EPUB validationを比較する。
 7. 実測した処理時間とpeak memoryから対応範囲を決める。大きなPDFで止まる場合は上限と説明を設けるが、根拠なしの固定MB制限を先に置かない。
 8. 開発者ツールの通信記録で、PDF内容が外部へ送信されていないことを確認する。必要なapp resource取得とinput data送信を区別する。

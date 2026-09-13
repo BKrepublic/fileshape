@@ -23,9 +23,16 @@ Stages 15–20 add production image preservation and explicit source-backed cove
 
 Stage 25 automated CLI acceptance also passes: fixed-metadata output is byte-deterministic, strict unresolved-ruby mode rejects as designed, failed conversions preserve an existing output, invalid/missing CLI input is rejected, help works, and the documented option surface succeeds through the real CLI. Manual Thorium/calibre validation remains a separate unperformed item and is not implied by EPUBCheck success.
 
-Stage 26 starts Task 6A with byte-input inspection and conversion APIs. The Node CLI now reads the PDF once and delegates to the same byte conversion path; fixed-metadata public fixtures produce byte-identical EPUB output through both entry points. Browser runtime dependencies, workers, progress/cancellation, UI, and Android packaging remain later checkpoints.
+Stages 26–28 add byte-input APIs, explicit core/adapter boundaries, a reproducible runtime dependency inventory, and a mobile-first local PWA foundation. The Node CLI and browser adapter both reach the same conversion core without sending the PDF to a backend.
 
-Stage 27 places those byte paths in explicit inspection/conversion core modules and commits a reproducible runtime dependency inventory. The inventory currently reports Node SHA-256 and zlib as conversion blockers and confirms that Java/EPUBCheck tooling is outside the conversion graph; the modules are not yet browser-ready.
+Stage 29 completes the browser runtime path with Web Crypto SHA-256, a pinned
+zlib-ng 2.3.3 WASM deflater, same-origin PDF.js resources, a dedicated
+conversion worker, progress/cancellation, and EPUB download. Local acceptance
+with system Chrome passes all 9 private PDFs: 5,141 pages, 6,387 unresolved
+annotations preserved, and every browser EPUB byte-identical to the accepted
+Node byte API. This result does not define a universal maximum input size;
+Android packaging and real-device acceptance remain later work. GitHub Actions
+are disabled, so browser acceptance evidence is local-only.
 
 See [continuation status](docs/continuation-status.md) for the current evidence and [the remaining-work runbook](docs/remaining-work/README.md) for ordered acceptance work.
 
@@ -160,7 +167,9 @@ npm run verify:cover
 - automatic cover inference is intentionally not implemented.
 - unresolved ruby is preserved, not guessed. The accepted corpus currently contains 6,387 unresolved annotations.
 - EPUBCheck success is automated. Manual real-reader validation in Thorium/calibre remains a separate environment-dependent acceptance item and must not be reported as complete until actually performed.
-- browser/Android adapters are downstream work and are not part of the automated CLI checkpoint.
+- the browser/PWA adapter is accepted through the Stage 29 corpus checkpoint.
+  Android packaging, real-device validation, and a general browser input-size
+  policy remain downstream work.
 
 ## Design rules
 

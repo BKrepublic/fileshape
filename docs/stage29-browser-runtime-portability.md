@@ -1,6 +1,6 @@
 # Stage 29: browser runtime portability and end-to-end conversion
 
-Status: **browser runtime parity implementation specified; not yet accepted**.
+Status: **accepted on the Stage 29 implementation checkpoint**.
 
 Current Codex/session handoff: [stage29-codex-handoff.md](stage29-codex-handoff.md).
 
@@ -10,7 +10,8 @@ GitHub Actions is disabled by project policy. All verification below is local-on
 
 - Environment-neutral `BinaryRuntime` seam for SHA-256 and zlib deflate.
 - Node provider preserves accepted CLI semantics.
-- Browser provider uses Web Crypto SHA-256 and `CompressionStream("deflate")`.
+- Browser provider uses Web Crypto SHA-256 and the pinned local zlib-ng 2.3.3
+  WebAssembly artifact.
 - PDF.js browser resources are prepared from pinned `pdfjs-dist 6.3.289` and served from the application origin: CMaps, standard fonts, WASM, ICC.
 - Dedicated conversion worker reaches the shared PDF inspection/document/EPUB core.
 - Input PDF and output EPUB buffers are transferred, not uploaded.
@@ -26,9 +27,9 @@ GitHub Actions is disabled by project policy. All verification below is local-on
   - same-origin-only runtime requests.
 - Private local acceptance harness covers all 9 corpus PDFs, browser/Node byte parity, 5,141-page and 6,387-unresolved baselines, elapsed time, and Linux Chromium RSS sampling. Reports contain only anonymous PDF hash prefixes and aggregate metrics.
 
-## Confirmed blocker: zlib-ng byte parity
+## Resolved blocker: zlib-ng byte parity
 
-The first private-corpus browser run reaches successful conversion but fails exact EPUB byte parity on the first PDF (`sha256:82954140592708dd`). Entry-level diagnosis isolates the first difference to `OEBPS/package.opf`, and image-level diagnosis shows the single generated PNG has identical dimensions, color metadata, and inflated PNG scanline bytes on Node and browser. Only the compressed zlib/IDAT bytes differ:
+The first private-corpus browser run reached successful conversion but failed exact EPUB byte parity on the first PDF (`sha256:82954140592708dd`). Entry-level diagnosis isolated the first difference to `OEBPS/package.opf`, and image-level diagnosis showed the single generated PNG had identical dimensions, color metadata, and inflated PNG scanline bytes on Node and browser. Only the compressed zlib/IDAT bytes differed:
 
 - Node PNG: 151,039 bytes
 - browser PNG: 151,370 bytes
@@ -36,7 +37,10 @@ The first private-corpus browser run reaches successful conversion but fails exa
 - inflated SHA-256 prefix: `4c1e9c26235804c0` on both sides
 - `inflatedByteIdentical: true`
 
-Therefore PDF.js decoding, pixels, PNG filtering, document semantics, and EPUB ZIP serialization are not the cause of this failure. The remaining blocker is deterministic zlib byte output.
+At that checkpoint, PDF.js decoding, pixels, PNG filtering, document semantics,
+and EPUB ZIP serialization were ruled out. The failure was isolated to
+deterministic zlib byte output and was later resolved by the accepted provider
+below.
 
 The accepted Node baseline environment was then identified exactly:
 
@@ -50,7 +54,8 @@ This proves the accepted Node PNG bytes are produced through zlib-ng compatibili
 
 A pako 3.0.1 experiment was attempted with both Node-compatible and legacy/stock-zlib hash paths. Both failed the accepted Node byte-parity unit tests, including the production PNG identity test. That experiment has been reverted completely. Do not reintroduce pako or weaken byte equality.
 
-The branch is intentionally restored to the last public-browser-passing `CompressionStream` implementation while the private zlib-ng parity blocker remains open. This is a known limitation, not an acceptance claim.
+The temporary `CompressionStream` baseline was replaced by the reviewed
+zlib-ng WASM provider. There is no pako or `CompressionStream` fallback.
 
 ### Confirmed implementation contract
 
@@ -211,18 +216,18 @@ array must match; a decompression-only check, length check, or hash-prefix check
 is insufficient. The runtime-neutral PNG test must also retain full PNG byte
 identity.
 
-### Required next implementation
+### Implemented resolution
 
-1. Keep the accepted Node provider and all Stage 25–28 semantics unchanged.
-2. Replace only the browser deflate provider with the pinned zlib-ng 2.3.3 WASM
-   implementation and exact 16 KiB Node v26.7.0 call contract above.
-3. Add the public/local large-fixture parity test before any private rerun.
-4. Rerun the entire public local gate with system Chrome after the runtime
-   change.
-5. Only after public parity passes, rerun `verify:browser-private` and require
-   all 9 PDFs / 5,141 pages / 6,387 unresolved annotations / exact EPUB bytes.
-6. Do not alter expected hashes, image extraction, PNG filtering, parser
-   semantics, ruby rules, or EPUB equality to make the gate pass.
+1. The accepted Node provider and all Stage 25–28 semantics remain unchanged.
+2. Only the browser deflate provider was replaced with pinned zlib-ng 2.3.3
+   WASM using the exact 16 KiB Node v26.7.0 call contract above.
+3. The public/local suite now includes the large-fixture parity test.
+4. The entire public local gate passed with system Chrome after the runtime and
+   PDF.js application-base fixes.
+5. `verify:browser-private` then passed all 9 PDFs / 5,141 pages / 6,387
+   unresolved annotations / exact EPUB bytes.
+6. Expected hashes, image extraction, PNG filtering, parser semantics, ruby
+   rules, and EPUB equality were not weakened.
 
 ## Local commands
 
@@ -254,18 +259,46 @@ env PLAYWRIGHT_CHROMIUM_EXECUTABLE=/usr/bin/google-chrome-stable npm run verify:
 
 The private browser report is written under `local-reports/`, which is gitignored.
 
-## Acceptance gates still open
+## Accepted result
 
-1. Implement browser zlib-ng-compatible deterministic deflate without changing the accepted Node provider.
-2. Run public browser verification on the resulting Stage 29 HEAD with system Chrome.
-3. Run the private browser parity harness against the 9 private PDFs and confirm:
-   - 9 PDFs;
-   - 5,141 pages;
-   - 6,387 unresolved annotations preserved;
-   - every browser EPUB byte-identical to the Node byte API;
-   - no external runtime request;
-   - measured timing/RSS recorded for every PDF.
-4. Inspect any failure instead of weakening expectations.
-5. Manual Thorium/calibre validation remains a separate unperformed reader gate.
+Stage 29 implementation head `2e68168f17f44f4b11396c341028df5217fb79db`
+passes the public local gate with system Chrome:
 
-Do not claim browser corpus parity, a supported maximum file size, or Stage 29 acceptance until the private local run passes.
+```text
+npm test                         PASS (217/217)
+npm run verify:runtime-deps      PASS
+npm run verify:browser           PASS (2/2)
+npm run verify:epubcheck         PASS (5/5)
+git diff --check                 PASS
+WASM reproducible rebuild        PASS
+WASM bytes                       44,801
+WASM SHA-256                     90bc26f8c73322492510a9438e04d41c5ab7badcf76d0ae1e70d1aae4d9176f1
+```
+
+The private local browser gate on the same implementation passes:
+
+```text
+PRIVATE_BROWSER_ACCEPTANCE=PASS
+PRIVATE_BROWSER_PDFS=9
+PRIVATE_BROWSER_PAGES=5141
+PRIVATE_BROWSER_UNRESOLVED=6387
+PRIVATE_BROWSER_BYTE_IDENTICAL=yes
+elapsed=2.9m
+```
+
+Every PDF used the dedicated browser conversion worker, same-origin PDF.js and
+WASM resources, and the accepted Node byte API as the equality baseline. The
+run recorded per-PDF elapsed time and Linux Chromium RSS in the gitignored local
+report. The report and private inputs/outputs were not committed.
+
+The private run also exposed and fixed a worker-relative resource bug: a worker
+emitted below `assets/` had resolved PDF.js resources below `assets/pdfjs/`
+instead of the application-level `pdfjs/` directory. Resource configuration now
+receives the application base explicitly, public tests reject
+`/assets/pdfjs/`, and all nine PDFs pass after the fix.
+
+Stage 29 proves browser corpus byte parity for this accepted corpus. It does not
+establish a general maximum input size. A supported-size claim still requires a
+separate policy based on the recorded timing/RSS evidence and target-device
+measurements. Manual Thorium/calibre validation also remains a separate
+unperformed reader gate.

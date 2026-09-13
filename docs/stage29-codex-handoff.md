@@ -1,173 +1,164 @@
 # Stage 29 Codex handoff
 
-This file is the current handoff for continuing Stage 29 browser runtime portability work.
+This file records the accepted Stage 29 browser runtime portability checkpoint
+and the remaining work after it.
 
 ## Repository state
 
 - Repository: `BKrepublic/fileshape`
 - Branch: `stage29-browser-runtime-portability`
-- PR: #22, still Draft
-- Local worktree used by the user: `/data/experiment/fileshape`
-- GitHub Actions are prohibited. Do not add, restore, run, rerun, or use Actions/workflow status as acceptance evidence.
-- Private corpus files and local reports must never be committed or uploaded.
+- PR: #22
+- Accepted implementation head:
+  `2e68168f17f44f4b11396c341028df5217fb79db`
+- Local worktree: `/data/experiment/fileshape`
+- GitHub Actions are prohibited. Do not add, restore, run, rerun, or use
+  workflow status as acceptance evidence.
+- Private corpus files, generated EPUBs, and local reports must never be
+  committed or uploaded.
 
-## Accepted baselines before this blocker
+## Accepted baselines
 
-Earlier stages are accepted: Stage 25 CLI, Stage 26 byte API, Stage 27 runtime boundary, Stage 28 browser/PWA foundation.
+Stages 25–28 remain accepted and were not reopened. Stage 29 preserves the
+accepted Node/CLI conversion path and adds a real local-only browser/PWA path
+through the same conversion core.
 
-Accepted private Node corpus baseline:
+The accepted private corpus baseline remains:
 
-- 9 PDFs
-- 5,141 pages
-- 6,387 unresolved annotations
-- EPUBCheck 5.3.0: 9/9, 0 errors, 0 warnings
-- outline 250/250
-- image occurrences 4/4
-- unique PNG 1
-- total EPUB bytes 17,959,256
-
-Do not change Node semantics or weaken any verifier/expected value to make browser parity pass.
-
-## Stage 29 target
-
-Browser/PWA conversion must remain local-only and execute in the dedicated browser Worker with real PDF.js worker/resources. For the same PDF/options/metadata, browser EPUB bytes must be exactly identical to the accepted Node byte API.
-
-System Chrome is used locally:
-
-```sh
-env PLAYWRIGHT_CHROMIUM_EXECUTABLE=/usr/bin/google-chrome-stable ...
+```text
+PDFs=9
+Pages=5141
+Unresolved annotations preserved=6387
+Outline entries=250/250
+Image occurrences=4/4
+Unique PNG content resources=1
+Node EPUB bytes=17959256 total
+EPUBCheck 5.3.0=9/9, 0 errors, 0 warnings
 ```
 
-Do not require a Playwright-managed Chromium download.
+Manual Thorium/calibre validation is still unperformed. EPUBCheck or browser
+byte equality must not be described as real-reader acceptance.
 
-## Important browser PDF.js fix already accepted
+## Stage 29 accepted implementation
 
-Browser PDF.js must keep these options:
+Browser conversion remains local-only and executes in a dedicated conversion
+Worker with a real PDF.js Worker. Input PDF and output EPUB buffers are
+transferred rather than uploaded. Progress, cancellation, result download,
+cleanup, retry, and the mobile-first PWA UI are connected to the shared core.
+
+The browser runtime uses:
+
+- Web Crypto for SHA-256;
+- a committed 44,801-byte zlib-ng 2.3.3 WebAssembly artifact for deterministic
+  zlib deflate;
+- PDF.js 6.3.289 CMaps, standard fonts, WASM, and ICC resources from the
+  application origin;
+- system Chrome `/usr/bin/google-chrome-stable` for local Playwright checks.
+
+The accepted Node provider in `src/binary-runtime-node.ts` is unchanged.
+
+Browser PDF.js must retain:
 
 ```ts
 isOffscreenCanvasSupported: false,
 isImageDecoderSupported: false,
 ```
 
-Without them PDF.js returns bitmap-only image objects in the browser and image extraction fails. Public browser acceptance passed after this fix.
+These options keep image extraction on the decoded-byte path required by the
+accepted Node/browser PNG contract.
 
-Do not replace this with a canvas/ImageBitmap fallback unless new evidence proves it necessary.
+## Deterministic zlib contract
 
-## Private browser failure and diagnosis
+The accepted Node v26.7.0 environment reports `1.3.1.zlib-ng` and links
+`zlib-ng-compat 2.3.3-2`. A native control proved that choosing the same
+library is not sufficient: `compress2` diverges for production-sized input.
+Exact equality requires Node's synchronous call pattern—zlib defaults plus
+repeated `deflate(..., Z_FINISH)` calls with 16 KiB output windows.
 
-The first private PDF is identified only as:
+The repository therefore includes:
 
-`sha256:82954140592708dd`
+- `vendor/zlib-ng/fileshape-zlib-wrapper.c`;
+- `vendor/zlib-ng/build-wasm.sh`;
+- `vendor/zlib-ng/LICENSE` and provenance README;
+- `web/vendor/fileshape-zlib-ng-2.3.3.wasm`;
+- the neutral adapter `src/zlib-wasm-adapter.ts`;
+- the same-origin Vite loader `web/zlib-ng-binary-runtime.ts`.
 
-Node result for that PDF:
-
-- pages: 1,377
-- unresolved annotations: 639
-- EPUB bytes: 4,102,626
-
-The first browser parity failure was isolated to `OEBPS/package.opf`, where the image resource content hash differed.
-
-The EPUB uses deterministic stored ZIP entries, so the image was extracted from Node/browser EPUBs and compared safely without exposing private content.
-
-Image diagnostic for the single 800x600 RGB PNG:
-
-- Node PNG bytes: 151,039
-- Browser PNG bytes: 151,370
-- Node/browser inflated IDAT bytes: 1,440,600
-- inflated SHA-256 on both sides: `4c1e9c26235804c0`
-- `inflatedByteIdentical: true`
-
-Therefore PDF.js decoded pixels, PNG dimensions, color type, filters, and uncompressed PNG scanline bytes match. The remaining mismatch is only the zlib-compressed IDAT bitstream.
-
-## Root cause now confirmed
-
-The user's accepted Node environment is:
+Pinned inputs:
 
 ```text
-NODE=v26.7.0
-NODE_REPORTED_ZLIB=1.3.1.zlib-ng
-LIBZ_OWNER=/usr/lib/libz.so.1 is owned by zlib-ng-compat 2.3.3-2
-INSTALLED_ZLIB_PACKAGES=zlib-ng-compat 2.3.3-2
-NODE_LINKED_LIBZ=libz.so.1 => /usr/lib/libz.so.1
+zlib-ng commit=12731092979c6d07f42da27da673a9f6c7b13586
+emsdk commit=5eb0bde7585670252e8ba05e9d361627bffd08b5
+Emscripten commit=4e4223852a0835923411059a3929907d7df1232e
+WASM SHA-256=90bc26f8c73322492510a9438e04d41c5ab7badcf76d0ae1e70d1aae4d9176f1
 ```
 
-So `node:zlib.deflateSync()` in the accepted Node baseline is backed by `zlib-ng-compat`, not classic stock zlib and not simply Node's bundled patched zlib behavior.
+The failed pako 3.0.1 experiment remains reverted. Do not retry its legacy hash
+variants or add a `CompressionStream` fallback.
 
-This explains why browser `CompressionStream("deflate")` and pako did not reproduce the private Node PNG bytes.
+## Resource-base correction
 
-## Failed experiment that must not be repeated
+The first four private PDFs passed after the zlib fix, while anonymous PDF
+`sha256:b59291fa7de1903e` exposed missing browser text. The conversion Worker had
+resolved PDF.js resources relative to its emitted `/assets/` location, producing
+invalid `/assets/pdfjs/` URLs.
 
-Pako 3.0.1 was tested as a browser replacement.
+`browserPdfJsResourceConfig` now receives an explicit application base. The
+page probe uses the page base, the conversion Worker uses the parent of its
+`assets/` directory, and every resource URL remains origin-checked. Public
+tests require application-level `pdfjs/` requests and reject
+`/assets/pdfjs/`.
 
-- `legacyHash: false` did not match accepted Node bytes.
-- `legacyHash: true` also did not match accepted Node bytes.
-- Unit parity failed in `test/binary-runtime.test.ts` for large/image-like input, and PNG identity failed as a consequence.
+Do not change PDF interpretation or font policy to address resource failures.
 
-The pako experiment has been reverted from the branch. `package.json` and committed `package-lock.json` contain no pako dependency.
+## Acceptance evidence
 
-Do not retry pako by merely toggling `legacyHash`.
+Public local gate on the accepted implementation head:
 
-## Current branch implementation after cleanup
+```text
+npm test=PASS (217/217)
+npm run verify:runtime-deps=PASS
+npm run verify:browser=PASS (2/2)
+npm run verify:epubcheck=PASS (5/5)
+git diff --check=PASS
+pinned WASM rebuild and byte comparison=PASS
+```
 
-The branch has been restored to the last public-browser-compatible browser binary provider:
+Private local browser gate:
 
-- Web Crypto for SHA-256
-- `CompressionStream("deflate")` for browser deflate
+```text
+PRIVATE_BROWSER_ACCEPTANCE=PASS
+PRIVATE_BROWSER_PDFS=9
+PRIVATE_BROWSER_PAGES=5141
+PRIVATE_BROWSER_UNRESOLVED=6387
+PRIVATE_BROWSER_BYTE_IDENTICAL=yes
+elapsed=2.9m
+```
 
-This restoration is intentional as a clean baseline. It is not the final Stage 29 solution because private zlib-ng byte parity still fails.
+The gitignored report is
+`local-reports/stage29-browser-private-1789277083621.json`. This path is local
+evidence only and must not be committed.
 
-`CompressionStream` is known to produce semantically correct PNG data but different compressed bytes for the private image above.
+## Remaining work
 
-## Next engineering task
+1. Merge PR #22 after the documentation/review checkpoint, using local
+   verification as evidence. Do not enable GitHub Actions.
+2. Keep manual Thorium/calibre reader validation pending until it is actually
+   performed.
+3. Derive any browser size/support statement from the recorded RSS/elapsed
+   evidence and representative target-device runs. Stage 29 does not define a
+   universal maximum input size.
+4. Begin Android architecture evaluation only from the accepted browser/core
+   path. Compare installed PWA, WebView wrapper, and native adapter constraints
+   before choosing a framework.
+5. Do not reopen Task 4 or weaken ruby, image, navigation, EPUB, or byte-equality
+   rules without new generic source-backed evidence.
 
-Implement a browser-side zlib provider that reproduces the accepted Node `zlib-ng-compat` deflate bitstream exactly, while preserving Node output unchanged.
+## Local commands
 
-Recommended sequence:
+```sh
+env PLAYWRIGHT_CHROMIUM_EXECUTABLE=/usr/bin/google-chrome-stable npm run verify:local
+env PLAYWRIGHT_CHROMIUM_EXECUTABLE=/usr/bin/google-chrome-stable npm run verify:browser-private
+```
 
-1. Do not touch `src/binary-runtime-node.ts` or accepted Node PNG/EPUB semantics.
-2. Investigate a browser-capable zlib-ng implementation, likely WebAssembly compiled from the matching zlib-ng line/version or another implementation proven byte-identical to the user's `node:zlib` output.
-3. Before integrating it into PDF conversion, add a focused parity test comparing browser-provider deflate against `nodeBinaryRuntime.deflateZlib()` on:
-   - empty bytes;
-   - tiny bytes;
-   - 257 bytes;
-   - 65,537 bytes;
-   - a large 800x600 PNG-like filtered byte fixture.
-4. Require exact `Uint8Array` equality, not just successful inflate or equal decompressed bytes.
-5. Once focused/unit parity passes, run public browser acceptance with system Chrome.
-6. Only after public browser passes, run `verify:browser-private` against the 9 local private PDFs.
-7. Preserve the private acceptance requirements: 9 PDFs, 5,141 pages, 6,387 unresolved annotations, exact browser/Node EPUB bytes, same-origin-only runtime requests, no console/page errors, timing/RSS recorded.
-8. If production source changes, rerun the public browser gate before claiming private acceptance.
-
-There is public precedent for compiling zlib-family code to browser WASM. A zlib-ng WASM path is therefore technically plausible, but its output must be proven against this exact Node environment before adoption. Do not assume version-name compatibility implies byte compatibility.
-
-## Relevant files
-
-- `src/binary-runtime.ts`
-- `src/binary-runtime-node.ts`
-- `src/binary-runtime-web.ts`
-- `src/pdf-image-resource-core.ts`
-- `src/pdf-inspector-core.ts`
-- `web/pdfjs-resource-config.ts`
-- `web/conversion-worker.ts`
-- `web/binary-runtime-probe.ts`
-- `test/binary-runtime.test.ts`
-- `browser-private-test/stage29-private-corpus.spec.ts`
-- `src/verify-browser.ts`
-- `docs/stage29-browser-runtime-portability.md`
-- `docs/local-verification-policy.md`
-
-## Private harness notes
-
-`browser-private-test/stage29-private-corpus.spec.ts` already contains safe stored-ZIP/image diagnostics. It reports hashes, byte lengths, entry paths and first differing offsets without printing private document/image contents.
-
-The harness also avoids re-closing the advanced settings `<details>` element between books.
-
-Do not remove the useful diagnostics until Stage 29 is accepted.
-
-## Final acceptance reminder
-
-Stage 29 is not accepted yet.
-
-The open blocker is specifically: browser zlib output must match the accepted zlib-ng-backed Node output byte-for-byte for production PNGs.
-
-Manual Thorium/calibre validation remains a separate later gate and must not be claimed as completed.
+Playwright-managed Chromium is not required. GitHub Actions and hosted compute
+must not be used as a substitute for these local gates.
