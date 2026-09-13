@@ -102,9 +102,9 @@ export async function convertPdfBytesToEpubWithResources(
     {
       ...(control?.throwIfCancelled === undefined ? {} : { throwIfCancelled: control.throwIfCancelled }),
       onDocumentLoaded: (pageCount) => {
-        // One unit for loading, one per inspected page, one per document-build
-        // page, then one unit for EPUB serialization.
-        totalUnits = pageCount * 2 + 2;
+        // One unit for loading, one per inspected page, two per source page for
+        // the document flow/layout passes, then one unit for EPUB serialization.
+        totalUnits = pageCount * 3 + 2;
         control?.onProgress?.({ phase: "loading-pdf", completedUnits: 1, totalUnits });
         control?.onProgress?.({ phase: "inspecting-pages", completedUnits: 1, totalUnits });
       },
@@ -149,7 +149,7 @@ export async function convertPdfBytesToEpubWithResources(
     },
   );
   control?.throwIfCancelled?.();
-  if (totalUnits === undefined) totalUnits = inspection.pageCount * 2 + 2;
+  if (totalUnits === undefined) totalUnits = inspection.pageCount * 3 + 2;
 
   const buildStartUnits = 1 + inspection.pageCount;
   control?.onProgress?.({
@@ -162,11 +162,19 @@ export async function convertPdfBytesToEpubWithResources(
     documentId,
     precomputedRubySpans,
     {
-      onPageBuilt: (completedPages) => {
+      onFlowAnalyzed: (completedPages) => {
         control?.throwIfCancelled?.();
         control?.onProgress?.({
           phase: "building-document",
           completedUnits: buildStartUnits + completedPages,
+          totalUnits,
+        });
+      },
+      onPageBuilt: (completedPages) => {
+        control?.throwIfCancelled?.();
+        control?.onProgress?.({
+          phase: "building-document",
+          completedUnits: buildStartUnits + inspection.pageCount + completedPages,
           totalUnits,
         });
       },
@@ -176,7 +184,7 @@ export async function convertPdfBytesToEpubWithResources(
     ? []
     : inferStructuralHeadings(document, inspection);
   control?.throwIfCancelled?.();
-  const serializationStartUnits = 1 + inspection.pageCount * 2;
+  const serializationStartUnits = 1 + inspection.pageCount * 3;
   control?.onProgress?.({
     phase: "building-document",
     completedUnits: serializationStartUnits,
