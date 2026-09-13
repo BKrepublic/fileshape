@@ -98,6 +98,15 @@ function fixture(
   return { document, inspection };
 }
 
+function replaceLeadingStyle(inspection: InspectResult, pages: number[], fontName: string): void {
+  for (const pageNumber of pages) {
+    const page = inspection.pages[pageNumber - 1];
+    const first = page?.textItems[0];
+    if (!first) throw new Error(`fixture page ${pageNumber} has no leading text item`);
+    first.fontName = fontName;
+  }
+}
+
 test("recurring layout style and cadence identify major headings without title syntax", () => {
   const headings = new Map<number, string>([
     [2, "prefatory note"],
@@ -128,6 +137,29 @@ test("when there is no short auxiliary cadence, every recurring structural style
       { title: "No number at all", sourcePage: 7 },
     ],
   );
+});
+
+test("a minor recurring page-leading style cannot create false headings beside a dominant family", () => {
+  const headingPages = new Map<number, string>([
+    [1, "alpha"], [5, "beta"], [9, "gamma"], [13, "delta"], [17, "epsilon"],
+    [21, "zeta"], [25, "eta"], [29, "theta"], [33, "iota"], [37, "kappa"],
+  ]);
+  const { document, inspection } = fixture(40, headingPages);
+  replaceLeadingStyle(inspection, [3, 7, 11], "DecorativeFace");
+
+  assert.deepEqual(
+    inferStructuralHeadings(document, inspection).map(({ title, sourcePage }) => ({ title, sourcePage })),
+    [...headingPages].map(([sourcePage, title]) => ({ title, sourcePage })),
+  );
+});
+
+test("competing recurring non-body styles fail closed instead of guessing a heading family", () => {
+  const headingPages = new Map<number, string>([
+    [1, "one"], [5, "two"], [9, "three"], [13, "four"], [17, "five"],
+  ]);
+  const { document, inspection } = fixture(24, headingPages);
+  replaceLeadingStyle(inspection, [3, 7, 11, 15], "CompetingFace");
+  assert.deepEqual(inferStructuralHeadings(document, inspection), []);
 });
 
 test("digits and heading-like words in ordinary body style never create a heading", () => {
