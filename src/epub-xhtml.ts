@@ -248,6 +248,7 @@ function continuesAcrossSourcePage(
   const currentBlock = current.blocks[0];
   if (!previousBlock || !currentBlock) return false;
   if (inferHeading(current) !== undefined) return false;
+  if (inferHeading(previous) !== undefined && previous.blocks.length === 1) return false;
 
   const before = blockPlainText(previousBlock).trimEnd();
   const after = blockPlainText(currentBlock);
@@ -350,7 +351,10 @@ function serializeLogicalXhtml(
       index < pages.length - 1 && joins[index] === true,
     ));
   }
-  const body = bodyItems.length === 0 ? "" : `\n${bodyItems.join("\n")}\n  `;
+  // Deliberately avoid pretty-print whitespace between fragments: when a
+  // paragraph spans a source PDF page, an inserted newline would become a text
+  // node inside the still-open paragraph and could render as an unwanted gap.
+  const body = bodyItems.length === 0 ? "" : `\n${bodyItems.join("")}\n  `;
 
   return `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE html>\n<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="${escapeXmlAttribute(language)}" lang="${escapeXmlAttribute(language)}">\n  <head>\n    <meta charset="utf-8" />\n    <title>${escapeXmlText(title)}</title>${stylesheet}\n  </head>\n  <body ${orientationAttributes(firstPage)}>${body}</body>\n</html>\n`;
 }
