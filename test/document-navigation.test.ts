@@ -76,14 +76,16 @@ test("blank outline labels get a presentation fallback while the source title st
   assert.equal(document.navigation[0]!.children[0]!.title, "  ");
 });
 
-test("adding navigation changes only nav.xhtml, never body text, ruby, notes, OPF or spine", () => {
+test("adding navigation changes only navigation resources, never body text, ruby, notes, OPF or spine", () => {
   const document = fixture();
   const withOutline = serializeEpubPackage(document, options);
   const without = structuredClone(document);
   delete without.navigation;
   delete without.source.outline;
   const baseline = serializeEpubPackage(without, options);
-  assert.deepEqual(withOutline.files.filter((f) => f.path !== "OEBPS/nav.xhtml"), baseline.files.filter((f) => f.path !== "OEBPS/nav.xhtml"));
+  const nonNavigation = (files: typeof withOutline.files) => files.filter((f) =>
+    f.path !== "OEBPS/nav.xhtml" && f.path !== "OEBPS/toc.ncx");
+  assert.deepEqual(nonNavigation(withOutline.files), nonNavigation(baseline.files));
   assert.equal(baseline.navigation.mode, "pages");
   assert.deepEqual(withOutline.bytes, serializeEpubPackage(document, options).bytes);
 });
