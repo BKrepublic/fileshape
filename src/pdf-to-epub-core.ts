@@ -102,7 +102,9 @@ export async function convertPdfBytesToEpubWithResources(
     {
       ...(control?.throwIfCancelled === undefined ? {} : { throwIfCancelled: control.throwIfCancelled }),
       onDocumentLoaded: (pageCount) => {
-        totalUnits = pageCount + 3;
+        // One unit for loading, one per inspected page, two per source page for
+        // the document flow/layout passes, then one unit for EPUB serialization.
+        totalUnits = pageCount * 3 + 2;
         control?.onProgress?.({ phase: "loading-pdf", completedUnits: 1, totalUnits });
         control?.onProgress?.({ phase: "inspecting-pages", completedUnits: 1, totalUnits });
       },
@@ -147,25 +149,46 @@ export async function convertPdfBytesToEpubWithResources(
     },
   );
   control?.throwIfCancelled?.();
-  if (totalUnits === undefined) totalUnits = inspection.pageCount + 3;
+  if (totalUnits === undefined) totalUnits = inspection.pageCount * 3 + 2;
+  const buildTotalUnits = totalUnits;
 
+  const buildStartUnits = 1 + inspection.pageCount;
   control?.onProgress?.({
     phase: "building-document",
-    completedUnits: 1 + inspection.pageCount,
+    completedUnits: buildStartUnits,
     totalUnits,
   });
   const { document } = buildDocumentFromInspection(
     inspection,
     documentId,
     precomputedRubySpans,
+    {
+      onFlowAnalyzed: (completedPages) => {
+        control?.throwIfCancelled?.();
+        control?.onProgress?.({
+          phase: "building-document",
+          completedUnits: buildStartUnits + completedPages,
+          totalUnits: buildTotalUnits,
+        });
+      },
+      onPageBuilt: (completedPages) => {
+        control?.throwIfCancelled?.();
+        control?.onProgress?.({
+          phase: "building-document",
+          completedUnits: buildStartUnits + inspection.pageCount + completedPages,
+          totalUnits: buildTotalUnits,
+        });
+      },
+    },
   );
   const structuralHeadings = inspection.outline && inspection.outline.length > 0
     ? []
     : inferStructuralHeadings(document, inspection);
   control?.throwIfCancelled?.();
+  const serializationStartUnits = 1 + inspection.pageCount * 3;
   control?.onProgress?.({
     phase: "building-document",
-    completedUnits: 2 + inspection.pageCount,
+    completedUnits: serializationStartUnits,
     totalUnits,
   });
   const unresolvedAnnotationCount = document.pages.reduce(
@@ -181,7 +204,7 @@ export async function convertPdfBytesToEpubWithResources(
   control?.throwIfCancelled?.();
   control?.onProgress?.({
     phase: "serializing-epub",
-    completedUnits: 2 + inspection.pageCount,
+    completedUnits: serializationStartUnits,
     totalUnits,
   });
   const epub = serializeEpubPackage(document, {
@@ -202,7 +225,7 @@ export async function convertPdfBytesToEpubWithResources(
   control?.throwIfCancelled?.();
   control?.onProgress?.({
     phase: "serializing-epub",
-    completedUnits: 3 + inspection.pageCount,
+    completedUnits: totalUnits,
     totalUnits,
   });
 
