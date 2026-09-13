@@ -120,9 +120,18 @@ export async function convertPdfBytesToEpubWithResources(
         delete page.operatorGlyphs;
         delete page.glyphIssues;
 
+        // The original PDF transform and ruby-only display geometry are no
+        // longer needed after flow/ruby extraction. Later layout reconstruction
+        // uses displayX/displayY/width/height/fontSize and displayTransform.
+        // Share one empty vector instead of retaining a six-number array for
+        // every text item in the document.
+        const releasedTransform: number[] = [];
+
         for (const item of page.textItems) {
           delete item.glyphs;
           delete item.glyphMapping;
+          delete item.displayGeometry;
+          item.transform = releasedTransform;
         }
 
         if (totalUnits === undefined) {
