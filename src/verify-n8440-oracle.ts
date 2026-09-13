@@ -222,14 +222,56 @@ async function main(): Promise<void> {
   if (!firstChapter) {
     structuralFailures.push("chapter 01 logical XHTML not found");
   } else {
-    const beforeText = "一人ぼっちで居る、と";
-    const afterText = "いうのも居心地が悪い。";
-    const before = firstChapter.xhtml.indexOf(beforeText);
-    const after = firstChapter.xhtml.indexOf(afterText);
-    if (before < 0 || after <= before) {
-      structuralFailures.push("known cross-page sentence not found in chapter 01 XHTML");
-    } else if (firstChapter.xhtml.slice(before, after).includes("</p>")) {
-      structuralFailures.push("physical PDF page break still splits known paragraph in chapter 01");
+    const beforeText = normalizeComparable("一人ぼっちで居る、と");
+    const afterText = normalizeComparable("いうのも居心地が悪い。");
+    const beforePage = document.pages.find((page) =>
+      normalizeComparable(page.blocks.map((block) => block.semanticText).join("")).includes(beforeText));
+    const afterPage = document.pages.find((page) =>
+      normalizeComparable(page.blocks.map((block) => block.semanticText).join("")).includes(afterText));
+
+    if (!beforePage || !afterPage) {
+      structuralFailures.push("known cross-page sentence fragments not found in semantic document");
+    } else {
+      console.log(`[oracle] known cross-page boundary=${beforePage.sourcePage}->${afterPage.sourcePage}`);
+      if (afterPage.sourcePage !== beforePage.sourcePage + 1) {
+        structuralFailures.push(
+          `known sentence fragments are not on adjacent source pages: ` +
+          `${beforePage.sourcePage}->${afterPage.sourcePage}`,
+        );
+      } else if (!firstChapter.sourcePages.includes(beforePage.sourcePage) ||
+                 !firstChapter.sourcePages.includes(afterPage.sourcePage)) {
+        structuralFailures.push(
+          `known sentence pages are outside chapter 01 logical XHTML: ` +
+          `${beforePage.sourcePage}->${afterPage.sourcePage}`,
+        );
+      } else {
+        const marker = `id="source-page-${afterPage.sourcePage}"`;
+        const markerIndex = firstChapter.xhtml.indexOf(marker);
+        if (markerIndex < 0) {
+          structuralFailures.push(`source-page marker missing for page ${afterPage.sourcePage}`);
+        } else {
+          const prefix = firstChapter.xhtml.slice(0, markerIndex);
+          const lastParagraphOpen = prefix.lastIndexOf("<p ");
+          const lastParagraphClose = prefix.lastIndexOf("</p>");
+          if (lastParagraphOpen < 0 || lastParagraphOpen <= lastParagraphClose) {
+            structuralFailures.push(
+              `physical PDF page break still closes the paragraph before source page ${afterPage.sourcePage}`,
+            );
+          }
+
+          const nextParagraphClose = firstChapter.xhtml.indexOf("</p>", markerIndex);
+          const continuation = firstChapter.xhtml.indexOf(
+            'class="fileshape-block-continuation"',
+            markerIndex,
+          );
+          if (continuation < 0 ||
+              (nextParagraphClose >= 0 && continuation > nextParagraphClose)) {
+            structuralFailures.push(
+              `source page ${afterPage.sourcePage} does not resume the open paragraph as a continuation`,
+            );
+          }
+        }
+      }
     }
   }
 
