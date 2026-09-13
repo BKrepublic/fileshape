@@ -20,7 +20,7 @@ function block(page: number, index: number, text: string): DocumentTextBlock {
 }
 
 function fixture(): FileShapeDocument {
-  const heading = "01　天使様は水も滴るいい女";
+  const heading = "雨の日";
   const first = "　ただまあ、ここで少女がずぶ濡れになって一人ぼっちで居る、と";
   const second = "いうのも居心地が悪い。";
   return {
@@ -60,7 +60,9 @@ function fixture(): FileShapeDocument {
 }
 
 test("physical PDF page boundaries do not split a paragraph that continues mid-sentence", () => {
-  const result = serializeEpubXhtml(fixture());
+  const result = serializeEpubXhtml(fixture(), {
+    structuralHeadings: [{ title: "雨の日", sourcePage: 1, semanticBlockIndex: 0 }],
+  });
   assert.equal(result.pages.length, 1);
   const xhtml = result.pages[0]!.xhtml;
   const before = xhtml.indexOf("一人ぼっちで居る、と");
