@@ -111,7 +111,7 @@ export async function probePdfJsRuntime(): Promise<PdfJsProbeResult> {
     const page = await within(document.getPage(1), "page load");
     const content = await within(page.getTextContent(), "text extraction");
     const text = content.items
-      .map((item: { str?: string }) => item.str ?? "")
+      .map((item) => ("str" in item ? item.str : ""))
       .join("")
       .trim();
     if (text !== "FileShape browser probe") return unsupported("PDF.js fixture text was unexpected.", true);
@@ -128,11 +128,7 @@ export async function probePdfJsRuntime(): Promise<PdfJsProbeResult> {
       : error instanceof Error ? error.message : "PDF.js のブラウザ実行環境を確認できませんでした。";
     return unsupported(message, workerPort !== undefined);
   } finally {
-    if (document) {
-      await settleCleanup(() => document?.destroy());
-    } else if (loadingTask) {
-      await settleCleanup(() => loadingTask?.destroy());
-    }
+    if (loadingTask) await settleCleanup(() => loadingTask?.destroy());
     await settleCleanup(() => {
       if (pdfjsLib.GlobalWorkerOptions.workerPort === workerPort) {
         pdfjsLib.GlobalWorkerOptions.workerPort = null;
