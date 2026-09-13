@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; img-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'none'" />
+    <meta name="theme-color" content="#4f5f91" />
+    <link rel="icon" type="image/png" sizes="192x192" href="../../icons/fileshape-192.png" />
+    <link rel="stylesheet" href="../../policy.css" />
+    <title>ブラウザ内ローカル変換とは | FileShape</title>
+    <meta name="description" content="FileShapeがPDFをサーバーへ送らず、ブラウザ内でPDF解析とEPUB生成を行うローカル変換の仕組み、利点、制約を解説します。" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand-mark" href="../../" aria-label="FileShape トップへ">F</a>
+      <div class="brand-copy"><a href="../../">FileShape</a><span>PDF to EPUB</span></div>
+    </header>
+    <main class="page">
+      <p class="eyebrow">GUIDE / LOCAL PROCESSING</p>
+      <h1>ブラウザ内ローカル変換とは</h1>
+      <p class="lead">FileShapeは、選択したPDFを変換のためにサーバーへ送るのではなく、利用者のブラウザ内で解析してEPUBを生成します。</p>
+
+      <section class="policy-section">
+        <h2>ファイル選択後も変換処理は端末内</h2>
+        <p>PDFを選択すると、ブラウザがファイルを読み込み、専用のWeb Worker内でPDF解析とEPUB生成を行います。FileShapeの変換処理は、PDF本文を変換目的でFileShapeのサーバーへアップロードする構成ではありません。</p>
+      </section>
+
+      <section class="policy-section">
+        <h2>ローカル処理にする理由</h2>
+        <ul>
+          <li>PDF本文を変換サーバーへ預けずに済む</li>
+          <li>変換用ファイルのサーバー保存期間を気にしなくてよい</li>
+          <li>サーバー側で文書内容を解析する必要がない</li>
+          <li>変換処理の計算資源を利用者の端末側で完結できる</li>
+        </ul>
+        <p>一方で、すべてを端末内で処理するため、処理速度と利用可能メモリは利用している端末やブラウザの影響を受けます。</p>
+      </section>
+
+      <section class="policy-section">
+        <h2>ファイル容量よりページ数や内部構造が効くことがある</h2>
+        <p>13MBのPDFが必ず軽く、100MBのPDFが必ず重いとは限りません。数千ページの文書、文字や描画命令が非常に多い文書、画像を多数含む文書では、解析中に大きなメモリが必要になることがあります。スマートフォンではOSやブラウザが1つのページへ割り当てられるメモリに上限を設けるため、デスクトップより先に限界へ達する場合があります。</p>
+      </section>
+
+      <section class="policy-section">
+        <h2>ブラウザごとに限界が違う</h2>
+        <p>同じ端末でもChrome系とFirefox系ではJavaScriptエンジン、PDF処理、ガベージコレクション、Workerのメモリ管理が異なります。そのため、同じPDFでも処理速度や停止し始めるページ数が一致するとは限りません。長時間の停止やタブの再読み込みが発生する場合は、ブラウザがメモリ圧迫を受けている可能性があります。</p>
+      </section>
+
+      <section class="policy-section">
+        <h2>通信が完全にゼロという意味ではない</h2>
+        <p>「ローカル変換」はPDF本文の変換処理についての説明です。サイトのHTML、JavaScript、フォント等の配信、将来導入するアクセス解析や広告などは通常のWeb通信を行う場合があります。どの情報を扱うかは<a href="../../privacy/">プライバシーポリシー</a>と<a href="../../affiliate/">広告・アフィリエイトポリシー</a>に記載します。</p>
+      </section>
+
+      <p class="meta">最終更新: 2026年9月13日</p>
+    </main>
+    <footer class="page-footer">
+      <nav aria-label="サイト情報"><a href="../">ガイド</a><a href="../../about/">運営情報</a><a href="../../terms/">利用規約</a><a href="../../privacy/">プライバシー</a><a href="../../affiliate/">広告・アフィリエイト</a><a href="../../disclaimer/">免責事項</a><a href="../../contact/">お問い合わせ</a></nav>
+      <p>© FileShape</p>
+    </footer>
+  </body>
+</html>
