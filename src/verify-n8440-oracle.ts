@@ -4,6 +4,7 @@ import { nodeBinaryRuntime } from "./binary-runtime-node.js";
 import { serializeLegacyNcx } from "./epub-ncx.js";
 import { serializeEpubNavigation } from "./epub-navigation.js";
 import { serializeEpubXhtml } from "./epub-xhtml.js";
+import { inferStructuralHeadings } from "./heading-inference.js";
 import { buildDocumentFromInspection } from "./pdf-document-pipeline.js";
 import { inspectPdfBytes } from "./pdf-inspector-core.js";
 import { nodePdfJsResourceConfig } from "./pdf-inspector.js";
@@ -178,16 +179,46 @@ async function main(): Promise<void> {
   const failures = results.filter((result) =>
     result.inversions > 0 || result.coverage < MIN_CHAPTER_ANCHOR_COVERAGE);
 
-  console.log("[oracle] EPUB論理構造を検証しています...");
-  const xhtml = serializeEpubXhtml(document, { unresolvedRubyPolicy: "preserve-as-page-note" });
+  console.log("[oracle] 汎用レイアウト見出し推定を検証しています...");
+  const structuralHeadings = inferStructuralHeadings(document, inspection);
+  console.log(`[oracle] structural headings=${structuralHeadings.length}`);
   const structuralFailures: string[] = [];
-  const inferredHeadings = xhtml.pages.filter((page) => page.heading !== undefined);
-  if (inferredHeadings.length < EXPECTED_CHAPTERS) {
-    structuralFailures.push(`inferred headings too few: ${inferredHeadings.length} < ${EXPECTED_CHAPTERS}`);
+
+  const expectedTokens = chapters.map(headingToken);
+  const inferredTokens = structuralHeadings.map((heading) => normalizeComparable(heading.title));
+  const expectedPositions = expectedTokens.map((token) => inferredTokens.indexOf(token));
+  if (expectedPositions.some((position) => position < 0)) {
+    const missing = expectedTokens.filter((_, index) => expectedPositions[index]! < 0).slice(0, 10);
+    structuralFailures.push(`generic inference missing oracle headings: ${missing.join(", ")}`);
+  }
+  for (let index = 1; index < expectedPositions.length; index += 1) {
+    if (expectedPositions[index]! <= expectedPositions[index - 1]!) {
+      structuralFailures.push(`generic heading order mismatch at oracle chapter ${index + 1}`);
+      break;
+    }
   }
 
-  const firstChapter = xhtml.pages.find((page) =>
-    page.heading !== undefined && normalizeComparable(page.heading.title).startsWith("01"));
+  const lastExpectedIndex = expectedPositions.at(-1) ?? -1;
+  if (lastExpectedIndex >= 0) {
+    const selectedThroughOldSnapshot = inferredTokens.slice(0, lastExpectedIndex + 1);
+    if (selectedThroughOldSnapshot.length !== EXPECTED_CHAPTERS ||
+        selectedThroughOldSnapshot.some((token, index) => token !== expectedTokens[index])) {
+      structuralFailures.push(
+        `generic inference produced false/misordered headings inside old 266-chapter snapshot: ` +
+        `${selectedThroughOldSnapshot.length} selected`,
+      );
+    }
+  }
+
+  const xhtml = serializeEpubXhtml(document, {
+    unresolvedRubyPolicy: "preserve-as-page-note",
+    structuralHeadings,
+  });
+  const inferredPages = xhtml.pages.filter((page) => page.heading !== undefined);
+  const firstToken = expectedTokens[0]!;
+  const secondToken = expectedTokens[1]!;
+  const firstChapter = inferredPages.find((page) =>
+    page.heading !== undefined && normalizeComparable(page.heading.title) === firstToken);
   if (!firstChapter) {
     structuralFailures.push("chapter 01 logical XHTML not found");
   } else {
@@ -206,30 +237,26 @@ async function main(): Promise<void> {
   const legacyNcx = serializeLegacyNcx(document, "N8440FE", "urn:fileshape:n8440-oracle", xhtml.pages);
   const normalizedEpub3Nav = normalizeComparable(epub3Nav);
   const normalizedLegacyNcx = normalizeComparable(legacyNcx);
-  for (const heading of ["01天使様は水も滴るいい女", "02天使様の申し出"]) {
-    const normalizedHeading = normalizeComparable(heading);
-    if (!normalizedEpub3Nav.includes(normalizedHeading)) {
-      structuralFailures.push(`EPUB3 nav missing heading: ${heading}`);
-    }
-    if (!normalizedLegacyNcx.includes(normalizedHeading)) {
-      structuralFailures.push(`NCX missing heading: ${heading}`);
-    }
+  for (const token of [firstToken, secondToken]) {
+    if (!normalizedEpub3Nav.includes(token)) structuralFailures.push(`EPUB3 nav missing heading: ${token}`);
+    if (!normalizedLegacyNcx.includes(token)) structuralFailures.push(`NCX missing heading: ${token}`);
   }
 
   console.log("");
   console.log("====================================================================");
   if (failures.length === 0 && structuralFailures.length === 0) {
-    console.log("N8440FE FULL-ORDER + EPUB-STRUCTURE ORACLE: PASS");
+    console.log("N8440FE FULL-ORDER + GENERIC EPUB-STRUCTURE ORACLE: PASS");
     console.log(`chapters=${results.length}`);
     console.log(`exact_chapters=${exact}`);
     console.log(`anchors=${totalMatched}/${totalExpected}`);
     console.log("order_inversions=0");
-    console.log(`inferred_headings=${inferredHeadings.length}`);
+    console.log(`structural_headings=${structuralHeadings.length}`);
+    console.log("generic_heading_inference=PASS");
     console.log("cross_page_paragraph=PASS");
     console.log("epub3_toc=PASS");
     console.log("legacy_ncx=PASS");
   } else {
-    console.log("!!! N8440FE FULL-ORDER + EPUB-STRUCTURE ORACLE: FAIL !!!");
+    console.log("!!! N8440FE FULL-ORDER + GENERIC EPUB-STRUCTURE ORACLE: FAIL !!!");
     for (const failure of failures.slice(0, 20)) {
       console.log(
         `chapter=${failure.number} coverage=${(failure.coverage * 100).toFixed(1)}% ` +
