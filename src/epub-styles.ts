@@ -32,6 +32,17 @@ body {
   text-orientation: mixed;
 }
 
+.fileshape-heading {
+  margin: 0 0 1.5em 0;
+  font-size: 1.15em;
+  font-weight: bold;
+}
+
+.fileshape-source-page-marker {
+  font-size: 0;
+  line-height: 0;
+}
+
 .fileshape-block {
   margin: 0 0 1em 0;
 }
