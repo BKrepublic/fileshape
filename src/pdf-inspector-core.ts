@@ -22,8 +22,14 @@ export type PdfInspectionControl = {
   throwIfCancelled?: () => void;
   /** Called only after PDF.js has loaded a real document and page count is known. */
   onDocumentLoaded?: (pageCount: number) => void;
-  /** Called after a complete page has been inspected and committed to the result. */
-  onPageInspected?: (completedPages: number, totalPages: number) => void;
+  /** Called after a complete page has been inspected and committed to the result.
+   * The callback may compact evidence that has already been reduced to a
+   * source-backed representation. */
+  onPageInspected?: (
+    completedPages: number,
+    totalPages: number,
+    page: InspectPage,
+  ) => void;
 };
 
 function validateSourceName(sourceName: string): void {
@@ -166,7 +172,7 @@ export async function inspectPdfBytes(
         imageResources.set(resource.id, existing ?? resource);
       }
 
-      pages.push({
+      const inspectedPage: InspectPage = {
         ...(extracted ? { operatorGlyphs: extracted.glyphs, glyphIssues: extracted.issues } : {}),
         page: pageNumber,
         width: viewport.width,
@@ -178,8 +184,9 @@ export async function inspectPdfBytes(
         imagePaintOps: countImagePaintOps(operatorList.fnArray),
         textItems,
         ...(productionImages === undefined ? {} : { imageOccurrences: productionImages.occurrences }),
-      });
-      control?.onPageInspected?.(pageNumber, pageCount);
+      };
+      pages.push(inspectedPage);
+      control?.onPageInspected?.(pageNumber, pageCount, inspectedPage);
       } finally {
         // PDF.js retains page-local operator/font/image caches unless the page
         // proxy is explicitly cleaned. The extracted FileShape evidence above
