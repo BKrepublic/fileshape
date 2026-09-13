@@ -59,7 +59,7 @@ function fixture(): FileShapeDocument {
   };
 }
 
-test("physical PDF page boundaries do not split a paragraph that continues mid-sentence", () => {
+test("physical PDF page boundaries do not split or pad a paragraph that continues mid-sentence", () => {
   const result = serializeEpubXhtml(fixture(), {
     structuralHeadings: [{ title: "雨の日", sourcePage: 1, semanticBlockIndex: 0 }],
   });
@@ -69,6 +69,43 @@ test("physical PDF page boundaries do not split a paragraph that continues mid-s
   const after = xhtml.indexOf("いうのも居心地が悪い。");
   assert.ok(before >= 0 && after > before);
   assert.doesNotMatch(xhtml.slice(before, after), /<\/p>/);
-  assert.match(xhtml, /class="fileshape-block-continuation"[^>]*>いうのも居心地が悪い。<\/span><\/p>/);
-  assert.match(xhtml, /id="source-page-2"/);
+  assert.match(
+    xhtml,
+    /一人ぼっちで居る、と<span id="source-page-2" class="fileshape-source-page-marker" data-source-page="2"><\/span><span class="fileshape-block-continuation"[^>]*>いうのも居心地が悪い。<\/span><\/p>/,
+  );
+  assert.doesNotMatch(
+    xhtml,
+    /一人ぼっちで居る、と\s+<span id="source-page-2"|<\/span>\s+<span class="fileshape-block-continuation"/,
+  );
+});
+
+test("serializer adds no formatting whitespace at any continued physical page boundary", () => {
+  const heading = "任意の題";
+  const document: FileShapeDocument = {
+    kind: "document",
+    id: "cross-page-multiple",
+    imageResources: [],
+    source: {
+      documentId: "cross-page-multiple",
+      pages: [
+        { page: 1, textItems: [{ itemIndex: 0, text: heading }, { itemIndex: 1, text: "　A、" }] },
+        { page: 2, textItems: [{ itemIndex: 0, text: "B、" }] },
+        { page: 3, textItems: [{ itemIndex: 0, text: "C。" }] },
+      ],
+    },
+    pages: [
+      { kind: "page", sourcePage: 1, rotation: 0, orientation: "vertical", imageOccurrences: [], unresolvedRuby: [], unmappedExactRuby: [], blocks: [block(1, 0, heading), block(1, 1, "　A、")] },
+      { kind: "page", sourcePage: 2, rotation: 0, orientation: "vertical", imageOccurrences: [], unresolvedRuby: [], unmappedExactRuby: [], blocks: [block(2, 0, "B、")] },
+      { kind: "page", sourcePage: 3, rotation: 0, orientation: "vertical", imageOccurrences: [], unresolvedRuby: [], unmappedExactRuby: [], blocks: [block(3, 0, "C。")] },
+    ],
+  };
+
+  const xhtml = serializeEpubXhtml(document, {
+    structuralHeadings: [{ title: heading, sourcePage: 1, semanticBlockIndex: 0 }],
+  }).pages[0]!.xhtml;
+
+  assert.match(
+    xhtml,
+    /A、<span id="source-page-2"[^>]*><\/span><span class="fileshape-block-continuation"[^>]*>B、<\/span><span id="source-page-3"[^>]*><\/span><span class="fileshape-block-continuation"[^>]*>C。<\/span><\/p>/,
+  );
 });
