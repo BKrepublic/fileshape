@@ -266,8 +266,8 @@ function progressLabel(phase: string): string {
 function totalPagesFromProgress(totalUnits: number | undefined): number | undefined {
   if (totalUnits === undefined || totalUnits < 2) return undefined;
   const pageUnits = totalUnits - 2;
-  if (pageUnits % 2 !== 0) return undefined;
-  return pageUnits / 2;
+  if (pageUnits % 3 !== 0) return undefined;
+  return pageUnits / 3;
 }
 
 function renderProgress(
@@ -280,20 +280,25 @@ function renderProgress(
 
   if (phase === "inspecting-pages" && totalPages !== undefined) {
     const completedPages = Math.min(totalPages, Math.max(0, completedUnits - 1));
-    showDeterminateProgress(completedPages, totalPages, `${label} ${completedPages}/${totalPages}ページ`);
-    if (conversionStatus) {
-      conversionStatus.textContent = `${label} ${completedPages.toLocaleString("ja-JP")}/${totalPages.toLocaleString("ja-JP")}ページ`;
-    }
+    const status = `${label} ${completedPages.toLocaleString("ja-JP")}/${totalPages.toLocaleString("ja-JP")}ページ`;
+    showDeterminateProgress(completedPages, totalPages, status);
+    if (conversionStatus) conversionStatus.textContent = status;
     return;
   }
 
   if (phase === "building-document" && totalPages !== undefined) {
     const buildStartUnits = 1 + totalPages;
-    const completedPages = Math.min(totalPages, Math.max(0, completedUnits - buildStartUnits));
-    showDeterminateProgress(completedPages, totalPages, `${label} ${completedPages}/${totalPages}ページ`);
-    if (conversionStatus) {
-      conversionStatus.textContent = `${label} ${completedPages.toLocaleString("ja-JP")}/${totalPages.toLocaleString("ja-JP")}ページ`;
+    const completedBuildUnits = Math.min(totalPages * 2, Math.max(0, completedUnits - buildStartUnits));
+    let status: string;
+    if (completedBuildUnits <= totalPages) {
+      const analyzedPages = completedBuildUnits;
+      status = `文書構造を解析中 ${analyzedPages.toLocaleString("ja-JP")}/${totalPages.toLocaleString("ja-JP")}ページ`;
+    } else {
+      const builtPages = completedBuildUnits - totalPages;
+      status = `文書構造を構築中 ${builtPages.toLocaleString("ja-JP")}/${totalPages.toLocaleString("ja-JP")}ページ`;
     }
+    showDeterminateProgress(completedBuildUnits, totalPages * 2, status);
+    if (conversionStatus) conversionStatus.textContent = status;
     return;
   }
 
