@@ -4,12 +4,17 @@ import {
   type FileShapeDocument,
 } from "./document-model.js";
 import { resolveDocumentOrientations } from "./document-orientation.js";
+import { buildDocumentMarginProfile } from "./margin-recurrence.js";
 import { summarizeOrientationEvidence } from "./orientation-evidence.js";
 import type { InspectResult } from "./pdf-inspection-model.js";
 import { reconstructPhysicalLayout } from "./physical-layout.js";
 import { associateRubySpans, type RubySpan } from "./ruby-spans.js";
 import { buildSemanticBlocks } from "./semantic-blocks.js";
-import { reconstructPageFlow, type PageFlowResult } from "./text-flow.js";
+import {
+  estimateBodyFontSize,
+  reconstructPageFlow,
+  type PageFlowResult,
+} from "./text-flow.js";
 
 export type PdfDocumentPipelinePage = {
   page: number;
@@ -45,8 +50,12 @@ export function buildDocumentFromInspection(
   control?: PdfDocumentPipelineControl,
 ): PdfDocumentPipelineResult {
   const totalPages = inspection.pages.length;
+  const bodyFontSizes = new Map(
+    inspection.pages.map((page) => [page.page, estimateBodyFontSize(page.textItems)]),
+  );
+  const marginProfile = buildDocumentMarginProfile(inspection.pages, bodyFontSizes);
   const flows = inspection.pages.map((page, index) => {
-    const flow = reconstructPageFlow(page);
+    const flow = reconstructPageFlow(page, marginProfile);
     control?.onFlowAnalyzed?.(index + 1, totalPages);
     return { page, flow };
   });
@@ -68,7 +77,12 @@ export function buildDocumentFromInspection(
   const documentPages = flows.map(({ page, flow }, index) => {
     const resolved = resolvedByPage.get(page.page);
     const orientation = resolved?.resolved ?? flow.orientation;
-    const layout = reconstructPhysicalLayout(page, orientation, flow.bodyFontSize);
+    const layout = reconstructPhysicalLayout(
+      page,
+      orientation,
+      flow.bodyFontSize,
+      marginProfile,
+    );
     const rubySpans = precomputedRubySpans === undefined
       ? associateRubySpans(page, flow.bodyFontSize)
       : precomputedRubySpans.get(page.page);
