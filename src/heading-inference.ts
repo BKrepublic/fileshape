@@ -112,6 +112,18 @@ function dominantRecurringClusters(candidatesByStyle: Map<string, Candidate[]>):
   return clearDominance ? [strongest.candidates] : [];
 }
 
+function uniquePerSourcePage(candidates: Candidate[]): Candidate[] {
+  const counts = new Map<number, number>();
+  for (const candidate of candidates) {
+    counts.set(candidate.sourcePage, (counts.get(candidate.sourcePage) ?? 0) + 1);
+  }
+  // EPUB logical grouping currently exposes one structural boundary per source
+  // page. When the source presents multiple indistinguishable candidates on the
+  // same page, there is not enough evidence to choose one, so omit that page
+  // rather than reintroducing first-block/page-position bias.
+  return candidates.filter((candidate) => counts.get(candidate.sourcePage) === 1);
+}
+
 /**
  * Infer only source-backed, recurring structural headings.
  *
@@ -156,7 +168,7 @@ export function inferStructuralHeadings(
     }
   }
 
-  const selected = dominantRecurringClusters(candidatesByStyle).flat();
+  const selected = uniquePerSourcePage(dominantRecurringClusters(candidatesByStyle).flat());
   return selected
     .sort((a, b) => a.sourcePage - b.sourcePage || a.semanticBlockIndex - b.semanticBlockIndex)
     .map(({ title, sourcePage, semanticBlockIndex }) => ({ title, sourcePage, semanticBlockIndex }));
