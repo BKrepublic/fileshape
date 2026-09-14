@@ -4,6 +4,7 @@ import {
   ordinaryCrossAxisTolerance,
   verticalTextLayoutMode,
 } from "./layout-clustering.js";
+import type { DocumentMarginProfile } from "./margin-recurrence.js";
 import type { InspectPage, InspectTextItem } from "./pdf-inspection-model.js";
 import type { WritingOrientation } from "./text-flow.js";
 import { fullTextRef, type SourceTextRef } from "./source-text.js";
@@ -44,8 +45,12 @@ function round(value: number, digits = 2): number {
   return Math.round(value * factor) / factor;
 }
 
-function primaryItems(page: InspectPage, bodyFontSize: number): InspectTextItem[] {
-  return collectTextItemEvidence(page, bodyFontSize)
+function primaryItems(
+  page: InspectPage,
+  bodyFontSize: number,
+  marginProfile?: DocumentMarginProfile,
+): InspectTextItem[] {
+  return collectTextItemEvidence(page, bodyFontSize, marginProfile)
     .filter((entry) => entry.visible && !entry.marginNoise && !entry.annotationSized)
     .map(({ item, itemIndex }) => ({
       ...item,
@@ -199,8 +204,9 @@ export function reconstructPhysicalLayout(
   page: InspectPage,
   orientation: WritingOrientation,
   bodyFontSize: number,
+  marginProfile?: DocumentMarginProfile,
 ): PhysicalPageLayout {
-  const items = primaryItems(page, bodyFontSize);
+  const items = primaryItems(page, bodyFontSize, marginProfile);
   const inlineSize = orientation === "horizontal" ? page.width : page.height;
 
   let units: PhysicalTextUnit[] = [];
