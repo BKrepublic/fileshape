@@ -174,6 +174,33 @@ function makeUnit(
   };
 }
 
+function sourceItemIndex(item: InspectTextItem): number | undefined {
+  return item.source?.itemIndex;
+}
+
+function verticalGlyphOrder(a: InspectTextItem, b: InspectTextItem): number {
+  const yDifference = a.displayY - b.displayY;
+  const aExtent = Math.max(Math.abs(a.height), a.fontSize * 0.8, 1);
+  const bExtent = Math.max(Math.abs(b.height), b.fontSize * 0.8, 1);
+  const nearTie = Math.abs(yDifference) < Math.min(aExtent, bExtent) * 0.75;
+
+  // Vertical punctuation and rotated glyphs may have shifted display origins.
+  // Once geometry has already placed two items in the same physical column,
+  // overlapping/near-overlapping advance cells do not provide a reliable order.
+  // Preserve exact PDF source order only for that local tie; larger separations
+  // still use geometry so interleaved or unusual producer emission remains safe.
+  if (nearTie) {
+    const aSource = sourceItemIndex(a);
+    const bSource = sourceItemIndex(b);
+    if (aSource !== undefined && bSource !== undefined && aSource !== bSource) {
+      return aSource - bSource;
+    }
+  }
+
+  return yDifference || a.displayX - b.displayX ||
+    ((sourceItemIndex(a) ?? 0) - (sourceItemIndex(b) ?? 0));
+}
+
 function buildVerticalGlyphUnits(
   items: InspectTextItem[],
   bodyFontSize: number,
@@ -184,14 +211,12 @@ function buildVerticalGlyphUnits(
   // Single-glyph PDFs do not guarantee that PDF.js emits text items grouped by
   // visual column. Some producers interleave glyph operators by row or drawing
   // order. Reconstruct columns from display geometry first, then establish the
-  // Japanese vertical reading order explicitly: columns right-to-left and glyphs
-  // top-to-bottom. The wider tolerance keeps shifted punctuation in its body
-  // column while still separating ordinary neighbouring columns.
+  // vertical reading order within each column. Local overlapping glyph origins
+  // retain source order because punctuation/rotation can shift their baselines.
   const tolerance = Math.max(8, bodyFontSize * 1.25);
   return clusterByAxis(items, "x", tolerance)
     .map((unit) => {
-      const orderedItems = [...unit.items].sort((a, b) =>
-        a.displayY - b.displayY || a.displayX - b.displayX);
+      const orderedItems = [...unit.items].sort(verticalGlyphOrder);
       return {
         position: median(unit.positions),
         items: orderedItems,
