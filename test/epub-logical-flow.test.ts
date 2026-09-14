@@ -78,6 +78,19 @@ function setEdgeGeometry(
   };
 }
 
+function serializedContinuation(
+  previousEndRatio: number,
+  previousCoverageRatio: number,
+  nextStartRatio: number,
+  firstText = "終端。",
+  nextText = "「次」",
+): ReturnType<typeof serializeEpubXhtml> {
+  const document = documentFixture([firstText, nextText]);
+  setEdgeGeometry(document, 1, 0.1, previousEndRatio, previousCoverageRatio);
+  setEdgeGeometry(document, 2, nextStartRatio, 0.6, 0.5);
+  return serializeEpubXhtml(document);
+}
+
 const structuralHeadings = [
   { title: "序章ではない名前", sourcePage: 1, semanticBlockIndex: 0 },
   { title: "◆第二の区切り", sourcePage: 3, semanticBlockIndex: 0 },
@@ -376,6 +389,55 @@ test("cross-page paragraph continuation follows edge geometry even when text loo
   const body = serializeEpubXhtml(document).pages[0]?.xhtml ?? "";
   assert.match(body, /class="fileshape-block-continuation"/);
   assert.equal((body.match(/<p class="fileshape-block"/g) ?? []).length, 1);
+});
+
+test("logical XHTML continuation agrees with shared edge boundaries", () => {
+  const firstText = "終端。" + "a".repeat(149_997);
+  const nextText = "「次」" + "b".repeat(149_997);
+  const cases = [
+    { previousEnd: 0.78, coverage: 0.5, nextStart: 0.32, expected: true },
+    { previousEnd: 0.78 - 1e-6, coverage: 0.5, nextStart: 0.32, expected: false },
+    { previousEnd: 0.78, coverage: 0.5 - 1e-6, nextStart: 0.32, expected: false },
+    { previousEnd: 0.78, coverage: 0.5, nextStart: 0.32 + 1e-6, expected: false },
+  ];
+
+  for (const { previousEnd, coverage, nextStart, expected } of cases) {
+    const result = serializedContinuation(previousEnd, coverage, nextStart, firstText, nextText);
+    const body = result.pages.map((page) => page.xhtml).join("");
+    assert.equal(result.pages.length, expected ? 1 : 2);
+    assert.deepEqual(
+      result.pages.map((page) => page.sourcePages),
+      expected ? [[1, 2]] : [[1], [2]],
+    );
+    assert.equal(body.includes("fileshape-block-continuation"), expected);
+    assert.equal((body.match(/<p class="fileshape-block"/g) ?? []).length, expected ? 1 : 2);
+  }
+});
+
+test("logical XHTML continuation depends on geometry rather than punctuation or text", () => {
+  const exactPunctuation = serializedContinuation(
+    0.78,
+    0.5,
+    0.32,
+    "終端。" + "a".repeat(149_997),
+    "「次」" + "b".repeat(149_997),
+  );
+  const exactPlain = serializedContinuation(
+    0.78,
+    0.5,
+    0.32,
+    "plain alpha!" + "a".repeat(149_988),
+    "plain beta?" + "b".repeat(149_989),
+  );
+  const punctuationBody = exactPunctuation.pages.map((page) => page.xhtml).join("");
+  const plainBody = exactPlain.pages.map((page) => page.xhtml).join("");
+
+  assert.deepEqual(exactPunctuation.pages.map((page) => page.sourcePages), [[1, 2]]);
+  assert.deepEqual(exactPlain.pages.map((page) => page.sourcePages), [[1, 2]]);
+  assert.equal(punctuationBody.includes("fileshape-block-continuation"), true);
+  assert.equal(plainBody.includes("fileshape-block-continuation"), true);
+  assert.equal((punctuationBody.match(/<p class="fileshape-block"/g) ?? []).length, 1);
+  assert.equal((plainBody.match(/<p class="fileshape-block"/g) ?? []).length, 1);
 });
 
 test("cross-page paragraph stays separate when edge geometry disagrees even without punctuation", () => {

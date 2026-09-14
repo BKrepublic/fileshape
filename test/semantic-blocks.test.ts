@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { PhysicalPageLayout, PhysicalTextUnit } from "../src/physical-layout.js";
-import { buildSemanticBlocks } from "../src/semantic-blocks.js";
+import { buildSemanticBlocks, hasContinuationEdgeGeometry } from "../src/semantic-blocks.js";
 
 function unit(
   index: number,
@@ -43,6 +43,34 @@ function layout(units: PhysicalTextUnit[]): PhysicalPageLayout {
     }),
   };
 }
+
+test("continuation edge geometry uses inclusive boundaries for every channel", () => {
+  assert.equal(hasContinuationEdgeGeometry(0.78, 0.5, 0.32), true);
+  assert.equal(hasContinuationEdgeGeometry(0.78 - 1e-6, 0.5, 0.32), false);
+  assert.equal(hasContinuationEdgeGeometry(0.78, 0.5 - 1e-6, 0.32), false);
+  assert.equal(hasContinuationEdgeGeometry(0.78, 0.5, 0.32 + 1e-6), false);
+});
+
+test("semantic block construction agrees with the shared continuation edge gate", () => {
+  const cases = [
+    { previousEnd: 0.78, coverage: 0.5, nextStart: 0.32, expected: true },
+    { previousEnd: 0.78 - 1e-6, coverage: 0.5, nextStart: 0.32, expected: false },
+    { previousEnd: 0.78, coverage: 0.5 - 1e-6, nextStart: 0.32, expected: false },
+    { previousEnd: 0.78, coverage: 0.5, nextStart: 0.32 + 1e-6, expected: false },
+  ];
+
+  for (const { previousEnd, coverage, nextStart, expected } of cases) {
+    const result = buildSemanticBlocks(
+      layout([
+        unit(0, 700, "終端。", previousEnd - coverage, previousEnd),
+        unit(1, 676, "「次」", nextStart, nextStart + coverage),
+      ]),
+      14,
+    );
+    assert.equal(result.decisions[0]?.continuationEdgeGeometry, expected);
+    assert.equal(result.blocks.length, expected ? 1 : 2);
+  }
+});
 
 test("joins a high-confidence physical wrap while retaining sparse spacing provenance", () => {
   const result = buildSemanticBlocks(
