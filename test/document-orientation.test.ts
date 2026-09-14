@@ -115,18 +115,29 @@ test("does not override a known metric-backed label whose retained source decide
   assert.equal(result[1]?.source, "detected");
 });
 
-test("does not resolve attached-run evidence across an orientation transition", () => {
+test("attached-run evidence can place an unknown run on the matching side of a transition", () => {
   const result = resolveDocumentOrientations([
     { page: 10, orientation: "vertical", evidence: evidence("vertical", 0.9, 0.1) },
     { page: 11, orientation: "unknown", evidence: attachedEvidence("vertical") },
     { page: 12, orientation: "horizontal", evidence: evidence("horizontal", 0.1, 0.9) },
   ]);
 
-  assert.equal(result[1]?.resolved, "unknown");
-  assert.equal(result[1]?.source, "unresolved");
+  assert.equal(result[1]?.resolved, "vertical");
+  assert.equal(result[1]?.source, "document-context");
 });
 
-test("does not infer across an orientation transition", () => {
+test("attached-run evidence may instead place an unknown run on the next side of a transition", () => {
+  const result = resolveDocumentOrientations([
+    { page: 10, orientation: "vertical", evidence: evidence("vertical", 0.9, 0.1) },
+    { page: 11, orientation: "unknown", evidence: attachedEvidence("horizontal") },
+    { page: 12, orientation: "horizontal", evidence: evidence("horizontal", 0.1, 0.9) },
+  ]);
+
+  assert.equal(result[1]?.resolved, "horizontal");
+  assert.equal(result[1]?.source, "document-context");
+});
+
+test("does not infer across an orientation transition from raw weak tendency", () => {
   const result = resolveDocumentOrientations([
     { page: 10, orientation: "vertical", evidence: evidence("vertical", 0.9, 0.1) },
     { page: 11, orientation: "unknown", evidence: evidence("unknown", 0.55, 0.45, "none") },
