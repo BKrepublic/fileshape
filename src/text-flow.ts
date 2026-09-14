@@ -42,9 +42,21 @@ export type FlowBoundary = {
   estimatedLineBreaks: number;
 };
 
+export type BodyFontEvidence = {
+  size: number;
+  totalWeight: number;
+  dominantWeight: number;
+  runnerUpWeight: number;
+  dominantSupportRatio: number;
+  dominanceMarginRatio: number;
+  bucketCount: number;
+};
+
 export type PageFlowResult = {
   orientation: WritingOrientation;
   bodyFontSize: number;
+  /** Compact page-local evidence behind bodyFontSize; retained for later document context. */
+  bodyFontEvidence: BodyFontEvidence;
   primaryItemCount: number;
   annotationItemCount: number;
   marginNoiseItemCount: number;
@@ -69,8 +81,8 @@ function charCount(text: string): number {
   return [...text.trim()].length;
 }
 
-/** Compact page-local body-font estimate shared with glyph-live ruby extraction. */
-export function estimateBodyFontSize(items: readonly InspectTextItem[]): number {
+/** Compact page-local body-font evidence shared with glyph-live ruby extraction. */
+export function measureBodyFontEvidence(items: readonly InspectTextItem[]): BodyFontEvidence {
   const buckets = new Map<number, number>();
 
   for (const item of items) {
@@ -80,16 +92,29 @@ export function estimateBodyFontSize(items: readonly InspectTextItem[]): number 
     buckets.set(size, (buckets.get(size) ?? 0) + count);
   }
 
-  let bestSize = 0;
-  let bestWeight = -1;
-  for (const [size, weight] of buckets) {
-    if (weight > bestWeight || (weight === bestWeight && size > bestSize)) {
-      bestSize = size;
-      bestWeight = weight;
-    }
-  }
+  const ranked = [...buckets.entries()]
+    .map(([size, weight]) => ({ size, weight }))
+    .sort((left, right) => right.weight - left.weight || right.size - left.size);
+  const dominant = ranked[0];
+  const runnerUp = ranked[1];
+  const totalWeight = ranked.reduce((sum, entry) => sum + entry.weight, 0);
+  const dominantWeight = dominant?.weight ?? 0;
+  const runnerUpWeight = runnerUp?.weight ?? 0;
 
-  return bestSize;
+  return {
+    size: dominant?.size ?? 0,
+    totalWeight,
+    dominantWeight,
+    runnerUpWeight,
+    dominantSupportRatio: totalWeight === 0 ? 0 : dominantWeight / totalWeight,
+    dominanceMarginRatio: totalWeight === 0 ? 0 : (dominantWeight - runnerUpWeight) / totalWeight,
+    bucketCount: ranked.length,
+  };
+}
+
+/** Backwards-compatible numeric view of the retained body-font evidence. */
+export function estimateBodyFontSize(items: readonly InspectTextItem[]): number {
+  return measureBodyFontEvidence(items).size;
 }
 
 function detectOrientation(items: InspectTextItem[]): {
@@ -324,7 +349,8 @@ export function reconstructPageFlow(
   marginProfile?: DocumentMarginProfile,
 ): PageFlowResult {
   const nonEmptyItems = page.textItems.filter((item) => item.text.trim().length > 0);
-  const bodyFontSize = estimateBodyFontSize(nonEmptyItems);
+  const bodyFontEvidence = measureBodyFontEvidence(nonEmptyItems);
+  const bodyFontSize = bodyFontEvidence.size;
   const itemEvidence = collectTextItemEvidence(page, bodyFontSize, marginProfile);
 
   const marginNoiseItems = itemEvidence
@@ -352,6 +378,7 @@ export function reconstructPageFlow(
   return {
     orientation,
     bodyFontSize: round(bodyFontSize, 2),
+    bodyFontEvidence,
     primaryItemCount: primaryItems.length,
     annotationItemCount: annotationItems.length,
     marginNoiseItemCount: marginNoiseItems.length,
