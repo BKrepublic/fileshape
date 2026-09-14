@@ -46,7 +46,7 @@ export type EpubXhtmlOptions = {
   titlePrefix?: string;
   /** Exact ruby display. `off` emits only source-backed base text; defaults to `on`. */
   rubyMode?: EpubRubyMode;
-  /** Fail closed by default; optionally preserve unresolved annotation text as page-end notes. */
+  /** Fail closed by default; callers may explicitly preserve unresolved source evidence. */
   unresolvedRubyPolicy?: UnresolvedRubyPolicy;
   /**
    * Optional structural headings inferred upstream from PDF layout/style evidence.
@@ -135,6 +135,18 @@ function renderPreservedNotes(notes: PreservedUnresolvedAnnotation[]): string {
   if (notes.length === 0) return "";
   const items = notes.map(renderPreservedNote).join("\n");
   return `    <section class="fileshape-unresolved-notes" aria-label="Unresolved annotations">\n      <h2>Notes</h2>\n${items}\n    </section>`;
+}
+
+function renderHiddenProvenance(
+  entries: PreservedUnresolvedAnnotation[],
+): string {
+  if (entries.length === 0) return "";
+  const items = entries.map((entry, index) => {
+    const sourceRanges = escapeXmlAttribute(JSON.stringify(entry.sourceRanges));
+    const alternatives = escapeXmlAttribute(JSON.stringify(entry.alternatives));
+    return `      <span hidden="hidden" class="fileshape-unresolved-provenance" data-fileshape-entry="${index + 1}" data-fileshape-reason="${escapeXmlAttribute(entry.reason)}" data-fileshape-source-ranges="${sourceRanges}" data-fileshape-alternatives="${alternatives}">${escapeXmlText(entry.text)}</span>`;
+  }).join("\n");
+  return `    <div hidden="hidden" class="fileshape-unresolved-provenance-set" aria-hidden="true">\n${items}\n    </div>`;
 }
 
 function orientationAttributes(page: DocumentPage): string {
@@ -289,6 +301,7 @@ function renderSourcePageItems(
   document: FileShapeDocument,
   page: DocumentPage,
   notes: PreservedUnresolvedAnnotation[],
+  hiddenProvenance: PreservedUnresolvedAnnotation[],
   rubyMode: EpubRubyMode,
   heading: EpubInferredHeading | undefined,
   continueFromPrevious: boolean,
@@ -334,6 +347,8 @@ function renderSourcePageItems(
   }
   const preservedNotes = renderPreservedNotes(notes);
   if (preservedNotes.length > 0) bodyItems.push(preservedNotes);
+  const provenance = renderHiddenProvenance(hiddenProvenance);
+  if (provenance.length > 0) bodyItems.push(provenance);
   return bodyItems;
 }
 
@@ -341,6 +356,7 @@ function serializeLogicalXhtml(
   document: FileShapeDocument,
   pages: DocumentPage[],
   notesByPage: Map<number, PreservedUnresolvedAnnotation[]>,
+  hiddenProvenanceByPage: Map<number, PreservedUnresolvedAnnotation[]>,
   heading: EpubInferredHeading | undefined,
   headingByPage: Map<number, EpubInferredHeading>,
   options: EpubXhtmlOptions,
@@ -383,6 +399,7 @@ function serializeLogicalXhtml(
       document,
       page,
       notesByPage.get(page.sourcePage) ?? [],
+      hiddenProvenanceByPage.get(page.sourcePage) ?? [],
       rubyMode,
       heading?.sourcePage === page.sourcePage ? heading : undefined,
       index > 0 && joins[index - 1] === true,
@@ -413,6 +430,9 @@ export function serializeEpubXhtml(
       : { unresolvedRuby: options.unresolvedRubyPolicy },
   );
   const notesByPage = new Map(policy.pages.map((page) => [page.sourcePage, page.notes]));
+  const hiddenProvenanceByPage = new Map(
+    policy.pages.map((page) => [page.sourcePage, page.hiddenProvenance]),
+  );
   const headings = validateStructuralHeadings(document, options.structuralHeadings ?? []);
   const headingByPage = new Map(headings.map((heading) => [heading.sourcePage, heading]));
   const outlineBoundaries = outlineBoundaryPages(document);
@@ -431,6 +451,7 @@ export function serializeEpubXhtml(
           document,
           group.pages,
           notesByPage,
+          hiddenProvenanceByPage,
           group.heading,
           headingByPage,
           options,
