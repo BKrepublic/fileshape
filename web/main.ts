@@ -42,12 +42,13 @@ app.innerHTML = `
       <p class="supporting-text">未指定項目はCLIと同じ既定値を使います。</p>
     </details>
     <section class="surface runtime-surface" aria-labelledby="runtime-title">
-      <div class="section-heading"><div><h2 id="runtime-title">実行環境</h2><p>変換前にブラウザの準備状態を確認します。</p></div><span id="runtime-badge" class="state-badge" data-state="checking">確認中</span></div>
-      <div class="runtime-row"><span>PDF.js 実ワーカー</span><strong id="pdfjs-status" aria-live="polite">確認中…</strong></div>
-      <div class="runtime-row"><span>SHA-256 / zlib deflate</span><strong id="binary-runtime-status" aria-live="polite">確認中…</strong></div>
-      <div class="runtime-row"><span>PWA オフラインshell</span><strong id="pwa-status" aria-live="polite">確認中…</strong></div>
-      <p id="runtime-message" class="runtime-message" aria-live="polite">ブラウザ機能を確認しています。</p>
-      <div class="blocker-box"><strong>残っている検証</strong><ul><li>private corpusでのbrowser parityとpeak memory計測</li><li>Thorium/calibre実reader確認</li></ul></div>
+      <div class="section-heading"><div><h2 id="runtime-title">ブラウザの対応状況</h2><p>この端末で変換を開始できるか確認します。</p></div><span id="runtime-badge" class="state-badge" data-state="checking">確認中</span></div>
+      <p id="runtime-message" class="runtime-message" aria-live="polite">変換に必要な機能を確認しています。</p>
+      <div hidden aria-hidden="true">
+        <span id="pdfjs-status">確認中…</span>
+        <span id="binary-runtime-status">確認中…</span>
+        <span id="pwa-status">確認中…</span>
+      </div>
     </section>
     <section class="action-area" aria-labelledby="action-title">
       <h2 id="action-title" class="visually-hidden">変換</h2>
@@ -82,8 +83,8 @@ const formatBytes = (bytes: number): string => `${bytes.toLocaleString("ja-JP")}
 
 let pdfJsReady: boolean | undefined;
 let binaryRuntimeReady: boolean | undefined;
-let pdfJsMessage = "PDF.js 実ワーカーを確認中です。";
-let binaryRuntimeMessage = "SHA-256 / zlib deflate を確認中です。";
+let pdfJsMessage = "PDF解析機能を確認中です。";
+let binaryRuntimeMessage = "EPUB生成機能を確認中です。";
 let selected: File | undefined;
 let activeWorker: Worker | undefined;
 let activeTracker: BrowserConversionEventTracker | undefined;
@@ -93,6 +94,28 @@ let requestCounter = 0;
 
 function runtimeReady(): boolean {
   return pdfJsReady === true && binaryRuntimeReady === true;
+}
+
+function runtimeFailureGuidance(): string {
+  if (!window.isSecureContext) {
+    return "安全な接続（HTTPS）で開かれていないため変換できません。HTTPSのURLで開き直してください。";
+  }
+  if (typeof Worker === "undefined") {
+    return "PDF解析に必要なWeb Workerに対応していないため変換できません。最新版のChrome、Edge、Firefox、Safariで開いてください。";
+  }
+  if (pdfJsReady === false) {
+    return "PDF解析に必要な機能または関連ファイルを利用できません。まずページを再読み込みしてください。直らない場合は、広告ブロッカーやセキュリティ拡張を一時的に無効にして再試行してください。";
+  }
+  if (typeof globalThis.crypto?.subtle === "undefined") {
+    return "EPUB生成に必要なWeb Cryptoに対応していないため変換できません。最新版のChrome、Edge、Firefox、Safariで開いてください。";
+  }
+  if (typeof WebAssembly === "undefined") {
+    return "EPUB生成に必要なWebAssemblyに対応していないため変換できません。最新版のChrome、Edge、Firefox、Safariで開いてください。";
+  }
+  if (binaryRuntimeReady === false) {
+    return "EPUB生成に必要な圧縮処理をこのブラウザで実行できません。ページを再読み込みするか、最新版のChrome、Edge、Firefox、Safariで開いてください。";
+  }
+  return "変換に必要なブラウザ機能を確認できませんでした。ページを再読み込みしてください。直らない場合は最新版のChrome、Edge、Firefox、Safariで開いてください。";
 }
 
 function updateConvertAvailability(): void {
@@ -161,7 +184,7 @@ function showFile(file: File | undefined): void {
   }
   selectedFile.textContent = `${file.name} — ${formatBytes(file.size)}`;
   resetButton.hidden = false;
-  if (conversionStatus) conversionStatus.textContent = runtimeReady() ? "変換できます。" : "実行環境の確認完了を待っています。";
+  if (conversionStatus) conversionStatus.textContent = runtimeReady() ? "変換できます。" : "ブラウザの対応状況を確認しています。";
   updateConvertAvailability();
 }
 
@@ -207,18 +230,18 @@ function renderRuntimeReadiness(): void {
   if (pdfJsReady === undefined || binaryRuntimeReady === undefined) {
     runtimeBadge.dataset.state = "checking";
     runtimeBadge.textContent = "確認中";
-    runtimeMessage.textContent = [pdfJsMessage, binaryRuntimeMessage].join(" ");
+    runtimeMessage.textContent = "変換に必要な機能を確認しています。";
     updateConvertAvailability();
     return;
   }
   const supported = runtimeReady();
   runtimeBadge.dataset.state = supported ? "supported" : "unsupported";
-  runtimeBadge.textContent = supported ? "利用可能" : "要確認";
+  runtimeBadge.textContent = supported ? "変換可能" : "利用不可";
   runtimeMessage.textContent = supported
-    ? "PDF.js 実ワーカー、same-origin変換資源、Web Crypto SHA-256、pinned zlib-ng WASM deflate を確認しました。"
-    : [pdfJsReady ? "" : pdfJsMessage, binaryRuntimeReady ? "" : binaryRuntimeMessage].filter(Boolean).join(" ");
+    ? "このブラウザで変換できます。"
+    : runtimeFailureGuidance();
   if (selected && conversionStatus && activeWorker === undefined) {
-    conversionStatus.textContent = supported ? "変換できます。" : "この環境では変換を開始できません。";
+    conversionStatus.textContent = supported ? "変換できます。" : "このブラウザでは変換できません。上の案内を確認してください。";
   }
   updateConvertAvailability();
 }
@@ -228,6 +251,7 @@ function showPdfProbe(result: PdfJsProbeResult): void {
   pdfJsReady = result.state === "supported" && result.realWorkerPort;
   pdfJsMessage = result.message;
   pdfjsStatus.textContent = pdfJsReady ? "確認済み" : "要確認";
+  if (!pdfJsReady) console.warn("FileShape PDF runtime probe:", pdfJsMessage);
   renderRuntimeReadiness();
 }
 
@@ -236,6 +260,7 @@ function showBinaryProbe(result: BinaryRuntimeProbeResult): void {
   binaryRuntimeReady = result.state === "supported";
   binaryRuntimeMessage = result.message;
   binaryRuntimeStatus.textContent = binaryRuntimeReady ? "確認済み" : "要確認";
+  if (!binaryRuntimeReady) console.warn("FileShape binary runtime probe:", binaryRuntimeMessage);
   renderRuntimeReadiness();
 }
 
