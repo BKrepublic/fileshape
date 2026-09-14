@@ -1,6 +1,11 @@
 import type { InspectPage, InspectTextItem } from "./pdf-inspection-model.js";
+import {
+  decideMetricOrientation,
+  type OrientationMetrics,
+  type WritingOrientation,
+} from "./orientation-decision.js";
 
-export type WritingOrientation = "vertical" | "horizontal" | "unknown";
+export type { WritingOrientation } from "./orientation-decision.js";
 
 export type FlowGroup = {
   position: number;
@@ -22,15 +27,7 @@ export type PageFlowResult = {
   annotationItemCount: number;
   marginNoiseItemCount: number;
   groupCount: number;
-  metrics: {
-    singleCharItemRatio: number;
-    verticalRunRatio: number;
-    horizontalRunRatio: number;
-    verticalBaselineRatio: number;
-    horizontalBaselineRatio: number;
-    sequenceVerticalRatio: number;
-    sequenceHorizontalRatio: number;
-  };
+  metrics: OrientationMetrics;
   groups: FlowGroup[];
   boundaries: FlowBoundary[];
   /** Logical text: physical line/column wrapping removed, paragraph boundaries normalized to one LF. */
@@ -213,35 +210,17 @@ function detectOrientation(items: InspectTextItem[]): {
   const verticalBaselineRatio = verticalBaselines / items.length;
   const horizontalBaselineRatio = horizontalBaselines / items.length;
   const sequence = glyphSequenceRatios(items);
+  const rawMetrics: OrientationMetrics = {
+    singleCharItemRatio,
+    verticalRunRatio,
+    horizontalRunRatio,
+    verticalBaselineRatio,
+    horizontalBaselineRatio,
+    sequenceVerticalRatio: sequence.vertical,
+    sequenceHorizontalRatio: sequence.horizontal,
+  };
 
-  let orientation: WritingOrientation = "unknown";
-
-  if (verticalRunRatio >= 0.6 && verticalRunRatio > horizontalRunRatio) {
-    orientation = "vertical";
-  } else if (horizontalRunRatio >= 0.6 && horizontalRunRatio > verticalRunRatio) {
-    orientation = "horizontal";
-  } else if (
-    singleCharItemRatio >= 0.7 &&
-    sequence.vertical >= 0.6 &&
-    sequence.vertical > sequence.horizontal
-  ) {
-    orientation = "vertical";
-  } else if (
-    singleCharItemRatio >= 0.7 &&
-    sequence.horizontal >= 0.6 &&
-    sequence.horizontal > sequence.vertical
-  ) {
-    orientation = "horizontal";
-  } else if (singleCharItemRatio >= 0.7 && verticalBaselineRatio >= 0.6) {
-    orientation = "vertical";
-  } else if (singleCharItemRatio >= 0.7 && horizontalBaselineRatio >= 0.6) {
-    orientation = "horizontal";
-  } else if (verticalBaselineRatio > horizontalBaselineRatio * 1.5) {
-    orientation = "vertical";
-  } else if (horizontalBaselineRatio > verticalBaselineRatio * 1.5) {
-    orientation = "horizontal";
-  }
-
+  let orientation = decideMetricOrientation(rawMetrics).orientation;
   if (orientation === "unknown") orientation = attachedRunOrientation(items);
 
   return {
