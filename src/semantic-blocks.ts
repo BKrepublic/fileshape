@@ -24,8 +24,15 @@ export type SemanticBoundaryDecision = {
   normalGapSource: SpacingEstimateSource;
   normalGapSampleCount: number;
   gapRatio: number;
+  wrapGapThreshold: number;
+  paragraphGapThreshold: number;
   previousEndRatio: number;
+  previousCoverageRatio: number;
   nextStartRatio: number;
+  nearNormalGap: boolean;
+  continuationEdgeGeometry: boolean;
+  wrapCandidate: boolean;
+  largeGap: boolean;
   join: boolean;
   reason: "physical-wrap" | "large-gap" | "independent-unit";
 };
@@ -39,6 +46,10 @@ export type SemanticPageBlocks = {
 function round(value: number, digits = 3): number {
   const factor = 10 ** digits;
   return Math.round(value * factor) / factor;
+}
+
+function roundFinite(value: number, digits = 3): number {
+  return Number.isFinite(value) ? round(value, digits) : value;
 }
 
 function gapBetween(layout: PhysicalPageLayout, fromUnit: number, toUnit: number): number {
@@ -60,26 +71,10 @@ export function hasContinuationEdgeGeometry(
   return previousEndRatio >= 0.78 && previousCoverageRatio >= 0.5 && nextStartRatio <= 0.32;
 }
 
-function looksLikePhysicalWrap(
-  previous: PhysicalTextUnit,
-  current: PhysicalTextUnit,
-  gap: number,
-  normalGap: number,
-  bodyFontSize: number,
-): boolean {
-  if (normalGap <= 0) return false;
-
-  const nearNormalGap =
-    gap <= Math.max(normalGap * 1.35, normalGap + Math.max(2, bodyFontSize * 0.35));
-
-  // A true physical wrap normally consumes most of the previous line/column,
-  // then restarts near the beginning of the next one. This is deliberately
-  // conservative: short adjacent units are preserved as separate blocks.
-  return nearNormalGap && hasContinuationEdgeGeometry(
-    previous.inlineEndRatio,
-    previous.inlineCoverageRatio,
-    current.inlineStartRatio,
-  );
+function physicalWrapGapThreshold(normalGap: number, bodyFontSize: number): number {
+  return normalGap > 0
+    ? Math.max(normalGap * 1.35, normalGap + Math.max(2, bodyFontSize * 0.35))
+    : Number.POSITIVE_INFINITY;
 }
 
 function appendUnit(block: SemanticBlock, unit: PhysicalTextUnit): void {
@@ -101,6 +96,8 @@ export function buildSemanticBlocks(
     bodyFontSize,
   );
   const normalGap = spacing.normal;
+  const wrapGapThreshold = physicalWrapGapThreshold(normalGap, bodyFontSize);
+  const paragraphThreshold = paragraphGapThreshold(normalGap, bodyFontSize);
   const blocks: SemanticBlock[] = [];
   const decisions: SemanticBoundaryDecision[] = [];
 
@@ -123,10 +120,16 @@ export function buildSemanticBlocks(
 
     const gap = gapBetween(layout, previous.index, current.index);
     const gapRatio = normalGap > 0 ? gap / normalGap : 1;
-    const wrap = looksLikePhysicalWrap(previous, current, gap, normalGap, bodyFontSize);
-    const largeGap = gap > paragraphGapThreshold(normalGap, bodyFontSize);
+    const nearNormalGap = normalGap > 0 && gap <= wrapGapThreshold;
+    const continuationEdgeGeometry = hasContinuationEdgeGeometry(
+      previous.inlineEndRatio,
+      previous.inlineCoverageRatio,
+      current.inlineStartRatio,
+    );
+    const wrapCandidate = nearNormalGap && continuationEdgeGeometry;
+    const largeGap = gap > paragraphThreshold;
 
-    const join = wrap && !largeGap;
+    const join = wrapCandidate && !largeGap;
     const reason: SemanticBoundaryDecision["reason"] = join
       ? "physical-wrap"
       : largeGap
@@ -141,8 +144,15 @@ export function buildSemanticBlocks(
       normalGapSource: spacing.source,
       normalGapSampleCount: spacing.sampleCount,
       gapRatio: round(gapRatio, 3),
+      wrapGapThreshold: roundFinite(wrapGapThreshold, 2),
+      paragraphGapThreshold: roundFinite(paragraphThreshold, 2),
       previousEndRatio: round(previous.inlineEndRatio, 4),
+      previousCoverageRatio: round(previous.inlineCoverageRatio, 4),
       nextStartRatio: round(current.inlineStartRatio, 4),
+      nearNormalGap,
+      continuationEdgeGeometry,
+      wrapCandidate,
+      largeGap,
       join,
       reason,
     });
