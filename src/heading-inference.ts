@@ -7,6 +7,33 @@ export type StructuralHeading = {
   semanticBlockIndex: number;
 };
 
+export type HeadingFamilyEvidence = {
+  styleKey: string;
+  pageSupport: number;
+  candidateCount: number;
+  supportShare: number;
+  selected: boolean;
+};
+
+export type HeadingInferenceDecision =
+  | "no-body-style"
+  | "no-recurring-family"
+  | "single-recurring-family"
+  | "clear-dominance"
+  | "competing-families";
+
+export type StructuralHeadingInference = {
+  headings: StructuralHeading[];
+  bodyStyle?: string;
+  families: HeadingFamilyEvidence[];
+  strongestPageSupport: number;
+  runnerUpPageSupport: number;
+  supportMargin: number;
+  /** strongest / runner-up; undefined when there is no runner-up. */
+  dominanceRatio?: number;
+  decision: HeadingInferenceDecision;
+};
+
 type BlockStyle = {
   key: string;
   weight: number;
@@ -96,45 +123,11 @@ function recurringClusters(candidatesByStyle: Map<string, Candidate[]>): Candida
       left.candidates[0]!.styleKey.localeCompare(right.candidates[0]!.styleKey));
 }
 
-function dominantRecurringClusters(candidatesByStyle: Map<string, Candidate[]>): Candidate[][] {
-  const eligible = recurringClusters(candidatesByStyle);
-  if (eligible.length <= 1) return eligible.map((cluster) => cluster.candidates);
-
-  const strongest = eligible[0]!;
-  const runnerUp = eligible[1]!;
-
-  // A few recurring non-body styles are common in PDFs: cover metadata, running
-  // labels, font-subset aliases, notices, and other decoration. Infer one heading
-  // family only when its independent page support clearly dominates the runner-up.
-  // Keep the margin itself as document-relative evidence; physical page count and
-  // distances between candidate pages are deliberately irrelevant.
-  const clearDominance = strongest.pageSupport >= runnerUp.pageSupport * 3;
-  return clearDominance ? [strongest.candidates] : [];
-}
-
-/**
- * Infer only source-backed, recurring structural headings.
- *
- * Evidence is deliberately content- and pagination-agnostic:
- * - the block has a dominant PDF font/size style different from the document body;
- * - the same style recurs on at least two independent source pages;
- * - one recurring non-body style family is clearly dominant when families compete.
- *
- * Multiple source-backed heading blocks may coexist on one physical PDF page.
- * Physical pagination is provenance, not a reason to discard one logical heading.
- * A block does not have to be the first block on a physical PDF page, and source
- * page count/cadence never promotes or demotes it. Repagination may therefore move
- * a heading between page positions without changing its logical classification.
- * If a PDF does not encode a repeatable and unambiguous structural distinction,
- * this returns no heading rather than guessing from words, digits, punctuation,
- * language, author/site conventions, filenames or external metadata.
- */
-export function inferStructuralHeadings(
+function headingCandidates(
   document: FileShapeDocument,
   inspection: InspectResult,
-): StructuralHeading[] {
-  const bodyStyle = globalBodyStyle(document, inspection);
-  if (!bodyStyle) return [];
+  bodyStyle: string,
+): Map<string, Candidate[]> {
   const byPage = new Map(inspection.pages.map((page) => [page.page, page]));
   const candidatesByStyle = new Map<string, Candidate[]>();
 
@@ -158,8 +151,92 @@ export function inferStructuralHeadings(
     }
   }
 
-  return dominantRecurringClusters(candidatesByStyle)
-    .flat()
+  return candidatesByStyle;
+}
+
+function publicHeadings(clusters: CandidateCluster[]): StructuralHeading[] {
+  return clusters
+    .flatMap((cluster) => cluster.candidates)
     .sort((a, b) => a.sourcePage - b.sourcePage || a.semanticBlockIndex - b.semanticBlockIndex)
     .map(({ title, sourcePage, semanticBlockIndex }) => ({ title, sourcePage, semanticBlockIndex }));
+}
+
+/**
+ * Infer source-backed structural headings while retaining the complete recurring
+ * family competition that led to the current binary selection.
+ *
+ * The historical acceptance rule is intentionally unchanged: one recurring
+ * family is accepted directly; when multiple families recur, the strongest must
+ * have at least 3x the independent page support of the runner-up. The returned
+ * support/share/margin/ratio evidence makes that empirical threshold observable
+ * without changing EPUB output or interpreting text content.
+ */
+export function inferStructuralHeadingEvidence(
+  document: FileShapeDocument,
+  inspection: InspectResult,
+): StructuralHeadingInference {
+  const bodyStyle = globalBodyStyle(document, inspection);
+  if (!bodyStyle) {
+    return {
+      headings: [],
+      families: [],
+      strongestPageSupport: 0,
+      runnerUpPageSupport: 0,
+      supportMargin: 0,
+      decision: "no-body-style",
+    };
+  }
+
+  const eligible = recurringClusters(headingCandidates(document, inspection, bodyStyle));
+  if (eligible.length === 0) {
+    return {
+      headings: [],
+      bodyStyle,
+      families: [],
+      strongestPageSupport: 0,
+      runnerUpPageSupport: 0,
+      supportMargin: 0,
+      decision: "no-recurring-family",
+    };
+  }
+
+  const strongest = eligible[0]!;
+  const runnerUp = eligible[1];
+  const totalSupport = eligible.reduce((sum, cluster) => sum + cluster.pageSupport, 0);
+  const clearDominance = runnerUp === undefined || strongest.pageSupport >= runnerUp.pageSupport * 3;
+  const selectedStyleKey = clearDominance ? strongest.candidates[0]!.styleKey : undefined;
+  const families = eligible.map((cluster): HeadingFamilyEvidence => ({
+    styleKey: cluster.candidates[0]!.styleKey,
+    pageSupport: cluster.pageSupport,
+    candidateCount: cluster.candidates.length,
+    supportShare: totalSupport === 0 ? 0 : cluster.pageSupport / totalSupport,
+    selected: cluster.candidates[0]!.styleKey === selectedStyleKey,
+  }));
+  const runnerUpPageSupport = runnerUp?.pageSupport ?? 0;
+
+  return {
+    headings: clearDominance ? publicHeadings([strongest]) : [],
+    bodyStyle,
+    families,
+    strongestPageSupport: strongest.pageSupport,
+    runnerUpPageSupport,
+    supportMargin: strongest.pageSupport - runnerUpPageSupport,
+    ...(runnerUp === undefined ? {} : { dominanceRatio: strongest.pageSupport / runnerUp.pageSupport }),
+    decision: runnerUp === undefined
+      ? "single-recurring-family"
+      : clearDominance
+        ? "clear-dominance"
+        : "competing-families",
+  };
+}
+
+/**
+ * Backwards-compatible heading-only view. Physical pagination remains provenance,
+ * not semantic structure, and the existing recurrence/dominance rule is unchanged.
+ */
+export function inferStructuralHeadings(
+  document: FileShapeDocument,
+  inspection: InspectResult,
+): StructuralHeading[] {
+  return inferStructuralHeadingEvidence(document, inspection).headings;
 }
