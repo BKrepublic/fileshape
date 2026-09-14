@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { FileShapeDocument, DocumentTextBlock } from "../src/document-model.js";
-import { inferStructuralHeadings } from "../src/heading-inference.js";
+import {
+  inferStructuralHeadingEvidence,
+  inferStructuralHeadings,
+} from "../src/heading-inference.js";
 import type { InspectPage, InspectResult, InspectTextItem } from "../src/pdf-inspection-model.js";
 
 function item(text: string, fontName: string, fontSize = 14): InspectTextItem {
@@ -170,6 +173,16 @@ test("when there is one recurring structural style, every source-backed occurren
       { title: "No number at all", sourcePage: 7 },
     ],
   );
+
+  const evidence = inferStructuralHeadingEvidence(document, inspection);
+  assert.equal(evidence.decision, "single-recurring-family");
+  assert.equal(evidence.strongestPageSupport, 3);
+  assert.equal(evidence.runnerUpPageSupport, 0);
+  assert.equal(evidence.supportMargin, 3);
+  assert.equal(evidence.dominanceRatio, undefined);
+  assert.deepEqual(evidence.families.map(({ pageSupport, selected }) => ({ pageSupport, selected })), [
+    { pageSupport: 3, selected: true },
+  ]);
 });
 
 test("a minor recurring non-body style cannot create false headings beside a dominant family", () => {
@@ -184,6 +197,17 @@ test("a minor recurring non-body style cannot create false headings beside a dom
     inferStructuralHeadings(document, inspection).map(({ title, sourcePage }) => ({ title, sourcePage })),
     [...headingPages].map(([sourcePage, title]) => ({ title, sourcePage })),
   );
+
+  const evidence = inferStructuralHeadingEvidence(document, inspection);
+  assert.equal(evidence.decision, "clear-dominance");
+  assert.equal(evidence.strongestPageSupport, 10);
+  assert.equal(evidence.runnerUpPageSupport, 3);
+  assert.equal(evidence.supportMargin, 7);
+  assert.equal(evidence.dominanceRatio, 10 / 3);
+  assert.deepEqual(evidence.families.map(({ pageSupport, selected }) => ({ pageSupport, selected })), [
+    { pageSupport: 10, selected: true },
+    { pageSupport: 3, selected: false },
+  ]);
 });
 
 test("competing recurring non-body styles fail closed instead of guessing a heading family", () => {
@@ -193,9 +217,23 @@ test("competing recurring non-body styles fail closed instead of guessing a head
   const { document, inspection } = fixture(24, headingPages);
   replaceLeadingStyle(inspection, [3, 7, 11, 15], "CompetingFace");
   assert.deepEqual(inferStructuralHeadings(document, inspection), []);
+
+  const evidence = inferStructuralHeadingEvidence(document, inspection);
+  assert.equal(evidence.decision, "competing-families");
+  assert.equal(evidence.strongestPageSupport, 5);
+  assert.equal(evidence.runnerUpPageSupport, 4);
+  assert.equal(evidence.supportMargin, 1);
+  assert.equal(evidence.dominanceRatio, 1.25);
+  assert.deepEqual(evidence.families.map(({ pageSupport, selected }) => ({ pageSupport, selected })), [
+    { pageSupport: 5, selected: false },
+    { pageSupport: 4, selected: false },
+  ]);
 });
 
 test("digits and heading-like words in ordinary body style never create a heading", () => {
   const { document, inspection } = fixture(8, new Map(), 1);
   assert.deepEqual(inferStructuralHeadings(document, inspection), []);
+  const evidence = inferStructuralHeadingEvidence(document, inspection);
+  assert.equal(evidence.decision, "no-recurring-family");
+  assert.deepEqual(evidence.families, []);
 });
