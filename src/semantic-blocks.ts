@@ -54,6 +54,19 @@ function gapBetween(layout: PhysicalPageLayout, fromUnit: number, toUnit: number
   );
 }
 
+/**
+ * Geometry-only evidence that one physical text run reached the page edge and
+ * the next begins near the reading-axis start. Shared by same-page wrap and
+ * cross-page reflow so serialization never has to inspect language content.
+ */
+export function hasContinuationEdgeGeometry(
+  previousEndRatio: number,
+  previousCoverageRatio: number,
+  nextStartRatio: number,
+): boolean {
+  return previousEndRatio >= 0.78 && previousCoverageRatio >= 0.5 && nextStartRatio <= 0.32;
+}
+
 function looksLikePhysicalWrap(
   previous: PhysicalTextUnit,
   current: PhysicalTextUnit,
@@ -69,11 +82,11 @@ function looksLikePhysicalWrap(
   // A true physical wrap normally consumes most of the previous line/column,
   // then restarts near the beginning of the next one. This is deliberately
   // conservative: short adjacent units are preserved as separate blocks.
-  const previousReachedEnd = previous.inlineEndRatio >= 0.78;
-  const previousUsedEnoughSpace = previous.inlineCoverageRatio >= 0.5;
-  const currentStartsNearBeginning = current.inlineStartRatio <= 0.32;
-
-  return nearNormalGap && previousReachedEnd && previousUsedEnoughSpace && currentStartsNearBeginning;
+  return nearNormalGap && hasContinuationEdgeGeometry(
+    previous.inlineEndRatio,
+    previous.inlineCoverageRatio,
+    current.inlineStartRatio,
+  );
 }
 
 function appendUnit(block: SemanticBlock, unit: PhysicalTextUnit): void {
