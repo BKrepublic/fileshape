@@ -24,6 +24,8 @@ Purpose: FileShape must generalize to unknown PDFs at large scale. The local nin
 | item role evidence | `text-item-evidence.ts` computes visible/body/annotation/margin observations once for flow, physical layout and ruby consumers | **B**: annotation ratio `0.75` and margin constants remain empirical |
 | margin rule duplication | `margin-noise.ts` owns one scale-aware local edge-band measurement; the old divergent 88%/90% consumers are gone | **B/C**: local threshold calibration remains empirical |
 | margin document context | `margin-recurrence.ts` clusters local candidates by normalized edge/inline geometry, opaque font and body-relative size; production flow/layout suppress only recurring clusters while isolated local candidates remain content | **B**: recurrence gates (`>=2` pages and `>=20%` of text-bearing pages) and clustering buckets remain empirical |
+| body-font evidence | `measureBodyFontEvidence()` retains total/dominant/runner-up char weight, support, dominance margin and bucket count while preserving the historical 0.1pt winner | **B**: 0.1pt quantization and char weighting remain empirical |
+| body-font document context | `body-font-context.ts` may assist only weak page-local estimates; strong local majorities are immutable, the prior requires a strict majority across at least two strong pages, the prior size must occur on the weak page, and the change must preserve ruby annotation/body roles | **B**: local-majority and document-majority gates remain empirical; the local nine-PDF verification set exercised zero prior substitutions |
 | line/column clustering | `layout-clustering.ts` owns ordinary and vertical-glyph clustering; flow and physical reconstruction consume the same geometry-first helpers | **B**: `0.42`, `1.25`, `8` and local overlap tolerances remain empirical |
 | vertical reconstruction mode | flow and physical layout share `verticalTextLayoutMode`; single-glyph representation no longer selects different algorithms in different stages | **B**: existing `0.7` single-char and `0.6` vertical-sequence thresholds remain calibration debt |
 | vertical glyph ordering | geometry is primary; source item order is used only for local overlap when complete source indices exist | **B**: overlap/noise windows remain empirical |
@@ -31,7 +33,7 @@ Purpose: FileShape must generalize to unknown PDFs at large scale. The local nin
 | attached-run orientation | `attached-run-evidence.ts` retains anchor/pending/attachment evidence; it no longer hard-labels a page | **B/C**: geometric windows (`3x`, `1.5x`, `0.75`, `0.5`, `0.75`) originated from a sparse failure class and still need perturbation coverage |
 | document orientation | metric-backed labels are stable; unknown runs consume compact channel evidence; attached-run evidence can be placed on a matching side of a real orientation transition; raw weak tendencies still require agreeing stable context | **B**: metric thresholds remain empirical, but the old page-count/run-length semantic rule is gone |
 | orientation handoff | `pdf-document-pipeline.ts` passes compact metric + attached-run evidence into document resolution; decision provenance is no longer reconstructed after the fact | no known D blocker in this handoff |
-| glyph-live ruby prepass | `pdf-to-epub-core.ts` calls compact `estimateBodyFontSize()` only; full `reconstructPageFlow()` runs once during document build instead of twice per page | **B**: body-font estimator remains page-local empirical evidence |
+| glyph-live ruby prepass | `pdf-to-epub-core.ts` calls compact `estimateBodyFontSize()` only; full `reconstructPageFlow()` runs once during document build instead of twice per page | **B**: body-font thresholds remain empirical, but duplicate flow work is closed |
 | heading page-leading gate | recurring source-backed non-body style can be structural even when the block is not first on a physical page | **B**: style quantization/dominance calibration remains empirical |
 | heading document-length gate | recurrence is independent of total physical page count; the old `>=20 pages` switch is gone | no known D blocker for document length |
 | heading page-cadence inference | source-page-number cadence no longer promotes/demotes heading candidates | **B**: dominant-family `3x` support margin remains empirical |
@@ -46,8 +48,7 @@ Purpose: FileShape must generalize to unknown PDFs at large scale. The local nin
 
 | File / function | Decision | Current issue | Class | Next direction |
 | --- | --- | --- | --- | --- |
-| `text-flow.ts::measureBodyFontEvidence` | body-font estimate | the historical 0.1pt char-weighted mode is unchanged, but the branch now retains dominant/runner-up/total weights plus support and dominance margin in `PageFlowResult`; local verification is pending | **B, evidence implementation pending verification** | verify the numeric wrapper is byte-for-byte behavior compatible, then use weak support only as document context rather than changing the page-local winner |
-| `semantic-blocks.ts` | wrap/paragraph decisions | edge and gap decisions are still binary empirical thresholds | **B** | preserve the current geometry-only contract while retaining richer boundary evidence for calibration |
+| `semantic-blocks.ts` | wrap/paragraph decisions | branch now retains wrap-gap threshold, paragraph-gap threshold, previous coverage, near-normal-gap, continuation-edge, wrap-candidate and large-gap evidence in each decision without changing the decision formula; local verification is pending | **B, evidence implementation pending verification** | verify focused semantic decisions + unit/semantic suites; then use the retained evidence for metamorphic calibration rather than tuning thresholds against the nine PDFs |
 | `heading-inference.ts::dominantRecurringClusters` | choose heading family | strongest recurring style must have `>=3x` runner-up page support | **B** | retain support/margin as confidence instead of only a binary dominance result |
 | `ruby-association.ts` / `ruby-spans.ts` | ruby geometry | many fixed geometric windows remain | **B** | keep exact association fail-closed; calibrate through affine/scale/jitter metamorphic tests, never by weakening provenance |
 
@@ -59,9 +60,15 @@ The historical `48e0ec0` 88% footer repair was sample-shaped. That literal page-
 
 The recurrence gate currently requires support on at least two text-bearing pages and at least 20% of text-bearing pages. Those are B-class empirical thresholds, not corpus facts. Direct page-local APIs retain the historical local rule when no document profile is available; production document assembly supplies one shared profile to both flow and physical layout. Ruby association still does not gain a margin filter.
 
-### Body-font confidence
+### Body-font confidence and document context
 
-The numeric body-font winner remains the historical char-weighted 0.1pt size mode with larger-size tie breaking, so existing ruby/layout thresholds receive the same value. `measureBodyFontEvidence()` now also retains total weight, dominant and runner-up weight, support ratio, dominance margin and bucket count. A tied 12pt/14pt page can therefore still resolve to 14pt for compatibility while explicitly carrying zero dominance margin instead of looking confident. No document prior consumes this evidence yet.
+The numeric body-font winner remains the historical char-weighted 0.1pt size mode with larger-size tie breaking. `measureBodyFontEvidence()` retains total weight, dominant and runner-up weight, support ratio, dominance margin and bucket count, so a tied 12pt/14pt page can still resolve to 14pt for compatibility while explicitly carrying zero dominance margin.
+
+`body-font-context.ts` adds a deliberately conservative document prior. Only pages with a strict page-local majority vote into the prior, at least two such pages must agree, and the winning size must have a strict majority among eligible pages. Strong local pages are never overwritten. A weak page may adopt the prior only when the prior size is actually present on that page and the substitution leaves every visible TextItem on the same side of the ruby annotation/body cutoff. This preserves the already-computed glyph-live ruby partition without retaining glyphs or rereading the PDF. The nine-PDF verification checkpoint reported `bodyFontPrior=0`, so this safety mechanism did not alter those diagnostics.
+
+### Semantic boundary evidence
+
+Same-page wrap/paragraph reconstruction remains geometry-only. The branch now retains both decision thresholds and intermediate booleans instead of collapsing them to only `join`/`reason`: normal-gap provenance, wrap-gap threshold, paragraph-gap threshold, previous inline coverage, edge continuation result, near-normal-gap result, wrap candidate and large-gap result all survive on `SemanticBoundaryDecision`. Numeric behavior is intentionally unchanged pending local verification and later metamorphic calibration.
 
 ### Sparse attached-run calibration
 
@@ -81,16 +88,17 @@ The glyph-live inspection callback previously ran the complete page-flow reconst
 
 ## Current verification checkpoint
 
-At branch checkpoint `b48b69b616d316e193e8854f0a40ddcf92f0a692` the local gates reported:
+At branch checkpoint `27a30e4e7d1fb60684c25af0c21e84d87e6504ec` the local gates reported:
 
-- Focused margin recurrence tests: 4/4 PASS.
-- Unit suite: 300/300 PASS.
+- Focused body-font/context/core/ruby/runtime tests: PASS.
+- Unit suite: 307/307 PASS.
 - Semantic verification: PASS.
-- The immediately preceding full generic PDF quality gate at the same production code reported 9/9 PDFs and 5,141/5,141 pages PASS.
-- Detailed recurrence diagnostics reported 6,272 local margin candidates, 5,947 recurring suppressions and 325 isolated candidates retained; detected orientation unknowns were 5 -> resolved 0 with known repaired 0.
+- Genericity audit: 9 PDFs, 5,141 pages, detected unknown 5 -> resolved 0, known repaired 0, body-font prior substitutions 0.
+- Margin diagnostics: 6,272 local candidates, 5,947 recurring suppressions and 325 isolated candidates retained.
+- Generic PDF quality verification: 9/9 PDFs and 5,141/5,141 pages PASS.
 - No GitHub Actions or hosted CI is part of this verification policy.
 
-The body-font evidence refactor after this checkpoint is intended to be behavior-preserving and still requires local type/focused/unit verification. The nine PDFs remain diagnostics only; passing them is regression evidence, not proof of generality.
+The semantic-boundary evidence extension after this checkpoint is intended to be behavior-preserving and still requires local type/focused/unit/semantic verification. The nine PDFs remain diagnostics only; passing them is regression evidence, not proof of generality.
 
 ## Metamorphic coverage to preserve/extend
 
@@ -105,12 +113,13 @@ The body-font evidence refactor after this checkpoint is intended to be behavior
 9. Header/footer recurrence at varying normalized positions, including alternating left/right furniture.
 10. Mixed-orientation transitions that document context must not steamroll.
 11. Multiple logical section boundaries within one physical source page.
-12. Weak/tied page-local body-font estimates that must retain ambiguity rather than silently becoming document priors.
+12. Weak/tied page-local body-font estimates where a document prior must assist only when source-observed and ruby-role-safe.
+13. Same semantic boundary under uniform scale and small spacing perturbations, retaining both threshold margins and decision provenance.
 
 ## Immediate engineering order
 
-1. Verify the body-font evidence refactor with typecheck, focused body-font/flow-render/ruby tests and the complete unit + semantic gates.
-2. Do not rerun the nine-PDF quality set unless the behavior-compatible wrapper changes output or a broader regression appears.
-3. If clean, expose body-font support diagnostics to the audit and design a document prior that only assists weak pages; do not override strong page-local evidence.
+1. Verify semantic-boundary evidence with typecheck, focused `semantic-blocks`/logical-flow/metamorphic tests and the complete unit + semantic gates.
+2. Do not rerun the nine-PDF quality set for this evidence-only change unless output changes or a broader regression appears.
+3. If clean, move semantic-boundary evidence to closed and continue with heading-family confidence before touching ruby thresholds.
 4. Keep threshold tuning separate from evidence plumbing. Do not tune constants against the nine local PDFs.
 5. Keep ruby exact association fail-closed and unresolved provenance intact throughout.
