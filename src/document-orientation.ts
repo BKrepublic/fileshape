@@ -4,7 +4,7 @@ import type { WritingOrientation } from "./text-flow.js";
 export type PageOrientationObservation = {
   page: number;
   orientation: WritingOrientation;
-  /** Compact geometric evidence; optional for compatibility with focused tests/callers. */
+  /** Compact geometric evidence; optional for compatibility with focused callers. */
   evidence?: OrientationEvidenceSummary;
 };
 
@@ -15,11 +15,6 @@ export type ResolvedPageOrientation = {
   source: "detected" | "document-context" | "unresolved";
   /** Preserved verbatim so downstream diagnostics can inspect the source evidence. */
   evidence?: OrientationEvidenceSummary;
-};
-
-export type DocumentOrientationOptions = {
-  /** Avoid inferring across very long ambiguous sections. */
-  maxUnknownRun?: number;
 };
 
 /**
@@ -38,17 +33,62 @@ function isContextAmbiguous(observation: PageOrientationObservation): boolean {
   return observation.evidence.decisionSource === "attached-run";
 }
 
+function channelTendency(channel: { vertical: number; horizontal: number }): WritingOrientation {
+  if (channel.vertical > channel.horizontal) return "vertical";
+  if (channel.horizontal > channel.vertical) return "horizontal";
+  return "unknown";
+}
+
 /**
- * Resolve short context-ambiguous runs from surrounding stable pages. A run is
- * filled only when the nearest stable page on both sides exists and both sides
- * agree. Strong metric-backed labels are never overridden, so genuine writing-
- * mode transitions and conflicting but decisive page evidence remain protected.
+ * Read a low-confidence directional tendency without turning it into a page
+ * classification. Channel precedence mirrors the metric classifier: sequence
+ * leads only for glyph-dominant pages, then run geometry, then baseline geometry.
+ * No new numeric confidence threshold is introduced here.
+ */
+function ambiguousTendency(observation: PageOrientationObservation): WritingOrientation {
+  const evidence = observation.evidence;
+  if (!evidence) return "unknown";
+
+  if (evidence.singleCharItemRatio >= 0.7) {
+    const sequence = channelTendency(evidence.channels.sequence);
+    if (sequence !== "unknown") return sequence;
+  }
+
+  const run = channelTendency(evidence.channels.run);
+  if (run !== "unknown") return run;
+
+  return channelTendency(evidence.channels.baseline);
+}
+
+function runSupportsContext(
+  observations: PageOrientationObservation[],
+  orientation: Exclude<WritingOrientation, "unknown">,
+): boolean {
+  let hasSupportingEvidence = false;
+  for (const observation of observations) {
+    const tendency = ambiguousTendency(observation);
+    if (tendency === "unknown") continue;
+    if (tendency !== orientation) return false;
+    hasSupportingEvidence = true;
+  }
+  return hasSupportingEvidence;
+}
+
+/**
+ * Resolve context-ambiguous runs from surrounding stable pages.
+ *
+ * Physical run length is deliberately irrelevant. Resolution requires:
+ * - nearest stable pages on both sides;
+ * - both stable pages agree on orientation;
+ * - retained evidence inside the ambiguous run never tends the opposite way;
+ * - at least one ambiguous page carries a directional tendency matching the anchors.
+ *
+ * This keeps evidence-free gaps unresolved and protects real writing-mode
+ * transitions without making pagination itself part of the semantic decision.
  */
 export function resolveDocumentOrientations(
   observations: PageOrientationObservation[],
-  options: DocumentOrientationOptions = {},
 ): ResolvedPageOrientation[] {
-  const maxUnknownRun = options.maxUnknownRun ?? 8;
   const ordered = [...observations].sort((left, right) => left.page - right.page);
   const resolved: ResolvedPageOrientation[] = ordered.map((entry) => ({
     page: entry.page,
@@ -73,9 +113,6 @@ export function resolveDocumentOrientations(
       index += 1;
     }
     const endExclusive = index;
-    const runLength = endExclusive - start;
-
-    if (runLength > maxUnknownRun) continue;
 
     const previous = start > 0 ? ordered[start - 1] : undefined;
     const next = endExclusive < ordered.length ? ordered[endExclusive] : undefined;
@@ -85,6 +122,10 @@ export function resolveDocumentOrientations(
     if (previous.orientation === "unknown" || next.orientation === "unknown") continue;
     if (previous.orientation !== next.orientation) continue;
 
+    const anchorOrientation = previous.orientation;
+    const ambiguousRun = ordered.slice(start, endExclusive);
+    if (!runSupportsContext(ambiguousRun, anchorOrientation)) continue;
+
     for (let fill = start; fill < endExclusive; fill += 1) {
       const target = resolved[fill];
       if (!target) continue;
@@ -92,8 +133,8 @@ export function resolveDocumentOrientations(
       // Record document-context provenance only when context actually changes
       // the page decision or fills an unknown. Merely confirming an already
       // matching fallback label is not a resolution event.
-      if (target.detected !== previous.orientation) {
-        target.resolved = previous.orientation;
+      if (target.detected !== anchorOrientation) {
+        target.resolved = anchorOrientation;
         target.source = "document-context";
       }
     }
