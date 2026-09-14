@@ -55,6 +55,17 @@ test("legacy NCX mirrors source-backed structural headings for older reading sys
   assert.match(ncx, /<content src="text\/page-0002\.xhtml#heading-page-2-block-0"\/>/);
 });
 
+test("legacy NCX fallback preserves every source page anchor when XHTML is grouped", () => {
+  const document = fixture();
+  const pages = serializeEpubXhtml(document).pages;
+  assert.equal(pages.length, 1);
+  assert.deepEqual(pages[0]?.sourcePages, [1, 2]);
+
+  const ncx = serializeLegacyNcx(document, "Book", "urn:test:ncx", pages);
+  assert.match(ncx, /navPoint-1" playOrder="1"[\s\S]*?<text>Page 1<\/text>[\s\S]*?page-0001\.xhtml#source-page-1/);
+  assert.match(ncx, /navPoint-2" playOrder="2"[\s\S]*?<text>Page 2<\/text>[\s\S]*?page-0001\.xhtml#source-page-2/);
+});
+
 test("NCX reuses playOrder when multiple outline labels resolve to the same target", () => {
   const document = fixture();
   const outline = [
