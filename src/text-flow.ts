@@ -1,4 +1,5 @@
 import type { InspectPage, InspectTextItem } from "./pdf-inspection-model.js";
+import { isShortMarginNoise } from "./margin-noise.js";
 import {
   decideMetricOrientation,
   type OrientationMetrics,
@@ -80,17 +81,6 @@ function dominantFontSize(items: InspectTextItem[]): number {
   }
 
   return bestSize;
-}
-
-function isMarginNoise(item: InspectTextItem, page: InspectPage, bodyFontSize: number): boolean {
-  const count = charCount(item.text);
-  if (count === 0 || count > 8) return false;
-
-  const nearTop = item.displayY < page.height * 0.08;
-  const nearBottom = item.displayY > page.height * 0.9;
-  const smallerThanBody = bodyFontSize > 0 && item.fontSize < bodyFontSize * 0.98;
-
-  return (nearTop || nearBottom) && smallerThanBody;
 }
 
 function glyphSequenceRatios(items: InspectTextItem[]): {
@@ -500,7 +490,7 @@ export function reconstructPageFlow(page: InspectPage): PageFlowResult {
   const nonEmptyItems = page.textItems.filter((item) => item.text.trim().length > 0);
   const bodyFontSize = dominantFontSize(nonEmptyItems);
 
-  const marginNoiseItems = nonEmptyItems.filter((item) => isMarginNoise(item, page, bodyFontSize));
+  const marginNoiseItems = nonEmptyItems.filter((item) => isShortMarginNoise(item, page, bodyFontSize));
   const marginNoiseSet = new Set(marginNoiseItems);
   const contentItems = nonEmptyItems.filter((item) => !marginNoiseSet.has(item));
 
