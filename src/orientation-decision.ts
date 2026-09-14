@@ -1,6 +1,6 @@
 export type WritingOrientation = "vertical" | "horizontal" | "unknown";
 
-export type OrientationDecisionSource = "run" | "sequence" | "baseline" | "attached-run" | "none";
+export type OrientationDecisionSource = "run" | "sequence" | "baseline" | "none";
 
 export type OrientationMetrics = {
   singleCharItemRatio: number;
@@ -14,7 +14,7 @@ export type OrientationMetrics = {
 
 export type MetricOrientationDecision = {
   orientation: WritingOrientation;
-  source: Exclude<OrientationDecisionSource, "attached-run">;
+  source: OrientationDecisionSource;
 };
 
 /**
