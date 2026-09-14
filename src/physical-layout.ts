@@ -1,4 +1,5 @@
 import type { InspectPage, InspectTextItem } from "./pdf-inspection-model.js";
+import { isShortMarginNoise } from "./margin-noise.js";
 import type { WritingOrientation } from "./text-flow.js";
 import { fullTextRef, type SourceTextRef } from "./source-text.js";
 
@@ -49,24 +50,10 @@ function round(value: number, digits = 2): number {
   return Math.round(value * factor) / factor;
 }
 
-function isMarginNoise(item: InspectTextItem, page: InspectPage, bodyFontSize: number): boolean {
-  const count = charCount(item.text);
-  if (count === 0 || count > 8) return false;
-  const nearTop = item.displayY < page.height * 0.08;
-  // N8440FE and similar official Narou PDF exports place the page number at
-  // roughly 88.9% of page height, while body glyphs can legitimately extend
-  // to about 87%. The old 90% cutoff therefore allowed the smaller page number
-  // to survive and, because its X coordinate can be close to a body column,
-  // merge into that column as if it were story text.
-  const nearBottom = item.displayY > page.height * 0.88;
-  const smallerThanBody = bodyFontSize > 0 && item.fontSize < bodyFontSize * 0.98;
-  return (nearTop || nearBottom) && smallerThanBody;
-}
-
 function primaryItems(page: InspectPage, bodyFontSize: number): InspectTextItem[] {
   return page.textItems.map((item, index) => ({ ...item, source: item.source ?? fullTextRef(page.page, index, item.text) })).filter((item) => {
     if (item.text.trim().length === 0) return false;
-    if (isMarginNoise(item, page, bodyFontSize)) return false;
+    if (isShortMarginNoise(item, page, bodyFontSize)) return false;
     if (bodyFontSize > 0 && item.fontSize < bodyFontSize * 0.75) return false;
     return true;
   });
