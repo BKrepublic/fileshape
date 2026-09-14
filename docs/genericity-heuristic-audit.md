@@ -26,13 +26,13 @@ Purpose: FileShape must generalize to unknown PDFs at large scale. The local nin
 | margin document context | `margin-recurrence.ts` clusters local candidates by normalized edge/inline geometry, opaque font and body-relative size; production flow/layout suppress only recurring clusters while isolated local candidates remain content | **B**: recurrence gates (`>=2` pages and `>=20%` of text-bearing pages) and clustering buckets remain empirical |
 | body-font evidence | `measureBodyFontEvidence()` retains total/dominant/runner-up char weight, support, dominance margin and bucket count while preserving the historical 0.1pt winner | **B**: 0.1pt quantization and char weighting remain empirical |
 | body-font document context | `body-font-context.ts` may assist only weak page-local estimates; strong local majorities are immutable, the prior requires a strict majority across at least two strong pages, the prior size must occur on the weak page, and the change must preserve ruby annotation/body roles | **B**: local-majority and document-majority gates remain empirical; the local nine-PDF verification set exercised zero prior substitutions |
-| line/column clustering | `layout-clustering.ts` owns ordinary and vertical-glyph clustering; flow and physical reconstruction consume the same geometry-first helpers | **B**: clustering tolerances remain empirical |
+| line/column clustering | `layout-clustering.ts` owns ordinary and vertical-glyph clustering; flow and physical reconstruction consume the same geometry-first helpers | **B**: clustering tolerances remain empirical; focused boundary/metamorphic coverage is being added |
 | vertical reconstruction mode | flow and physical layout share `verticalTextLayoutMode`; single-glyph representation no longer selects different algorithms in different stages | **B**: existing `0.7` single-char and `0.6` vertical-sequence thresholds remain calibration debt |
 | vertical glyph ordering | geometry is primary; source item order is used only for local overlap when complete source indices exist | **B**: overlap/noise windows remain empirical |
 | spacing/pitch estimation | `spacing-evidence.ts` is the source of truth for normal spacing and paragraph-gap threshold; evidence retains `source` and `sampleCount`; one gap does not masquerade as a distribution | **B/C**: `1.65`, `1.55`, `1.25` and minimum-gap gates remain empirical |
 | semantic boundary evidence | `SemanticBoundaryDecision` retains normal-gap provenance, wrap/paragraph thresholds, previous coverage, edge-continuation result, near-normal-gap result, wrap candidate and large-gap result while keeping the existing join formula unchanged | **B**: continuation and spacing thresholds remain empirical, but intermediate evidence is no longer collapsed |
-| attached-run orientation | `attached-run-evidence.ts` retains anchor/pending/attachment evidence; it no longer hard-labels a page | **B/C**: geometric windows originated from a sparse failure class and still need perturbation coverage |
-| document orientation | metric-backed labels are stable; unknown runs consume compact channel evidence; attached-run evidence can be placed on a matching side of a real orientation transition; raw weak tendencies still require agreeing stable context | **B**: metric thresholds remain empirical, but the old page-count/run-length semantic rule is gone |
+| attached-run orientation | `attached-run-evidence.ts` retains anchor/pending/attachment evidence; it no longer hard-labels a page; focused tests now lock scale/translation invariance, small jitter, cross-axis and inline-gap boundaries | **B/C**: geometric windows remain empirical, but their present perturbation behavior is explicit |
+| document orientation | metric-backed labels are stable; unknown runs consume compact channel evidence; attached-run evidence can be placed on a matching side of a real orientation transition; raw weak tendencies still require agreeing stable context; threshold precedence/boundaries are directly tested | **B**: metric thresholds remain empirical, but their inclusive/strict boundaries are now explicit |
 | orientation handoff | `pdf-document-pipeline.ts` passes compact metric + attached-run evidence into document resolution; decision provenance is no longer reconstructed after the fact | no known D blocker in this handoff |
 | glyph-live ruby prepass | `pdf-to-epub-core.ts` calls compact `estimateBodyFontSize()` only; full `reconstructPageFlow()` runs once during document build instead of twice per page | **B**: body-font thresholds remain empirical, but duplicate flow work is closed |
 | heading page-leading gate | recurring source-backed non-body style can be structural even when the block is not first on a physical page | **B**: style quantization remains empirical |
@@ -50,9 +50,10 @@ Purpose: FileShape must generalize to unknown PDFs at large scale. The local nin
 
 | File / function | Decision | Current issue | Class | Next direction |
 | --- | --- | --- | --- | --- |
-| `ruby-association.ts` / `ruby-spans.ts` | ruby geometry | exact association still uses fixed geometric windows for annotation/body size, side distance, overlap, line grouping, continuity and ambiguity | **B** | keep exact association fail-closed; extend affine/scale/jitter/advance perturbation tests before considering any calibration change |
-| `attached-run-evidence.ts` | sparse endpoint attachment | fixed geometric windows remain | **B/C** | add perturbation coverage without allowing attachment evidence to become a local hard label |
-| orientation decision thresholds | page orientation metrics | `0.7`, `0.6`, `1.5x`-style gates are empirical | **B** | retain current provenance and add perturbation/boundary tests before calibration |
+| `layout-clustering.ts` | clustering, glyph sequence and local overlap | `0.42`, `1.25`, `0.75`, `2.75`, `1.5` and local-overlap `0.75` windows remain empirical | **B, perturbation tests pending local verification** | verify scale/translation invariance plus inclusive/strict boundaries before any calibration change |
+| `ruby-association.ts` / `ruby-spans.ts` | ruby geometry | exact association still uses fixed geometric windows for annotation/body size, side distance, overlap, line grouping, continuity and ambiguity | **B** | keep exact association fail-closed; current perturbation behavior is now directly tested, so any future calibration must preserve those provenance guarantees |
+| `attached-run-evidence.ts` | sparse endpoint attachment | fixed geometric windows remain | **B/C** | coverage now locks scale/translation, jitter and threshold boundaries; calibrate only with independent evidence, never by promoting it to a local hard label |
+| orientation decision thresholds | page orientation metrics | `0.7`, `0.6`, `1.5x`-style gates are empirical | **B** | boundary and precedence behavior is now explicit; any calibration change must remain provenance-preserving and fail closed on ties |
 
 ## Provenance notes
 
@@ -74,26 +75,36 @@ Same-page wrap/paragraph reconstruction remains geometry-only. `SemanticBoundary
 
 ### Heading family confidence
 
-Page-leading eligibility, physical-document-length gates and page cadence are gone. `inferStructuralHeadingEvidence()` exposes the complete recurring-family competition while leaving the historical behavior intact: a single recurring family is accepted directly; when multiple families recur, the strongest still needs at least `3x` the runner-up independent page support. Tests now distinguish clear dominance from competing families using support/share/margin/ratio evidence rather than a hidden boolean only.
+Page-leading eligibility, physical-document-length gates and page cadence are gone. `inferStructuralHeadingEvidence()` exposes the complete recurring-family competition while leaving the historical behavior intact: a single recurring family is accepted directly; when multiple families recur, the strongest still needs at least `3x` the runner-up independent page support. Tests distinguish clear dominance from competing families using support/share/margin/ratio evidence rather than a hidden boolean only.
 
 Local verification at checkpoint `4d3c8840f95bafbf2cd9d6bdcfdda4c3ef1ad076` passed typecheck, focused heading/navigation tests, 307/307 unit tests and semantic verification.
 
 ### Ruby geometry
 
-Exact ruby remains source-provenance-first and fail-closed. Existing tests already cover four rotations, uniform scale/translation, proportional glyph advances, ligatures, multi-item base/annotation spans, overhang, ambiguity, missing glyphs, duplicate overprints, noncontiguous bases, conflicting annotations and supplementary Unicode. The current branch adds focused perturbation tests for small independent coordinate jitter, small measured advance variation, jitter under scale, and explicit fail-closed behavior outside the accepted cross-axis window. Production thresholds are unchanged pending local verification.
+Exact ruby remains source-provenance-first and fail-closed. Coverage includes four rotations, uniform scale/translation, proportional glyph advances, ligatures, multi-item base/annotation spans, overhang, ambiguity, missing glyphs, duplicate overprints, noncontiguous bases, conflicting annotations, supplementary Unicode, small independent coordinate jitter, small advance variation, jitter under scale, and explicit fail-closed behavior outside the accepted cross-axis window.
+
+Local verification at checkpoint `f71df276bb927b3b785814d137af057ded647e0e` passed typecheck, focused ruby tests, 311/311 unit tests and semantic verification. Production ruby thresholds were not changed.
+
+### Attached-run and orientation thresholds
+
+Attached-run evidence remains compact geometry evidence only. Focused perturbation tests now cover uniform scale/translation, small cross/inline jitter, and both sides of the cross-axis and inline-gap windows. Document-context tests continue to require unknown local orientation before this evidence may resolve a page; a metric-backed label stays immutable.
+
+Orientation-decision tests lock the current inclusive `0.7` glyph-dominance and `0.6` channel gates, the strict baseline `>1.5x` fallback, and sequence -> run -> baseline precedence. These tests make the empirical policy observable without changing it.
+
+Local verification at checkpoint `80db124a5a79de8be1cf8ec41314a855e335f2bf` passed typecheck, focused attached-run/orientation tests, 324/324 unit tests and semantic verification. Production orientation logic was unchanged.
 
 ## Current verification checkpoint
 
-At branch checkpoint `4d3c8840f95bafbf2cd9d6bdcfdda4c3ef1ad076` the local gates reported:
+At branch checkpoint `80db124a5a79de8be1cf8ec41314a855e335f2bf` the local gates reported:
 
 - Typecheck: PASS.
-- Focused heading/navigation tests: PASS.
-- Unit suite: 307/307 PASS.
+- Focused attached-run/orientation tests: PASS.
+- Unit suite: 324/324 PASS.
 - Semantic verification: PASS.
 - The previous production-changing checkpoint reported 9/9 PDFs and 5,141/5,141 pages PASS, detected unknown 5 -> resolved 0, known repaired 0, body-font prior substitutions 0, 6,272 local margin candidates, 5,947 recurring suppressions and 325 isolated candidates retained.
 - No GitHub Actions or hosted CI is part of this verification policy.
 
-The ruby perturbation extension after this checkpoint is test-only and still requires local verification. The nine PDFs remain diagnostics only; passing them is regression evidence, not proof of generality.
+The layout-clustering perturbation extension after this checkpoint is test-only and still requires local verification. The nine PDFs remain diagnostics only; passing them is regression evidence, not proof of generality.
 
 ## Metamorphic coverage to preserve/extend
 
@@ -112,11 +123,14 @@ The ruby perturbation extension after this checkpoint is test-only and still req
 13. Weak/tied page-local body-font estimates where a document prior must assist only when source-observed and ruby-role-safe.
 14. Same semantic boundary under uniform scale and small spacing perturbations, retaining threshold margins and decision provenance.
 15. Ruby perturbations outside accepted geometry must remain unresolved rather than being rescued by looser provenance rules.
+16. Attached-run perturbations must remain stable within current windows and fail closed immediately outside them.
+17. Orientation threshold ties and precedence must remain explicit rather than depending on comparison order accidents.
+18. Layout clustering must preserve partitions under uniform scale/translation and make inclusive/strict threshold boundaries explicit.
 
 ## Immediate engineering order
 
-1. Locally verify the new ruby geometry perturbation tests plus the existing exact ruby suite.
+1. Locally verify the new layout-clustering perturbation tests plus the existing flow/physical-layout tests.
 2. Run the complete unit and semantic gates. Because production code is unchanged, do not rerun the nine-PDF quality set unless output changes or a broader regression appears.
-3. If clean, keep ruby thresholds unchanged and move to attached-run/orientation perturbation coverage.
+3. If clean, keep clustering constants unchanged and continue through the remaining B-class serialization/spacing thresholds with the same evidence-first approach.
 4. Keep threshold tuning separate from evidence plumbing. Do not tune constants against the nine local PDFs.
 5. Keep ruby exact association fail-closed and unresolved provenance intact throughout.
