@@ -20,6 +20,10 @@ function sampleFlow(): PageFlowResult {
       sequenceVerticalRatio: 1,
       sequenceHorizontalRatio: 0,
     },
+    attachedRunEvidence: {
+      vertical: { anchorCount: 0, pendingCount: 0, attachedCount: 0, complete: false },
+      horizontal: { anchorCount: 0, pendingCount: 0, attachedCount: 0, complete: false },
+    },
     groups: [
       { position: 700, itemCount: 1, text: "本文A" },
       { position: 600, itemCount: 1, text: "本文B" },
