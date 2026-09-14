@@ -2,6 +2,7 @@ import type { InspectPage, InspectTextItem } from "./pdf-inspection-model.js";
 import type { ExtractedGlyph } from "./pdfjs-glyph-adapter.js";
 import { dot, subtract, type Point } from "./display-geometry.js";
 import { fullTextRef, mergeSourceRanges, type SourceGlyphRef, type SourceTextRef } from "./source-text.js";
+import { collectTextItemEvidence } from "./text-item-evidence.js";
 
 export type RubySpan = {
   status: "exact" | "unresolved";
@@ -22,9 +23,11 @@ const projection = (glyph: ExtractedGlyph, axis: Point) => dot(glyph.geometry.st
  */
 export function associateRubySpans(page: InspectPage, bodyFontSize: number): RubySpan[] {
   if (!Number.isFinite(bodyFontSize) || bodyFontSize <= 0) return [];
-  const visible = page.textItems.map((item, index) => ({ item, index })).filter(({ item }) => item.text.trim());
-  const small = visible.filter(({ item }) => item.fontSize > 0 && item.fontSize < bodyFontSize * 0.75);
-  const body = visible.filter(({ item }) => item.fontSize >= bodyFontSize * 0.75);
+  const visible = collectTextItemEvidence(page, bodyFontSize)
+    .filter((entry) => entry.visible)
+    .map(({ item, itemIndex, annotationSized }) => ({ item, index: itemIndex, annotationSized }));
+  const small = visible.filter(({ item, annotationSized }) => item.fontSize > 0 && annotationSized);
+  const body = visible.filter(({ annotationSized }) => !annotationSized);
   const groups: Entry[][] = [];
   // Form connected components of adjacent annotation runs; input order is not evidence.
   const pending = new Set(small);
