@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { AttachedRunEvidence } from "../src/attached-run-evidence.js";
 import type {
   OrientationDecisionSource,
   OrientationEvidenceSummary,
@@ -29,6 +30,21 @@ function evidence(
   };
 }
 
+function attached(orientation: Exclude<WritingOrientation, "unknown">): AttachedRunEvidence {
+  const unsupported = { anchorCount: 0, pendingCount: 0, attachedCount: 0, complete: false };
+  const supported = { anchorCount: 1, pendingCount: 1, attachedCount: 1, complete: true };
+  return orientation === "vertical"
+    ? { vertical: supported, horizontal: unsupported }
+    : { vertical: unsupported, horizontal: supported };
+}
+
+function attachedEvidence(orientation: Exclude<WritingOrientation, "unknown">): OrientationEvidenceSummary {
+  return {
+    ...evidence("unknown", 0, 0, "none"),
+    attachedRun: attached(orientation),
+  };
+}
+
 test("fills an evidence-supported unknown run when both surrounding pages agree", () => {
   const result = resolveDocumentOrientations([
     { page: 1, orientation: "vertical", evidence: evidence("vertical", 0.9, 0.1) },
@@ -48,34 +64,23 @@ test("fills an evidence-supported unknown run when both surrounding pages agree"
   );
 });
 
-test("repairs an attached-run fallback when retained tendency and stable neighbors agree", () => {
+test("resolves attached-run evidence only when stable neighbors agree", () => {
   const result = resolveDocumentOrientations([
     { page: 1, orientation: "vertical", evidence: evidence("vertical", 0.9, 0.1) },
-    { page: 2, orientation: "horizontal", evidence: evidence("horizontal", 0.55, 0.45, "attached-run") },
+    { page: 2, orientation: "unknown", evidence: attachedEvidence("vertical") },
     { page: 3, orientation: "vertical", evidence: evidence("vertical", 0.8, 0.2) },
   ]);
 
-  assert.equal(result[1]?.detected, "horizontal");
+  assert.equal(result[1]?.detected, "unknown");
   assert.equal(result[1]?.resolved, "vertical");
   assert.equal(result[1]?.source, "document-context");
 });
 
-test("does not label a matching attached-run fallback as document-context when nothing changes", () => {
-  const result = resolveDocumentOrientations([
-    { page: 1, orientation: "vertical", evidence: evidence("vertical", 0.9, 0.1) },
-    { page: 2, orientation: "vertical", evidence: evidence("vertical", 0.55, 0.45, "attached-run") },
-    { page: 3, orientation: "vertical", evidence: evidence("vertical", 0.8, 0.2) },
-  ]);
-
-  assert.equal(result[1]?.resolved, "vertical");
-  assert.equal(result[1]?.source, "detected");
-});
-
-test("repairs a mixed unknown and attached-run fallback only when retained tendencies agree", () => {
+test("mixed raw tendency and attached-run evidence resolve only when both support context", () => {
   const result = resolveDocumentOrientations([
     { page: 1, orientation: "vertical", evidence: evidence("vertical", 0.9, 0.1) },
     { page: 2, orientation: "unknown", evidence: evidence("unknown", 0.55, 0.45, "none") },
-    { page: 3, orientation: "horizontal", evidence: evidence("horizontal", 0.52, 0.48, "attached-run") },
+    { page: 3, orientation: "unknown", evidence: attachedEvidence("vertical") },
     { page: 4, orientation: "vertical", evidence: evidence("vertical", 0.8, 0.1) },
   ]);
 
@@ -110,15 +115,15 @@ test("does not override a known metric-backed label whose retained source decide
   assert.equal(result[1]?.source, "detected");
 });
 
-test("does not repair an attached-run fallback across an orientation transition", () => {
+test("does not resolve attached-run evidence across an orientation transition", () => {
   const result = resolveDocumentOrientations([
     { page: 10, orientation: "vertical", evidence: evidence("vertical", 0.9, 0.1) },
-    { page: 11, orientation: "horizontal", evidence: evidence("horizontal", 0.55, 0.45, "attached-run") },
+    { page: 11, orientation: "unknown", evidence: attachedEvidence("vertical") },
     { page: 12, orientation: "horizontal", evidence: evidence("horizontal", 0.1, 0.9) },
   ]);
 
-  assert.equal(result[1]?.resolved, "horizontal");
-  assert.equal(result[1]?.source, "detected");
+  assert.equal(result[1]?.resolved, "unknown");
+  assert.equal(result[1]?.source, "unresolved");
 });
 
 test("does not infer across an orientation transition", () => {
@@ -134,7 +139,7 @@ test("does not infer across an orientation transition", () => {
 
 test("does not guess an unknown run at a document edge", () => {
   const result = resolveDocumentOrientations([
-    { page: 1, orientation: "unknown", evidence: evidence("unknown", 0.55, 0.45, "none") },
+    { page: 1, orientation: "unknown", evidence: attachedEvidence("vertical") },
     { page: 2, orientation: "unknown", evidence: evidence("unknown", 0.52, 0.48, "none") },
     { page: 3, orientation: "vertical", evidence: evidence("vertical", 0.9, 0.1) },
   ]);
@@ -172,11 +177,11 @@ test("fills a long ambiguous section when retained evidence consistently support
   assert.equal(result.filter((entry) => entry.resolved === "unknown").length, 0);
 });
 
-test("one opposite tendency blocks the whole ambiguous run instead of guessing through it", () => {
+test("one opposite attached-run tendency blocks the whole ambiguous run", () => {
   const result = resolveDocumentOrientations([
     { page: 1, orientation: "vertical", evidence: evidence("vertical", 0.9, 0.1) },
     { page: 2, orientation: "unknown", evidence: evidence("unknown", 0.55, 0.45, "none") },
-    { page: 3, orientation: "unknown", evidence: evidence("unknown", 0.45, 0.55, "none") },
+    { page: 3, orientation: "unknown", evidence: attachedEvidence("horizontal") },
     { page: 4, orientation: "vertical", evidence: evidence("vertical", 0.9, 0.1) },
   ]);
 
