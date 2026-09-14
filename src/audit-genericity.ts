@@ -2,14 +2,15 @@ import { readdirSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { attachedRunTendency } from "./attached-run-evidence.js";
+import { buildDocumentBodyFontContext } from "./body-font-context.js";
 import { resolveDocumentOrientations } from "./document-orientation.js";
 import type { SourceOutlineItem } from "./document-navigation.js";
 import { buildDocumentMarginProfile } from "./margin-recurrence.js";
 import { summarizeOrientationEvidence } from "./orientation-evidence.js";
 import { inspectPdf } from "./pdf-inspector.js";
 import {
-  estimateBodyFontSize,
   reconstructPageFlow,
+  type BodyFontSource,
   type PageFlowResult,
   type WritingOrientation,
 } from "./text-flow.js";
@@ -31,6 +32,7 @@ type PageAudit = {
   edge: "start" | "end" | "none";
   attachedTendency: WritingOrientation;
   bodyFontSize: number;
+  bodyFontSource: BodyFontSource;
   primaryItems: number;
   annotationItems: number;
   marginNoiseItems: number;
@@ -57,6 +59,7 @@ type FileAudit = {
   bodyFontQ10: number;
   bodyFontQ50: number;
   bodyFontQ90: number;
+  bodyFontPriorPages: number;
   evidenceMarginQ10: number;
   evidenceMarginQ50: number;
   evidenceMarginQ90: number;
@@ -136,21 +139,29 @@ function pageLabel(page: PageAudit): string {
     `base=${m.verticalBaselineRatio.toFixed(2)}/${m.horizontalBaselineRatio.toFixed(2)}`,
     `seq=${m.sequenceVerticalRatio.toFixed(2)}/${m.sequenceHorizontalRatio.toFixed(2)}`,
     `single=${m.singleCharItemRatio.toFixed(2)}`,
-    `font=${page.bodyFontSize.toFixed(2)}`,
+    `font=${page.bodyFontSize.toFixed(2)}:${page.bodyFontSource}`,
   ].join(" ");
 }
 
 async function auditFile(filePath: string): Promise<FileAudit> {
   const inspection = await inspectPdf(filePath);
+  const bodyFontContext = buildDocumentBodyFontContext(inspection.pages);
   const bodyFontSizes = new Map(
-    inspection.pages.map((page) => [page.page, estimateBodyFontSize(page.textItems)]),
+    inspection.pages.map((page) => [
+      page.page,
+      bodyFontContext.resolutions.get(page.page)?.size ?? 0,
+    ]),
   );
   const marginProfile = buildDocumentMarginProfile(inspection.pages, bodyFontSizes);
   const marginEvidence = [...marginProfile.evidenceByItem.values()];
   const recurringMarginCandidates = marginEvidence.filter((entry) => entry.recurring).length;
   const flows = inspection.pages.map((page) => ({
     page: page.page,
-    flow: reconstructPageFlow(page, marginProfile),
+    flow: reconstructPageFlow(
+      page,
+      marginProfile,
+      bodyFontContext.resolutions.get(page.page),
+    ),
   }));
   const orientationResolution = resolveDocumentOrientations(
     flows.map(({ page, flow }) => ({
@@ -182,6 +193,7 @@ async function auditFile(filePath: string): Promise<FileAudit> {
         ? "unknown"
         : attachedRunTendency(evidence.attachedRun),
       bodyFontSize: flow.bodyFontSize,
+      bodyFontSource: flow.bodyFontSource,
       primaryItems: flow.primaryItemCount,
       annotationItems: flow.annotationItemCount,
       marginNoiseItems: flow.marginNoiseItemCount,
@@ -239,6 +251,7 @@ async function auditFile(filePath: string): Promise<FileAudit> {
     bodyFontQ10: round(quantile(bodyFonts, 0.1), 2),
     bodyFontQ50: round(quantile(bodyFonts, 0.5), 2),
     bodyFontQ90: round(quantile(bodyFonts, 0.9), 2),
+    bodyFontPriorPages: pages.filter((page) => page.bodyFontSource === "document-prior").length,
     evidenceMarginQ10: round(quantile(margins, 0.1), 3),
     evidenceMarginQ50: round(quantile(margins, 0.5), 3),
     evidenceMarginQ90: round(quantile(margins, 0.9), 3),
@@ -264,6 +277,7 @@ function printSummary(result: FileAudit): void {
     + ` resolved=${r.vertical}/${r.horizontal}/${r.unknown}`
     + ` unknownFilled=${result.contextFilledUnknown}`
     + ` knownRepaired=${result.contextRepairedKnown}`
+    + ` bodyFontPrior=${result.bodyFontPriorPages}`
     + ` marginCandidates=${result.marginCandidates}`
     + ` recurringRemoved=${result.recurringMarginCandidates}`
     + ` retainedOneOff=${result.retainedOneOffMarginCandidates}`
@@ -286,7 +300,7 @@ function printAudit(result: FileAudit): void {
   if (result.repairedKnownPages.length > 0) {
     console.log(`  repairedKnownPages=${result.repairedKnownPages.map((page) => page.page).join(",")}`);
   }
-  console.log(`  bodyFont q10/q50/q90=${result.bodyFontQ10}/${result.bodyFontQ50}/${result.bodyFontQ90}`);
+  console.log(`  bodyFont q10/q50/q90=${result.bodyFontQ10}/${result.bodyFontQ50}/${result.bodyFontQ90} documentPriorPages=${result.bodyFontPriorPages}`);
   console.log(`  evidenceMargin q10/q50/q90=${result.evidenceMarginQ10}/${result.evidenceMarginQ50}/${result.evidenceMarginQ90}`);
   console.log(`  annotationFraction q50/q90=${result.annotationFractionQ50}/${result.annotationFractionQ90} pagesWithMarginNoise=${result.pagesWithMarginNoise}`);
   console.log(`  marginCandidates=${result.marginCandidates} recurringRemoved=${result.recurringMarginCandidates} retainedOneOff=${result.retainedOneOffMarginCandidates}`);
@@ -329,6 +343,7 @@ async function main(): Promise<void> {
   const totalKnownRepaired = results.reduce((sum, result) => sum + result.contextRepairedKnown, 0);
   const totalDetectedUnknown = results.reduce((sum, result) => sum + result.detected.unknown, 0);
   const totalResolvedUnknown = results.reduce((sum, result) => sum + result.resolved.unknown, 0);
+  const totalBodyFontPriorPages = results.reduce((sum, result) => sum + result.bodyFontPriorPages, 0);
   const totalMarginCandidates = results.reduce((sum, result) => sum + result.marginCandidates, 0);
   const totalRecurringMarginCandidates = results.reduce((sum, result) => sum + result.recurringMarginCandidates, 0);
   const totalRetainedOneOff = results.reduce((sum, result) => sum + result.retainedOneOffMarginCandidates, 0);
@@ -339,6 +354,7 @@ async function main(): Promise<void> {
     + ` unknown=${totalDetectedUnknown}->${totalResolvedUnknown}`
     + ` unknownFilled=${totalUnknownFilled}`
     + ` knownRepaired=${totalKnownRepaired}`
+    + ` bodyFontPrior=${totalBodyFontPriorPages}`
     + ` marginCandidates=${totalMarginCandidates}`
     + ` recurringRemoved=${totalRecurringMarginCandidates}`
     + ` retainedOneOff=${totalRetainedOneOff}`,
