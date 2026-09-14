@@ -83,11 +83,17 @@ async function main(): Promise<void> {
 
   for (const [needleIndex, needle] of needles.entries()) {
     const expected = compactText(needle);
+    const stagePositions = {
+      sourceEmission: sourceEmission.indexOf(expected),
+      flow: flowText.indexOf(expected),
+      physical: physicalText.indexOf(expected),
+      semantic: semanticText.indexOf(expected),
+    };
     const stagePresence = {
-      sourceEmission: sourceEmission.includes(expected),
-      flow: flowText.includes(expected),
-      physical: physicalText.includes(expected),
-      semantic: semanticText.includes(expected),
+      sourceEmission: stagePositions.sourceEmission >= 0,
+      flow: stagePositions.flow >= 0,
+      physical: stagePositions.physical >= 0,
+      semantic: stagePositions.semantic >= 0,
     };
     const sourceItems = sourceSpanItemIndexes(page.textItems.map((item) => item.text), expected);
     const sourceItemSet = new Set(sourceItems);
@@ -112,6 +118,7 @@ async function main(): Promise<void> {
       `RUN=${needleIndex + 1}`,
       `NEEDLE=${expected}`,
       `PRESENCE=${JSON.stringify(stagePresence)}`,
+      `POSITIONS=${JSON.stringify(stagePositions)}`,
       `SOURCE_SPAN_ITEMS=${JSON.stringify(sourceItems)}`,
       `PHYSICAL_TRACE=${JSON.stringify(tracedPhysicalUnits)}`,
       `SEMANTIC_TRACE=${JSON.stringify(tracedSemanticBlocks)}`,
