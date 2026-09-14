@@ -93,9 +93,10 @@ test("NCX reuses playOrder when multiple outline labels resolve to the same targ
   document.navigation = buildDocumentNavigation(outline);
 
   const pages = serializeEpubXhtml(document).pages;
+  assert.equal(pages.length, 1);
   const ncx = serializeLegacyNcx(document, "Book", "urn:test:ncx", pages);
 
   assert.match(ncx, /navPoint-1" playOrder="1"[\s\S]*?<text>Parent label<\/text>[\s\S]*?page-0001\.xhtml#source-page-1/);
   assert.match(ncx, /navPoint-2" playOrder="1"[\s\S]*?<text>Child label<\/text>[\s\S]*?page-0001\.xhtml#source-page-1/);
-  assert.match(ncx, /navPoint-3" playOrder="2"[\s\S]*?<text>Next label<\/text>[\s\S]*?page-0002\.xhtml#source-page-2/);
+  assert.match(ncx, /navPoint-3" playOrder="2"[\s\S]*?<text>Next label<\/text>[\s\S]*?page-0001\.xhtml#source-page-2/);
 });
