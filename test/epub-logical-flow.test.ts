@@ -45,6 +45,24 @@ function documentFixture(texts: string[]): FileShapeDocument {
   };
 }
 
+function addOutlineNavigation(document: FileShapeDocument): void {
+  document.navigation = [
+    {
+      kind: "outline",
+      title: "Source section A",
+      sourceOutlinePath: [0],
+      target: { status: "resolved", sourcePage: 2 },
+      children: [{
+        kind: "outline",
+        title: "Source section B",
+        sourceOutlinePath: [0, 0],
+        target: { status: "resolved", sourcePage: 4 },
+        children: [],
+      }],
+    },
+  ];
+}
+
 const structuralHeadings = [
   { title: "序章ではない名前", sourcePage: 1, semanticBlockIndex: 0 },
   { title: "◆第二の区切り", sourcePage: 3, semanticBlockIndex: 0 },
@@ -89,4 +107,57 @@ test("structural headings become EPUB TOC entries while PDF pages remain page-li
   assert.match(navigation.xhtml, /page-0003\.xhtml#heading-page-3-block-0">◆第二の区切り<\/a>/);
   assert.match(navigation.xhtml, /page-0001\.xhtml#source-page-2">Page 2<\/a>/);
   assert.match(navigation.xhtml, /page-0003\.xhtml#source-page-4">Page 4<\/a>/);
+});
+
+test("resolved source outline destinations group physical pages without inventing headings", () => {
+  const document = documentFixture([
+    "front matter",
+    "section A",
+    "body A",
+    "section B",
+    "body B",
+  ]);
+  addOutlineNavigation(document);
+
+  const xhtml = serializeEpubXhtml(document);
+  assert.equal(xhtml.pages.length, 3);
+  assert.deepEqual(xhtml.pages.map((page) => page.sourcePages), [
+    [1],
+    [2, 3],
+    [4, 5],
+  ]);
+  assert.equal(xhtml.pages[1]?.heading, undefined);
+  assert.equal(xhtml.pages[2]?.heading, undefined);
+
+  const navigation = serializeEpubNavigation(document, "Book", "en", xhtml.pages);
+  assert.equal(navigation.summary.mode, "outline");
+  assert.equal(navigation.summary.outlineEntries, 2);
+  assert.match(navigation.xhtml, /page-0002\.xhtml#source-page-2">Source section A<\/a>/);
+  assert.match(navigation.xhtml, /page-0004\.xhtml#source-page-4">Source section B<\/a>/);
+});
+
+test("outline-backed logical groups split again when writing orientation changes", () => {
+  const document = documentFixture([
+    "section",
+    "vertical body",
+    "horizontal insert",
+    "horizontal continuation",
+  ]);
+  document.navigation = [{
+    kind: "outline",
+    title: "Section",
+    sourceOutlinePath: [0],
+    target: { status: "resolved", sourcePage: 1 },
+    children: [],
+  }];
+  document.pages[2]!.orientation = "horizontal";
+  document.pages[3]!.orientation = "horizontal";
+
+  const xhtml = serializeEpubXhtml(document);
+  assert.deepEqual(xhtml.pages.map((page) => page.sourcePages), [
+    [1, 2],
+    [3, 4],
+  ]);
+  assert.match(xhtml.pages[0]?.xhtml ?? "", /writing-mode: vertical-rl/);
+  assert.match(xhtml.pages[1]?.xhtml ?? "", /writing-mode: horizontal-tb/);
 });
