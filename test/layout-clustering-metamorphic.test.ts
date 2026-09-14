@@ -91,11 +91,11 @@ test("ordinary cross-axis clustering is invariant under uniform scale and transl
 test("ordinary cross-axis tolerance is inclusive at the boundary and separates just outside it", () => {
   const tolerance = ordinaryCrossAxisTolerance(10);
   assert.equal(
-    clusterTextItemsByAxis([item("A", 100, 100, 10), item("B", 100 + tolerance, 120, 10)], "x", tolerance).length,
+    clusterTextItemsByAxis([item("A", 0, 100, 10), item("B", tolerance, 120, 10)], "x", tolerance).length,
     1,
   );
   assert.equal(
-    clusterTextItemsByAxis([item("A", 100, 100, 10), item("B", 100 + tolerance + 1e-6, 120, 10)], "x", tolerance).length,
+    clusterTextItemsByAxis([item("A", 0, 100, 10), item("B", tolerance + 1e-6, 120, 10)], "x", tolerance).length,
     2,
   );
 });
