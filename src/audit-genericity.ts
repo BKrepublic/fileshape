@@ -12,6 +12,7 @@ const EXPECTED_PDF_COUNT = 9;
 const RULE = "=".repeat(88);
 const DIAGNOSTIC_WEAK_MARGIN = 0.2;
 const MAX_SUSPICIOUS_PAGES = 12;
+const DETAILED = process.env.FILESHAPE_AUDIT_DETAILS === "1";
 
 type OrientationCounts = Record<WritingOrientation, number>;
 
@@ -208,6 +209,22 @@ async function auditFile(filePath: string): Promise<FileAudit> {
   };
 }
 
+function printSummary(result: FileAudit): void {
+  const d = result.detected;
+  const r = result.resolved;
+  const repaired = result.repairedKnownPages.length > 0
+    ? ` repairedPages=${result.repairedKnownPages.map((page) => page.page).join(",")}`
+    : "";
+  console.log(
+    `FILE=${result.file} pages=${result.pages}`
+    + ` detected=${d.vertical}/${d.horizontal}/${d.unknown}`
+    + ` resolved=${r.vertical}/${r.horizontal}/${r.unknown}`
+    + ` unknownFilled=${result.contextFilledUnknown}`
+    + ` knownRepaired=${result.contextRepairedKnown}`
+    + repaired,
+  );
+}
+
 function printAudit(result: FileAudit): void {
   const d = result.detected;
   const r = result.resolved;
@@ -246,19 +263,34 @@ async function main(): Promise<void> {
   console.log("");
   console.log(RULE);
   console.log("FILESHAPE GENERICITY AUDIT");
-  console.log("Diagnostic evidence only. No sample-specific value below is a production rule.");
+  console.log(DETAILED
+    ? "Detailed diagnostic evidence. No value below is a production rule."
+    : "Concise resolver-impact summary. Set FILESHAPE_AUDIT_DETAILS=1 for diagnostics.");
   console.log(RULE);
-  for (const result of results) printAudit(result);
+  for (const result of results) {
+    if (DETAILED) printAudit(result);
+    else printSummary(result);
+  }
 
   const totalPages = results.reduce((sum, result) => sum + result.pages, 0);
   const totalFlips = results.reduce((sum, result) => sum + result.isolatedKnownFlips.length, 0);
   const totalWeak = results.reduce((sum, result) => sum + result.weakKnownPages.length, 0);
   const totalUnknownFilled = results.reduce((sum, result) => sum + result.contextFilledUnknown, 0);
   const totalKnownRepaired = results.reduce((sum, result) => sum + result.contextRepairedKnown, 0);
+  const totalDetectedUnknown = results.reduce((sum, result) => sum + result.detected.unknown, 0);
+  const totalResolvedUnknown = results.reduce((sum, result) => sum + result.resolved.unknown, 0);
+
   console.log(RULE);
-  console.log(`TOTAL pdfs=${results.length} pages=${totalPages} isolatedKnownFlips=${totalFlips} weakKnown=${totalWeak}`);
-  console.log(`TOTAL context unknownFilled=${totalUnknownFilled} knownRepaired=${totalKnownRepaired}`);
-  console.log("Use these distributions to inspect resolver impact; do not patch listed pages or copy diagnostic thresholds into production.");
+  console.log(
+    `TOTAL pdfs=${results.length} pages=${totalPages}`
+    + ` unknown=${totalDetectedUnknown}->${totalResolvedUnknown}`
+    + ` unknownFilled=${totalUnknownFilled}`
+    + ` knownRepaired=${totalKnownRepaired}`,
+  );
+  if (DETAILED) {
+    console.log(`DETAIL isolatedKnownFlips=${totalFlips} weakKnownDiagnostic=${totalWeak}`);
+    console.log("Diagnostic weak-margin counts are cross-channel signals only; do not use them as production confidence.");
+  }
   console.log(RULE);
 }
 
