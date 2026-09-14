@@ -68,7 +68,8 @@ function charCount(text: string): number {
   return [...text.trim()].length;
 }
 
-function dominantFontSize(items: InspectTextItem[]): number {
+/** Compact page-local body-font estimate shared with glyph-live ruby extraction. */
+export function estimateBodyFontSize(items: readonly InspectTextItem[]): number {
   const buckets = new Map<number, number>();
 
   for (const item of items) {
@@ -319,7 +320,7 @@ function renderSourceSpacingText(groups: FlowGroup[], boundaries: FlowBoundary[]
 
 export function reconstructPageFlow(page: InspectPage): PageFlowResult {
   const nonEmptyItems = page.textItems.filter((item) => item.text.trim().length > 0);
-  const bodyFontSize = dominantFontSize(nonEmptyItems);
+  const bodyFontSize = estimateBodyFontSize(nonEmptyItems);
   const itemEvidence = collectTextItemEvidence(page, bodyFontSize);
 
   const marginNoiseItems = itemEvidence
