@@ -13,6 +13,7 @@ import type {
 } from "./document-model.js";
 import { normalizeEpubPresentationText } from "./epub-navigation-text.js";
 import type { StructuralHeading } from "./heading-inference.js";
+import { hasContinuationEdgeGeometry } from "./semantic-blocks.js";
 
 export type EpubInferredHeading = StructuralHeading & {
   targetId: string;
@@ -286,13 +287,14 @@ function continuesAcrossSourcePage(
   const previousHeading = headingByPage.get(previous.sourcePage);
   if (previousHeading && previous.blocks.length === 1) return false;
 
-  const before = normalizeEpubPresentationText(blockPlainText(previousBlock)).trimEnd();
-  const after = normalizeEpubPresentationText(blockPlainText(currentBlock));
-  if (before.length === 0 || after.trim().length === 0) return false;
-  if (/^[\u3000\t ]/u.test(after)) return false;
-  if (/^[「『（【〔［〈《]/u.test(after.trimStart())) return false;
-  if (/[。！？!?」』）】〕］〉》]$/u.test(before)) return false;
-  return true;
+  const previousEdge = previousBlock.edgeGeometry;
+  const currentEdge = currentBlock.edgeGeometry;
+  if (!previousEdge || !currentEdge) return false;
+  return hasContinuationEdgeGeometry(
+    previousEdge.lastUnitInlineEndRatio,
+    previousEdge.lastUnitInlineCoverageRatio,
+    currentEdge.firstUnitInlineStartRatio,
+  );
 }
 
 function renderSourcePageItems(
