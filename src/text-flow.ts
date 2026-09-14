@@ -1,3 +1,8 @@
+import {
+  clusterTextItemsByAxis,
+  clusterVerticalGlyphColumns,
+  ordinaryCrossAxisTolerance,
+} from "./layout-clustering.js";
 import type { InspectPage, InspectTextItem } from "./pdf-inspection-model.js";
 import {
   decideMetricOrientation,
@@ -44,14 +49,6 @@ function round(value: number, digits = 3): number {
 
 function charCount(text: string): number {
   return [...text.trim()].length;
-}
-
-function median(values: number[]): number {
-  if (values.length === 0) return 0;
-  const sorted = [...values].sort((left, right) => left - right);
-  const middle = Math.floor(sorted.length / 2);
-  if (sorted.length % 2 === 1) return sorted[middle] ?? 0;
-  return ((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2;
 }
 
 function lowerQuartile(values: number[]): number {
@@ -227,47 +224,6 @@ function detectOrientation(items: InspectTextItem[]): {
   };
 }
 
-type MutableGroup = {
-  position: number;
-  positions: number[];
-  items: InspectTextItem[];
-};
-
-function clusterByPosition(
-  items: InspectTextItem[],
-  axis: "x" | "y",
-  tolerance: number,
-): MutableGroup[] {
-  const coordinate = (item: InspectTextItem) => (axis === "x" ? item.displayX : item.displayY);
-  const ordered = [...items].sort((left, right) => coordinate(left) - coordinate(right));
-  const groups: MutableGroup[] = [];
-
-  for (const item of ordered) {
-    const value = coordinate(item);
-    let bestGroup: MutableGroup | undefined;
-    let bestDistance = Number.POSITIVE_INFINITY;
-
-    for (const group of groups) {
-      const distance = Math.abs(value - group.position);
-      if (distance <= tolerance && distance < bestDistance) {
-        bestGroup = group;
-        bestDistance = distance;
-      }
-    }
-
-    if (!bestGroup) {
-      groups.push({ position: value, positions: [value], items: [item] });
-      continue;
-    }
-
-    bestGroup.positions.push(value);
-    bestGroup.items.push(item);
-    bestGroup.position = median(bestGroup.positions);
-  }
-
-  return groups;
-}
-
 type GroupBuildResult = {
   groups: FlowGroup[];
   boundaries: FlowBoundary[];
@@ -364,18 +320,17 @@ function mergeVerticalColumns(
 }
 
 function buildVerticalGroups(items: InspectTextItem[], bodyFontSize: number): GroupBuildResult {
-  const tolerance = Math.max(1.5, bodyFontSize * 0.42);
-  const physicalColumns = clusterByPosition(items, "x", tolerance)
+  const physicalColumns = clusterTextItemsByAxis(items, "x", ordinaryCrossAxisTolerance(bodyFontSize))
     .sort((left, right) => right.position - left.position)
-    .map((group) => {
-      const orderedItems = [...group.items].sort((left, right) => {
+    .map((cluster) => {
+      const orderedItems = [...cluster.items].sort((left, right) => {
         const yDiff = left.displayY - right.displayY;
         if (Math.abs(yDiff) > 0.5) return yDiff;
         return right.fontSize - left.fontSize;
       });
 
       return {
-        position: group.position,
+        position: cluster.position,
         itemCount: orderedItems.length,
         text: orderedItems.map((item) => item.text).join(""),
       };
@@ -386,14 +341,13 @@ function buildVerticalGroups(items: InspectTextItem[], bodyFontSize: number): Gr
 }
 
 function buildHorizontalGroups(items: InspectTextItem[], bodyFontSize: number): GroupBuildResult {
-  const tolerance = Math.max(1.5, bodyFontSize * 0.42);
-  const groups = clusterByPosition(items, "y", tolerance)
+  const groups = clusterTextItemsByAxis(items, "y", ordinaryCrossAxisTolerance(bodyFontSize))
     .sort((left, right) => left.position - right.position)
-    .map((group) => {
-      const orderedItems = [...group.items].sort((left, right) => left.displayX - right.displayX);
+    .map((cluster) => {
+      const orderedItems = [...cluster.items].sort((left, right) => left.displayX - right.displayX);
 
       return {
-        position: round(group.position, 2),
+        position: round(cluster.position, 2),
         itemCount: orderedItems.length,
         text: orderedItems.map((item) => item.text).join(""),
       };
@@ -402,67 +356,17 @@ function buildHorizontalGroups(items: InspectTextItem[], bodyFontSize: number): 
   return { groups, boundaries: [] };
 }
 
-type SequenceColumn = {
-  anchorX: number;
-  positions: number[];
-  startY: number;
-  items: InspectTextItem[];
-};
-
-function buildVerticalGlyphSequenceGroups(
+function buildVerticalGlyphGroups(
   items: InspectTextItem[],
   bodyFontSize: number,
 ): GroupBuildResult {
-  if (items.length === 0) return { groups: [], boundaries: [] };
-
-  const shiftThreshold = Math.max(8, bodyFontSize * 1.25);
-  const columns: SequenceColumn[] = [];
-  let current: SequenceColumn | undefined;
-  let previous: InspectTextItem | undefined;
-
-  for (const item of items) {
-    if (!current) {
-      current = {
-        anchorX: item.displayX,
-        positions: [item.displayX],
-        startY: item.displayY,
-        items: [item],
-      };
-      columns.push(current);
-      previous = item;
-      continue;
-    }
-
-    const xShift = Math.abs(item.displayX - current.anchorX);
-    const yRestart = previous
-      ? item.displayY < previous.displayY - bodyFontSize * 0.5 ||
-        item.displayY <= current.startY + bodyFontSize * 1.5
-      : false;
-
-    if (xShift > shiftThreshold && yRestart) {
-      current = {
-        anchorX: item.displayX,
-        positions: [item.displayX],
-        startY: item.displayY,
-        items: [item],
-      };
-      columns.push(current);
-    } else {
-      current.positions.push(item.displayX);
-      current.items.push(item);
-    }
-
-    previous = item;
-  }
-
-  const physicalColumns = columns
+  const physicalColumns = clusterVerticalGlyphColumns(items, bodyFontSize)
     .map((column) => ({
-      position: median(column.positions),
+      position: column.position,
       itemCount: column.items.length,
       text: column.items.map((item) => item.text.trim()).join(""),
     }))
-    .filter((column) => column.text.length > 0)
-    .sort((left, right) => right.position - left.position);
+    .filter((column) => column.text.length > 0);
 
   return mergeVerticalColumns(physicalColumns, bodyFontSize);
 }
@@ -510,7 +414,7 @@ export function reconstructPageFlow(page: InspectPage): PageFlowResult {
     metrics.singleCharItemRatio >= 0.7 &&
     metrics.sequenceVerticalRatio >= 0.6
   ) {
-    built = buildVerticalGlyphSequenceGroups(primaryItems, bodyFontSize);
+    built = buildVerticalGlyphGroups(primaryItems, bodyFontSize);
   } else if (orientation === "vertical") {
     built = buildVerticalGroups(primaryItems, bodyFontSize);
   } else if (orientation === "horizontal") {
