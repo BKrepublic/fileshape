@@ -52,11 +52,20 @@ export type BodyFontEvidence = {
   bucketCount: number;
 };
 
+export type BodyFontSource = "page-local" | "document-prior";
+
+export type PageBodyFontInput = {
+  size: number;
+  evidence: BodyFontEvidence;
+  source: BodyFontSource;
+};
+
 export type PageFlowResult = {
   orientation: WritingOrientation;
   bodyFontSize: number;
-  /** Compact page-local evidence behind bodyFontSize; retained for later document context. */
+  /** Compact page-local evidence retained even when document context resolves the final size. */
   bodyFontEvidence: BodyFontEvidence;
+  bodyFontSource: BodyFontSource;
   primaryItemCount: number;
   annotationItemCount: number;
   marginNoiseItemCount: number;
@@ -347,10 +356,12 @@ function renderSourceSpacingText(groups: FlowGroup[], boundaries: FlowBoundary[]
 export function reconstructPageFlow(
   page: InspectPage,
   marginProfile?: DocumentMarginProfile,
+  bodyFontInput?: PageBodyFontInput,
 ): PageFlowResult {
   const nonEmptyItems = page.textItems.filter((item) => item.text.trim().length > 0);
-  const bodyFontEvidence = measureBodyFontEvidence(nonEmptyItems);
-  const bodyFontSize = bodyFontEvidence.size;
+  const bodyFontEvidence = bodyFontInput?.evidence ?? measureBodyFontEvidence(nonEmptyItems);
+  const bodyFontSize = bodyFontInput?.size ?? bodyFontEvidence.size;
+  const bodyFontSource = bodyFontInput?.source ?? "page-local";
   const itemEvidence = collectTextItemEvidence(page, bodyFontSize, marginProfile);
 
   const marginNoiseItems = itemEvidence
@@ -379,6 +390,7 @@ export function reconstructPageFlow(
     orientation,
     bodyFontSize: round(bodyFontSize, 2),
     bodyFontEvidence,
+    bodyFontSource,
     primaryItemCount: primaryItems.length,
     annotationItemCount: annotationItems.length,
     marginNoiseItemCount: marginNoiseItems.length,
