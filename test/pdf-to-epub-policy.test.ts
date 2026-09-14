@@ -28,7 +28,7 @@ const unresolvedPdf = () => pdfBytes(
   "BT /F1 20 Tf 1 0 0 1 100 500 Tm (Body) Tj ET\nBT /F1 10 Tf 1 0 0 1 400 100 Tm (note) Tj ET",
 );
 
-test("PDF-to-EPUB conversion preserves unresolved annotation text by default", async () => {
+test("PDF-to-EPUB conversion retains unresolved annotation as hidden provenance by default", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "fileshape-policy-default-"));
   try {
     const input = path.join(directory, "unresolved.pdf");
@@ -42,8 +42,10 @@ test("PDF-to-EPUB conversion preserves unresolved annotation text by default", a
 
     assert.equal(result.unresolvedAnnotationCount, 1);
     const epubText = new TextDecoder().decode(await readFile(output));
-    assert.match(epubText, /fileshape-unresolved-annotation/);
-    assert.match(epubText, />note<\/p>/);
+    assert.match(epubText, /fileshape-unresolved-provenance-set/);
+    assert.match(epubText, /hidden="hidden" class="fileshape-unresolved-provenance"/);
+    assert.match(epubText, />note<\/span>/);
+    assert.doesNotMatch(epubText, /fileshape-unresolved-annotation/);
     assert.doesNotMatch(epubText, /<ruby>note/);
   } finally {
     await rm(directory, { recursive: true, force: true });
