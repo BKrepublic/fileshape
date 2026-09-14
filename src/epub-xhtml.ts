@@ -137,14 +137,12 @@ function renderPreservedNotes(notes: PreservedUnresolvedAnnotation[]): string {
   return `    <section class="fileshape-unresolved-notes" aria-label="Unresolved annotations">\n      <h2>Notes</h2>\n${items}\n    </section>`;
 }
 
-function renderHiddenProvenance(
-  entries: PreservedUnresolvedAnnotation[],
-): string {
+function renderHiddenProvenance(entries: PreservedUnresolvedAnnotation[]): string {
   if (entries.length === 0) return "";
   const items = entries.map((entry, index) => {
     const sourceRanges = escapeXmlAttribute(JSON.stringify(entry.sourceRanges));
     const alternatives = escapeXmlAttribute(JSON.stringify(entry.alternatives));
-    return `      <span hidden="hidden" class="fileshape-unresolved-provenance" data-fileshape-entry="${index + 1}" data-fileshape-reason="${escapeXmlAttribute(entry.reason)}" data-fileshape-source-ranges="${sourceRanges}" data-fileshape-alternatives="${alternatives}">${escapeXmlText(entry.text)}</span>`;
+    return `      <span hidden="hidden" class="fileshape-unresolved-provenance" data-fileshape-entry="${index + 1}" data-source-page="${entry.sourcePage}" data-fileshape-reason="${escapeXmlAttribute(entry.reason)}" data-fileshape-source-ranges="${sourceRanges}" data-fileshape-alternatives="${alternatives}">${escapeXmlText(entry.text)}</span>`;
   }).join("\n");
   return `    <div hidden="hidden" class="fileshape-unresolved-provenance-set" aria-hidden="true">\n${items}\n    </div>`;
 }
@@ -301,7 +299,6 @@ function renderSourcePageItems(
   document: FileShapeDocument,
   page: DocumentPage,
   notes: PreservedUnresolvedAnnotation[],
-  hiddenProvenance: PreservedUnresolvedAnnotation[],
   rubyMode: EpubRubyMode,
   heading: EpubInferredHeading | undefined,
   continueFromPrevious: boolean,
@@ -347,8 +344,6 @@ function renderSourcePageItems(
   }
   const preservedNotes = renderPreservedNotes(notes);
   if (preservedNotes.length > 0) bodyItems.push(preservedNotes);
-  const provenance = renderHiddenProvenance(hiddenProvenance);
-  if (provenance.length > 0) bodyItems.push(provenance);
   return bodyItems;
 }
 
@@ -399,7 +394,6 @@ function serializeLogicalXhtml(
       document,
       page,
       notesByPage.get(page.sourcePage) ?? [],
-      hiddenProvenanceByPage.get(page.sourcePage) ?? [],
       rubyMode,
       heading?.sourcePage === page.sourcePage ? heading : undefined,
       index > 0 && joins[index - 1] === true,
@@ -409,9 +403,15 @@ function serializeLogicalXhtml(
 
   if (mixedOrientation && activeOrientation !== undefined) bodyItems.push("    </section>");
 
+  const hiddenProvenance = pages.flatMap((page) =>
+    hiddenProvenanceByPage.get(page.sourcePage) ?? []);
+  const provenanceMarkup = renderHiddenProvenance(hiddenProvenance);
+  if (provenanceMarkup.length > 0) bodyItems.push(provenanceMarkup);
+
   // Do not inject formatting whitespace between fragments: a paragraph may
-  // remain open across a physical PDF page boundary. Mixed-orientation runs are
-  // wrapped only at boundaries where continuation is already prohibited.
+  // remain open across a physical PDF page boundary. Hidden provenance is added
+  // only after all visible page fragments are closed, so it cannot interrupt a
+  // continued paragraph. Mixed-orientation runs are also closed before it.
   const body = bodyItems.length === 0 ? "" : `\n${bodyItems.join("")}\n  `;
   const bodyAttributes = mixedOrientation
     ? 'class="fileshape-page fileshape-mixed-orientation"'
