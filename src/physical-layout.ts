@@ -178,27 +178,37 @@ function sourceItemIndex(item: InspectTextItem): number | undefined {
   return item.source?.itemIndex;
 }
 
-function verticalGlyphOrder(a: InspectTextItem, b: InspectTextItem): number {
-  const yDifference = a.displayY - b.displayY;
-  const aExtent = Math.max(Math.abs(a.height), a.fontSize * 0.8, 1);
-  const bExtent = Math.max(Math.abs(b.height), b.fontSize * 0.8, 1);
-  const nearTie = Math.abs(yDifference) < Math.min(aExtent, bExtent) * 0.75;
+function verticalGlyphExtent(item: InspectTextItem): number {
+  return Math.max(Math.abs(item.height), item.fontSize * 0.8, 1);
+}
 
-  // Vertical punctuation and rotated glyphs may have shifted display origins.
-  // Once geometry has already placed two items in the same physical column,
-  // overlapping/near-overlapping advance cells do not provide a reliable order.
-  // Preserve exact PDF source order only for that local tie; larger separations
-  // still use geometry so interleaved or unusual producer emission remains safe.
-  if (nearTie) {
-    const aSource = sourceItemIndex(a);
-    const bSource = sourceItemIndex(b);
-    if (aSource !== undefined && bSource !== undefined && aSource !== bSource) {
-      return aSource - bSource;
+function orderVerticalGlyphItems(items: InspectTextItem[]): InspectTextItem[] {
+  const geometric = [...items].sort((a, b) =>
+    a.displayY - b.displayY || a.displayX - b.displayX ||
+    ((sourceItemIndex(a) ?? 0) - (sourceItemIndex(b) ?? 0)));
+  const ordered: InspectTextItem[] = [];
+
+  for (let start = 0; start < geometric.length;) {
+    let end = start + 1;
+    while (end < geometric.length) {
+      const previous = geometric[end - 1]!;
+      const current = geometric[end]!;
+      const gap = current.displayY - previous.displayY;
+      const localTie = gap < Math.min(verticalGlyphExtent(previous), verticalGlyphExtent(current)) * 0.75;
+      if (!localTie) break;
+      end += 1;
     }
+
+    const group = geometric.slice(start, end);
+    const hasCompleteSourceOrder = group.every((item) => sourceItemIndex(item) !== undefined);
+    if (group.length > 1 && hasCompleteSourceOrder) {
+      group.sort((a, b) => sourceItemIndex(a)! - sourceItemIndex(b)!);
+    }
+    ordered.push(...group);
+    start = end;
   }
 
-  return yDifference || a.displayX - b.displayX ||
-    ((sourceItemIndex(a) ?? 0) - (sourceItemIndex(b) ?? 0));
+  return ordered;
 }
 
 function buildVerticalGlyphUnits(
@@ -216,7 +226,7 @@ function buildVerticalGlyphUnits(
   const tolerance = Math.max(8, bodyFontSize * 1.25);
   return clusterByAxis(items, "x", tolerance)
     .map((unit) => {
-      const orderedItems = [...unit.items].sort(verticalGlyphOrder);
+      const orderedItems = orderVerticalGlyphItems(unit.items);
       return {
         position: median(unit.positions),
         items: orderedItems,
