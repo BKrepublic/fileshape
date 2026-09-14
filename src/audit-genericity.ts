@@ -3,6 +3,7 @@ import path from "node:path";
 import process from "node:process";
 import { resolveDocumentOrientations } from "./document-orientation.js";
 import type { SourceOutlineItem } from "./document-navigation.js";
+import { summarizeOrientationEvidence } from "./orientation-evidence.js";
 import { inspectPdf } from "./pdf-inspector.js";
 import { reconstructPageFlow, type PageFlowResult, type WritingOrientation } from "./text-flow.js";
 
@@ -37,6 +38,9 @@ type FileAudit = {
   detected: OrientationCounts;
   resolved: OrientationCounts;
   contextResolved: number;
+  contextFilledUnknown: number;
+  contextRepairedKnown: number;
+  repairedKnownPages: PageAudit[];
   isolatedKnownFlips: number[];
   weakKnownPages: PageAudit[];
   bodyFontQ10: number;
@@ -92,19 +96,6 @@ function outlineCounts(items: SourceOutlineItem[] | undefined): { total: number;
   return { total, resolved };
 }
 
-function orientationEvidence(flow: PageFlowResult): { vertical: number; horizontal: number; margin: number } {
-  const m = flow.metrics;
-  // Diagnostic only. Preserve the individual production metrics and summarize
-  // how strongly they disagree. This score must not become a production rule.
-  const vertical = Math.max(m.verticalRunRatio, m.verticalBaselineRatio, m.sequenceVerticalRatio);
-  const horizontal = Math.max(m.horizontalRunRatio, m.horizontalBaselineRatio, m.sequenceHorizontalRatio);
-  return {
-    vertical: round(vertical, 4),
-    horizontal: round(horizontal, 4),
-    margin: round(Math.abs(vertical - horizontal), 4),
-  };
-}
-
 function isolatedKnownFlips(pages: PageAudit[]): number[] {
   const flips: number[] = [];
   for (let index = 1; index + 1 < pages.length; index += 1) {
@@ -122,6 +113,7 @@ function pageLabel(page: PageAudit): string {
   return [
     `p${page.page}`,
     `${page.detected}->${page.resolved}`,
+    `source=${page.resolutionSource}`,
     `margin=${page.evidenceMargin.toFixed(3)}`,
     `V/H=${page.evidenceVertical.toFixed(3)}/${page.evidenceHorizontal.toFixed(3)}`,
     `run=${m.verticalRunRatio.toFixed(2)}/${m.horizontalRunRatio.toFixed(2)}`,
@@ -136,12 +128,16 @@ async function auditFile(filePath: string): Promise<FileAudit> {
   const inspection = await inspectPdf(filePath);
   const flows = inspection.pages.map((page) => ({ page: page.page, flow: reconstructPageFlow(page) }));
   const orientationResolution = resolveDocumentOrientations(
-    flows.map(({ page, flow }) => ({ page, orientation: flow.orientation })),
+    flows.map(({ page, flow }) => ({
+      page,
+      orientation: flow.orientation,
+      evidence: summarizeOrientationEvidence(flow.orientation, flow.metrics),
+    })),
   );
   const resolvedByPage = new Map(orientationResolution.map((entry) => [entry.page, entry]));
 
   const pages: PageAudit[] = flows.map(({ page, flow }) => {
-    const evidence = orientationEvidence(flow);
+    const evidence = summarizeOrientationEvidence(flow.orientation, flow.metrics);
     const resolved = resolvedByPage.get(page);
     return {
       page,
@@ -162,11 +158,19 @@ async function auditFile(filePath: string): Promise<FileAudit> {
   const weakKnownPages = pages
     .filter((page) => page.detected !== "unknown" && page.evidenceMargin < DIAGNOSTIC_WEAK_MARGIN)
     .sort((a, b) => a.evidenceMargin - b.evidenceMargin || a.page - b.page);
+  const repairedKnownPages = pages
+    .filter((page) => page.detected !== "unknown" && page.resolved !== page.detected)
+    .sort((a, b) => a.page - b.page);
   const flips = isolatedKnownFlips(pages);
   const flipSet = new Set(flips);
+  const repairedKnownSet = new Set(repairedKnownPages.map((page) => page.page));
   const suspicious = [...pages]
-    .filter((page) => flipSet.has(page.page) || weakKnownPages.includes(page))
-    .sort((a, b) => Number(flipSet.has(b.page)) - Number(flipSet.has(a.page)) || a.evidenceMargin - b.evidenceMargin || a.page - b.page)
+    .filter((page) => flipSet.has(page.page) || repairedKnownSet.has(page.page) || weakKnownPages.includes(page))
+    .sort((a, b) =>
+      Number(repairedKnownSet.has(b.page)) - Number(repairedKnownSet.has(a.page))
+      || Number(flipSet.has(b.page)) - Number(flipSet.has(a.page))
+      || a.evidenceMargin - b.evidenceMargin
+      || a.page - b.page)
     .slice(0, MAX_SUSPICIOUS_PAGES);
 
   const bodyFonts = pages.map((page) => page.bodyFontSize).filter((value) => value > 0);
@@ -176,6 +180,7 @@ async function auditFile(filePath: string): Promise<FileAudit> {
     return denominator === 0 ? 0 : page.annotationItems / denominator;
   });
   const outlines = outlineCounts(inspection.outline);
+  const contextPages = pages.filter((page) => page.resolutionSource === "document-context");
 
   return {
     file: path.basename(filePath),
@@ -184,7 +189,10 @@ async function auditFile(filePath: string): Promise<FileAudit> {
     outlineResolved: outlines.resolved,
     detected: countOrientation(pages.map((page) => page.detected)),
     resolved: countOrientation(pages.map((page) => page.resolved)),
-    contextResolved: pages.filter((page) => page.resolutionSource === "document-context").length,
+    contextResolved: contextPages.length,
+    contextFilledUnknown: contextPages.filter((page) => page.detected === "unknown").length,
+    contextRepairedKnown: repairedKnownPages.length,
+    repairedKnownPages,
     isolatedKnownFlips: flips,
     weakKnownPages,
     bodyFontQ10: round(quantile(bodyFonts, 0.1), 2),
@@ -205,9 +213,13 @@ function printAudit(result: FileAudit): void {
   const r = result.resolved;
   console.log(`FILE=${result.file}`);
   console.log(`  pages=${result.pages} outline=${result.outlineResolved}/${result.outlineTotal}`);
-  console.log(`  detected V/H/U=${d.vertical}/${d.horizontal}/${d.unknown} resolved V/H/U=${r.vertical}/${r.horizontal}/${r.unknown} contextFilled=${result.contextResolved}`);
+  console.log(`  detected V/H/U=${d.vertical}/${d.horizontal}/${d.unknown} resolved V/H/U=${r.vertical}/${r.horizontal}/${r.unknown}`);
+  console.log(`  contextResolved=${result.contextResolved} unknownFilled=${result.contextFilledUnknown} knownRepaired=${result.contextRepairedKnown}`);
   console.log(`  isolatedKnownFlips=${result.isolatedKnownFlips.length}${result.isolatedKnownFlips.length ? ` pages=${result.isolatedKnownFlips.slice(0, 20).join(",")}` : ""}`);
   console.log(`  weakKnown(margin<${DIAGNOSTIC_WEAK_MARGIN})=${result.weakKnownPages.length}`);
+  if (result.repairedKnownPages.length > 0) {
+    console.log(`  repairedKnownPages=${result.repairedKnownPages.map((page) => page.page).join(",")}`);
+  }
   console.log(`  bodyFont q10/q50/q90=${result.bodyFontQ10}/${result.bodyFontQ50}/${result.bodyFontQ90}`);
   console.log(`  evidenceMargin q10/q50/q90=${result.evidenceMarginQ10}/${result.evidenceMarginQ50}/${result.evidenceMarginQ90}`);
   console.log(`  annotationFraction q50/q90=${result.annotationFractionQ50}/${result.annotationFractionQ90} pagesWithMarginNoise=${result.pagesWithMarginNoise}`);
@@ -241,9 +253,12 @@ async function main(): Promise<void> {
   const totalPages = results.reduce((sum, result) => sum + result.pages, 0);
   const totalFlips = results.reduce((sum, result) => sum + result.isolatedKnownFlips.length, 0);
   const totalWeak = results.reduce((sum, result) => sum + result.weakKnownPages.length, 0);
+  const totalUnknownFilled = results.reduce((sum, result) => sum + result.contextFilledUnknown, 0);
+  const totalKnownRepaired = results.reduce((sum, result) => sum + result.contextRepairedKnown, 0);
   console.log(RULE);
   console.log(`TOTAL pdfs=${results.length} pages=${totalPages} isolatedKnownFlips=${totalFlips} weakKnown=${totalWeak}`);
-  console.log("Use these distributions to design confidence/document-context rules; do not patch listed pages.");
+  console.log(`TOTAL context unknownFilled=${totalUnknownFilled} knownRepaired=${totalKnownRepaired}`);
+  console.log("Use these distributions to inspect resolver impact; do not patch listed pages or copy diagnostic thresholds into production.");
   console.log(RULE);
 }
 
