@@ -191,9 +191,22 @@ function validateStructuralHeadings(
     a.sourcePage - b.sourcePage || a.semanticBlockIndex - b.semanticBlockIndex);
 }
 
+function outlineBoundaryPages(document: FileShapeDocument): Set<number> {
+  const boundaries = new Set<number>();
+  const visit = (items: NonNullable<FileShapeDocument["navigation"]>): void => {
+    for (const item of items) {
+      if (item.target.status === "resolved") boundaries.add(item.target.sourcePage);
+      visit(item.children);
+    }
+  };
+  visit(document.navigation ?? []);
+  return boundaries;
+}
+
 function logicalGroups(
   pages: DocumentPage[],
   headings: EpubInferredHeading[],
+  outlineBoundaries: ReadonlySet<number>,
 ): Array<{ pages: DocumentPage[]; heading?: EpubInferredHeading }> {
   const headingByPage = new Map<number, EpubInferredHeading>();
   for (const heading of headings) {
@@ -203,27 +216,29 @@ function logicalGroups(
     headingByPage.set(heading.sourcePage, heading);
   }
 
-  if (headingByPage.size === 0) return pages.map((page) => ({ pages: [page] }));
+  const boundaryPages = new Set(outlineBoundaries);
+  for (const page of headingByPage.keys()) boundaryPages.add(page);
+  if (boundaryPages.size === 0) return pages.map((page) => ({ pages: [page] }));
 
   const groups: Array<{ pages: DocumentPage[]; heading?: EpubInferredHeading }> = [];
   let current: { pages: DocumentPage[]; heading?: EpubInferredHeading } | undefined;
-  let chapterFlowStarted = false;
 
   for (const page of pages) {
     const heading = headingByPage.get(page.sourcePage);
-    if (heading) {
+    const previous = current?.pages.at(-1);
+    const startsBoundary = boundaryPages.has(page.sourcePage);
+    const changesOrientation = previous !== undefined && previous.orientation !== page.orientation;
+
+    if (current === undefined || startsBoundary || changesOrientation) {
       if (current) groups.push(current);
-      current = { pages: [page], heading };
-      chapterFlowStarted = true;
+      current = {
+        pages: [page],
+        ...(heading === undefined ? {} : { heading }),
+      };
       continue;
     }
 
-    if (chapterFlowStarted && current) {
-      current.pages.push(page);
-      continue;
-    }
-
-    groups.push({ pages: [page] });
+    current.pages.push(page);
   }
 
   if (current) groups.push(current);
@@ -376,10 +391,11 @@ export function serializeEpubXhtml(
   const notesByPage = new Map(policy.pages.map((page) => [page.sourcePage, page.notes]));
   const headings = validateStructuralHeadings(document, options.structuralHeadings ?? []);
   const headingByPage = new Map(headings.map((heading) => [heading.sourcePage, heading]));
+  const outlineBoundaries = outlineBoundaryPages(document);
 
   return {
     documentId: document.id,
-    pages: logicalGroups(document.pages, headings).map((group) => {
+    pages: logicalGroups(document.pages, headings, outlineBoundaries).map((group) => {
       const firstPage = group.pages[0];
       if (!firstPage) throw new Error("logical EPUB group is empty");
       return {
