@@ -149,3 +149,75 @@ test("keeps a large-gap boundary while retaining both threshold channels", () =>
   assert.equal(decision?.largeGap, true);
   assert.equal(decision?.join, false);
 });
+
+function semanticDecisionAtParagraphGap(gap: number) {
+  const result = buildSemanticBlocks(
+    layout([
+      unit(0, 700, "前半", 0.1, 0.9),
+      unit(1, 676, "中間", 0.12, 0.88),
+      unit(2, 676 - gap, "後半", 0.14, 0.4),
+    ]),
+    14,
+  );
+  const decision = result.decisions[1];
+  assert.ok(decision);
+  return decision;
+}
+
+test("semantic paragraph separation is strict above the exact threshold", () => {
+  const atThreshold = semanticDecisionAtParagraphGap(41.5);
+  assert.equal(atThreshold.paragraphGapThreshold, 41.5);
+  assert.equal(atThreshold.largeGap, false);
+  assert.equal(atThreshold.join, false);
+  assert.equal(atThreshold.reason, "independent-unit");
+
+  const justBelow = semanticDecisionAtParagraphGap(41.5 - 1e-6);
+  assert.equal(justBelow.largeGap, false);
+
+  const justAbove = semanticDecisionAtParagraphGap(41.5 + 1e-6);
+  assert.equal(justAbove.largeGap, true);
+  assert.equal(justAbove.join, false);
+  assert.equal(justAbove.reason, "large-gap");
+});
+
+test("semantic paragraph decisions preserve normalized spacing under scale", () => {
+  const baseline = buildSemanticBlocks(
+    layout([
+      unit(0, 700, "前半", 0.1, 0.9),
+      unit(1, 676, "中間", 0.12, 0.88),
+      unit(2, 616, "後半", 0.14, 0.4),
+    ]),
+    14,
+  );
+
+  const scale = 2;
+  const scaled = buildSemanticBlocks(
+    layout([
+      unit(0, 700 * scale, "前半", 0.1, 0.9),
+      unit(1, 676 * scale, "中間", 0.12, 0.88),
+      unit(2, 616 * scale, "後半", 0.14, 0.4),
+    ]),
+    14 * scale,
+  );
+
+  assert.deepEqual(
+    scaled.decisions.map((decision) => ({
+      source: decision.normalGapSource,
+      sampleCount: decision.normalGapSampleCount,
+      gapRatio: decision.gapRatio,
+      nearNormalGap: decision.nearNormalGap,
+      largeGap: decision.largeGap,
+      join: decision.join,
+      reason: decision.reason,
+    })),
+    baseline.decisions.map((decision) => ({
+      source: decision.normalGapSource,
+      sampleCount: decision.normalGapSampleCount,
+      gapRatio: decision.gapRatio,
+      nearNormalGap: decision.nearNormalGap,
+      largeGap: decision.largeGap,
+      join: decision.join,
+      reason: decision.reason,
+    })),
+  );
+});

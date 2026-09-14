@@ -160,6 +160,59 @@ test("stores large inter-column gaps as spacing evidence", () => {
   );
 });
 
+function paragraphGapBoundaryPage(lastGap: number, translation = 0): InspectPage {
+  const horizontalGlyphTransform = [14, 0, 0, 14, 0, 0];
+  const columnPositions = [800, 750, 672.5, 672.5 - lastGap].map((position) => position + translation);
+  const items = columnPositions.flatMap((displayX, columnIndex) => [
+    item({
+      text: String.fromCharCode(0x41 + columnIndex * 2),
+      displayX,
+      displayY: 100,
+      displayTransform: horizontalGlyphTransform,
+    }),
+    item({
+      text: String.fromCharCode(0x42 + columnIndex * 2),
+      displayX,
+      displayY: 114,
+      displayTransform: horizontalGlyphTransform,
+    }),
+  ]);
+  return page(items);
+}
+
+test("flow paragraph grouping accepts the exact inclusive threshold", () => {
+  const atThreshold = reconstructPageFlow(paragraphGapBoundaryPage(77.5));
+  assert.deepEqual(atThreshold.groups.map((group) => group.text), ["ABCD", "EF", "GH"]);
+  assert.deepEqual(atThreshold.boundaries.map((boundary) => boundary.gap), [77.5, 77.5]);
+
+  const justBelow = reconstructPageFlow(paragraphGapBoundaryPage(77.5 - 1e-6));
+  assert.deepEqual(justBelow.groups.map((group) => group.text), ["ABCD", "EFGH"]);
+  assert.deepEqual(justBelow.boundaries.map((boundary) => boundary.gap), [77.5]);
+});
+
+test("flow paragraph spacing is invariant under coordinate translation", () => {
+  const baseline = reconstructPageFlow(paragraphGapBoundaryPage(77.5));
+  const translated = reconstructPageFlow(paragraphGapBoundaryPage(77.5, -200));
+
+  assert.deepEqual(translated.groups.map((group) => group.text), baseline.groups.map((group) => group.text));
+  assert.deepEqual(
+    translated.boundaries.map((boundary) => ({
+      gap: boundary.gap,
+      normalPitch: boundary.normalPitch,
+      source: boundary.normalPitchSource,
+      sampleCount: boundary.normalPitchSampleCount,
+      gapRatio: boundary.gapRatio,
+    })),
+    baseline.boundaries.map((boundary) => ({
+      gap: boundary.gap,
+      normalPitch: boundary.normalPitch,
+      source: boundary.normalPitchSource,
+      sampleCount: boundary.normalPitchSampleCount,
+      gapRatio: boundary.gapRatio,
+    })),
+  );
+});
+
 test("keeps shifted vertical punctuation and long marks in source sequence", () => {
   const horizontalGlyphTransform = [14, 0, 0, 14, 0, 0];
   const result = reconstructPageFlow(
