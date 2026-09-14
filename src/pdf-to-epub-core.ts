@@ -181,9 +181,11 @@ export async function convertPdfBytesToEpubWithResources(
       },
     },
   );
-  const structuralHeadings = inspection.outline && inspection.outline.length > 0
-    ? []
-    : inferStructuralHeadings(document, inspection);
+  // Source outline navigation and rendered structural headings are independent
+  // evidence channels. Keep both: the outline remains the authoritative EPUB TOC,
+  // while recurring source-backed block style may still define logical XHTML
+  // boundaries and heading markup inside those outline sections.
+  const structuralHeadings = inferStructuralHeadings(document, inspection);
   control?.throwIfCancelled?.();
   const serializationStartUnits = 1 + inspection.pageCount * 3;
   control?.onProgress?.({
