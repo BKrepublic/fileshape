@@ -83,7 +83,11 @@ export function buildDocumentMarginProfile(
     for (const [itemIndex, item] of page.textItems.entries()) {
       if (item.text.trim().length === 0) continue;
       const evidence = measureMarginNoiseEvidence(item, page, bodyFontSize);
-      if (!evidence.localCandidate || evidence.fontRatio === undefined) continue;
+      if (
+        !evidence.localCandidate ||
+        evidence.fontRatio === undefined ||
+        evidence.edgeSide === "none"
+      ) continue;
       candidates.push({
         key: marginItemKey(page.page, itemIndex),
         page: page.page,
