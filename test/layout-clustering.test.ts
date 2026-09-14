@@ -4,8 +4,11 @@ import type { InspectTextItem } from "../src/pdf-inspection-model.js";
 import {
   clusterTextItemsByAxis,
   clusterVerticalGlyphColumns,
+  glyphSequenceRatios,
   ordinaryCrossAxisTolerance,
+  singleCharItemRatio,
   verticalGlyphColumnTolerance,
+  verticalTextLayoutMode,
 } from "../src/layout-clustering.js";
 import { fullTextRef } from "../src/source-text.js";
 
@@ -72,4 +75,38 @@ test("vertical glyph order uses source order only inside a local overlap group",
     item("上", 700, 100, 1),
   ], 14)[0]!;
   assert.equal(separated.items.map((entry) => entry.text).join(""), "上下");
+});
+
+test("vertical layout mode requires both glyph dominance and vertical sequence evidence", () => {
+  const verticalGlyphs = [
+    item("a", 700, 100, 0),
+    item("b", 700, 114, 1),
+    item("c", 700, 128, 2),
+    item("d", 700, 142, 3),
+  ];
+  assert.equal(singleCharItemRatio(verticalGlyphs), 1);
+  assert.deepEqual(glyphSequenceRatios(verticalGlyphs), { vertical: 1, horizontal: 0 });
+  assert.equal(verticalTextLayoutMode(verticalGlyphs), "glyph");
+
+  const horizontalSequence = [
+    item("a", 100, 100, 0),
+    item("b", 114, 100, 1),
+    item("c", 128, 100, 2),
+    item("d", 142, 100, 3),
+  ];
+  assert.equal(singleCharItemRatio(horizontalSequence), 1);
+  assert.deepEqual(glyphSequenceRatios(horizontalSequence), { vertical: 0, horizontal: 1 });
+  assert.equal(verticalTextLayoutMode(horizontalSequence), "run");
+});
+
+test("vertical layout mode stays run-based below glyph-dominant representation", () => {
+  const mixedEmission = [
+    item("ab", 700, 100, 0),
+    item("cd", 700, 114, 1),
+    item("e", 700, 128, 2),
+    item("f", 700, 142, 3),
+    item("g", 700, 156, 4),
+  ];
+  assert.equal(singleCharItemRatio(mixedEmission), 0.6);
+  assert.equal(verticalTextLayoutMode(mixedEmission), "run");
 });
