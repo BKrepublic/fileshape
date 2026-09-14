@@ -57,6 +57,12 @@ export type RubyInlineNode = {
 
 export type InlineNode = TextInlineNode | RubyInlineNode;
 
+export type DocumentBlockEdgeGeometry = {
+  firstUnitInlineStartRatio: number;
+  lastUnitInlineEndRatio: number;
+  lastUnitInlineCoverageRatio: number;
+};
+
 export type DocumentTextBlock = {
   kind: "text";
   sourcePage: number;
@@ -67,6 +73,8 @@ export type DocumentTextBlock = {
   /** Complete source coverage owned by this semantic block before inline splitting. */
   sourceRanges: SourceTextRef[];
   inlines: InlineNode[];
+  /** Physical edge evidence for content-independent cross-page reflow. */
+  edgeGeometry?: DocumentBlockEdgeGeometry;
 };
 
 export type DocumentImageResource = {
@@ -124,7 +132,7 @@ export type DocumentPageInput = {
   orientation: WritingOrientation;
   semantic: SemanticPageBlocks;
   rubySpans: RubySpan[];
-  /** Physical positions used to assign image/text placement gaps. */
+  /** Physical positions used to assign image/text placement gaps and reflow edge evidence. */
   layout?: PhysicalPageLayout;
 };
 
@@ -380,6 +388,22 @@ function assignedExactSpans(semantic: SemanticPageBlocks, rubySpans: RubySpan[])
   return { byBlock, unmapped };
 }
 
+function blockEdgeGeometry(
+  layout: PhysicalPageLayout | undefined,
+  unitIndexes: number[],
+): DocumentBlockEdgeGeometry | undefined {
+  if (!layout || unitIndexes.length === 0) return undefined;
+  const byIndex = new Map(layout.units.map((unit) => [unit.index, unit]));
+  const first = byIndex.get(unitIndexes[0]!);
+  const last = byIndex.get(unitIndexes.at(-1)!);
+  if (!first || !last) return undefined;
+  return {
+    firstUnitInlineStartRatio: first.inlineStartRatio,
+    lastUnitInlineEndRatio: last.inlineEndRatio,
+    lastUnitInlineCoverageRatio: last.inlineCoverageRatio,
+  };
+}
+
 export function buildFileShapeDocument(input: BuildDocumentInput): FileShapeDocument {
   const source = buildSourceStore(input.documentId, input.inspection);
   if (input.inspection.pageCount !== input.inspection.pages.length) {
@@ -397,6 +421,7 @@ export function buildFileShapeDocument(input: BuildDocumentInput): FileShapeDocu
     const { byBlock, unmapped } = assignedExactSpans(pageInput.semantic, pageInput.rubySpans);
     const blocks = pageInput.semantic.blocks.map((block): DocumentTextBlock => {
       const sourceRanges = cloneTextRefs(block.sourceRanges ?? []);
+      const edgeGeometry = blockEdgeGeometry(pageInput.layout, block.unitIndexes);
       return {
         kind: "text",
         sourcePage: inspectionPage.page,
@@ -405,6 +430,7 @@ export function buildFileShapeDocument(input: BuildDocumentInput): FileShapeDocu
         semanticText: block.text,
         sourceRanges,
         inlines: buildBlockInlines(source, block, byBlock.get(block) ?? []),
+        ...(edgeGeometry === undefined ? {} : { edgeGeometry }),
       };
     });
     return {

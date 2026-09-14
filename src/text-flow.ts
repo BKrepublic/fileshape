@@ -1,6 +1,31 @@
+import {
+  emptyAttachedRunEvidence,
+  measureAttachedRunEvidence,
+  type AttachedRunEvidence,
+} from "./attached-run-evidence.js";
+import {
+  clusterTextItemsByAxis,
+  clusterVerticalGlyphColumns,
+  glyphSequenceRatios,
+  ordinaryCrossAxisTolerance,
+  singleCharItemRatio as measureSingleCharItemRatio,
+  verticalTextLayoutMode,
+} from "./layout-clustering.js";
+import type { DocumentMarginProfile } from "./margin-recurrence.js";
 import type { InspectPage, InspectTextItem } from "./pdf-inspection-model.js";
+import {
+  decideMetricOrientation,
+  type OrientationMetrics,
+  type WritingOrientation,
+} from "./orientation-decision.js";
+import {
+  estimateNormalSpacing,
+  paragraphGapThreshold,
+  type SpacingEstimateSource,
+} from "./spacing-evidence.js";
+import { collectTextItemEvidence } from "./text-item-evidence.js";
 
-export type WritingOrientation = "vertical" | "horizontal" | "unknown";
+export type { WritingOrientation } from "./orientation-decision.js";
 
 export type FlowGroup = {
   position: number;
@@ -11,26 +36,43 @@ export type FlowGroup = {
 export type FlowBoundary = {
   gap: number;
   normalPitch: number;
+  normalPitchSource: SpacingEstimateSource;
+  normalPitchSampleCount: number;
   gapRatio: number;
   estimatedLineBreaks: number;
+};
+
+export type BodyFontEvidence = {
+  size: number;
+  totalWeight: number;
+  dominantWeight: number;
+  runnerUpWeight: number;
+  dominantSupportRatio: number;
+  dominanceMarginRatio: number;
+  bucketCount: number;
+};
+
+export type BodyFontSource = "page-local" | "document-prior";
+
+export type PageBodyFontInput = {
+  size: number;
+  evidence: BodyFontEvidence;
+  source: BodyFontSource;
 };
 
 export type PageFlowResult = {
   orientation: WritingOrientation;
   bodyFontSize: number;
+  /** Compact page-local evidence retained even when document context resolves the final size. */
+  bodyFontEvidence: BodyFontEvidence;
+  bodyFontSource: BodyFontSource;
   primaryItemCount: number;
   annotationItemCount: number;
   marginNoiseItemCount: number;
   groupCount: number;
-  metrics: {
-    singleCharItemRatio: number;
-    verticalRunRatio: number;
-    horizontalRunRatio: number;
-    verticalBaselineRatio: number;
-    horizontalBaselineRatio: number;
-    sequenceVerticalRatio: number;
-    sequenceHorizontalRatio: number;
-  };
+  metrics: OrientationMetrics;
+  /** Sparse endpoint-attachment evidence retained without promoting it to a page label. */
+  attachedRunEvidence: AttachedRunEvidence;
   groups: FlowGroup[];
   boundaries: FlowBoundary[];
   /** Logical text: physical line/column wrapping removed, paragraph boundaries normalized to one LF. */
@@ -48,22 +90,8 @@ function charCount(text: string): number {
   return [...text.trim()].length;
 }
 
-function median(values: number[]): number {
-  if (values.length === 0) return 0;
-  const sorted = [...values].sort((left, right) => left - right);
-  const middle = Math.floor(sorted.length / 2);
-  if (sorted.length % 2 === 1) return sorted[middle] ?? 0;
-  return ((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2;
-}
-
-function lowerQuartile(values: number[]): number {
-  if (values.length === 0) return 0;
-  const sorted = [...values].sort((left, right) => left - right);
-  const index = Math.floor((sorted.length - 1) * 0.25);
-  return sorted[index] ?? 0;
-}
-
-function dominantFontSize(items: InspectTextItem[]): number {
+/** Compact page-local body-font evidence shared with glyph-live ruby extraction. */
+export function measureBodyFontEvidence(items: readonly InspectTextItem[]): BodyFontEvidence {
   const buckets = new Map<number, number>();
 
   for (const item of items) {
@@ -73,110 +101,35 @@ function dominantFontSize(items: InspectTextItem[]): number {
     buckets.set(size, (buckets.get(size) ?? 0) + count);
   }
 
-  let bestSize = 0;
-  let bestWeight = -1;
-  for (const [size, weight] of buckets) {
-    if (weight > bestWeight || (weight === bestWeight && size > bestSize)) {
-      bestSize = size;
-      bestWeight = weight;
-    }
-  }
+  const ranked = [...buckets.entries()]
+    .map(([size, weight]) => ({ size, weight }))
+    .sort((left, right) => right.weight - left.weight || right.size - left.size);
+  const dominant = ranked[0];
+  const runnerUp = ranked[1];
+  const totalWeight = ranked.reduce((sum, entry) => sum + entry.weight, 0);
+  const dominantWeight = dominant?.weight ?? 0;
+  const runnerUpWeight = runnerUp?.weight ?? 0;
 
-  return bestSize;
-}
-
-function isMarginNoise(item: InspectTextItem, page: InspectPage, bodyFontSize: number): boolean {
-  const count = charCount(item.text);
-  if (count === 0 || count > 8) return false;
-
-  const nearTop = item.displayY < page.height * 0.08;
-  const nearBottom = item.displayY > page.height * 0.9;
-  const smallerThanBody = bodyFontSize > 0 && item.fontSize < bodyFontSize * 0.98;
-
-  return (nearTop || nearBottom) && smallerThanBody;
-}
-
-function glyphSequenceRatios(items: InspectTextItem[]): {
-  vertical: number;
-  horizontal: number;
-} {
-  const glyphs = items.filter((item) => charCount(item.text) === 1);
-  if (glyphs.length < 2) return { vertical: 0, horizontal: 0 };
-
-  let usable = 0;
-  let vertical = 0;
-  let horizontal = 0;
-
-  for (let index = 1; index < glyphs.length; index += 1) {
-    const previous = glyphs[index - 1];
-    const current = glyphs[index];
-    if (!previous || !current) continue;
-
-    const maxFontSize = Math.max(previous.fontSize, current.fontSize, 1);
-    const minFontSize = Math.min(previous.fontSize, current.fontSize);
-    if (minFontSize / maxFontSize < 0.75) continue;
-
-    const dx = Math.abs(current.displayX - previous.displayX);
-    const dy = Math.abs(current.displayY - previous.displayY);
-    const distance = Math.hypot(dx, dy);
-
-    if (distance < 0.5 || distance > maxFontSize * 2.75) continue;
-
-    if (dy > dx * 1.5) {
-      vertical += 1;
-      usable += 1;
-    } else if (dx > dy * 1.5) {
-      horizontal += 1;
-      usable += 1;
-    }
-  }
-
-  if (usable === 0) return { vertical: 0, horizontal: 0 };
   return {
-    vertical: vertical / usable,
-    horizontal: horizontal / usable,
+    size: dominant?.size ?? 0,
+    totalWeight,
+    dominantWeight,
+    runnerUpWeight,
+    dominantSupportRatio: totalWeight === 0 ? 0 : dominantWeight / totalWeight,
+    dominanceMarginRatio: totalWeight === 0 ? 0 : (dominantWeight - runnerUpWeight) / totalWeight,
+    bucketCount: ranked.length,
   };
 }
 
-/** A compact run has no reliable aspect-ratio vote. It may still continue a
- * long run when its origin is adjacent to that run's inline endpoint. Require
- * all remaining items to attach; isolated text and competing axes stay unknown.
- * Neither Unicode content nor glyph transform direction participates here. */
-function attachedRunOrientation(items: InspectTextItem[]): WritingOrientation {
-  const candidates = (["vertical", "horizontal"] as const).filter((orientation) => {
-    const inline = (item: InspectTextItem) => orientation === "vertical" ? item.displayY : item.displayX;
-    const cross = (item: InspectTextItem) => orientation === "vertical" ? item.displayX : item.displayY;
-    const extent = (item: InspectTextItem) => Math.abs(orientation === "vertical" ? item.height : item.width);
-    const breadth = (item: InspectTextItem) => Math.abs(orientation === "vertical" ? item.width : item.height);
-    const anchors = items.filter((item) => charCount(item.text) >= 2 &&
-      extent(item) >= item.fontSize * 3 && extent(item) > breadth(item) * 1.5);
-    if (anchors.length === 0) return false;
-    const anchorSet = new Set(anchors);
-    const pending = items.filter((item) => !anchorSet.has(item));
-    if (pending.length === 0) return false;
-    // A second elongated run is evidence of mixed layout, not an attachment.
-    if (pending.some((item) => item.fontSize <= 0 ||
-      Math.max(Math.abs(item.width), Math.abs(item.height)) > item.fontSize * 1.5)) return false;
-    const attached = [...anchors];
-    while (pending.length > 0) {
-      const index = pending.findIndex((item) => attached.some((parent) => {
-        const size = Math.max(parent.fontSize, item.fontSize);
-        const ratio = Math.min(parent.fontSize, item.fontSize) / size;
-        const gap = inline(item) - (inline(parent) + extent(parent));
-        return ratio >= 0.75 && Math.abs(cross(item) - cross(parent)) <= size * 0.5 &&
-          Math.abs(gap) <= size * 0.75 && inline(item) > inline(parent);
-      }));
-      if (index < 0) return false;
-      attached.push(...pending.splice(index, 1));
-    }
-    return true;
-  });
-  return candidates.length === 1 ? candidates[0]! : "unknown";
+/** Backwards-compatible numeric view of the retained body-font evidence. */
+export function estimateBodyFontSize(items: readonly InspectTextItem[]): number {
+  return measureBodyFontEvidence(items).size;
 }
 
 function detectOrientation(items: InspectTextItem[]): {
   orientation: WritingOrientation;
   metrics: PageFlowResult["metrics"];
+  attachedRunEvidence: AttachedRunEvidence;
 } {
   if (items.length === 0) {
     return {
@@ -190,10 +143,11 @@ function detectOrientation(items: InspectTextItem[]): {
         sequenceVerticalRatio: 0,
         sequenceHorizontalRatio: 0,
       },
+      attachedRunEvidence: emptyAttachedRunEvidence(),
     };
   }
 
-  const singleCharItems = items.filter((item) => charCount(item.text) === 1).length;
+  const singleCharItemRatio = measureSingleCharItemRatio(items);
   const multiCharItems = items.filter((item) => charCount(item.text) >= 2);
   const verticalRuns = multiCharItems.filter((item) => item.height > item.width * 1.5).length;
   const horizontalRuns = multiCharItems.filter((item) => item.width > item.height * 1.5).length;
@@ -207,45 +161,24 @@ function detectOrientation(items: InspectTextItem[]): {
     if (Math.abs(a) > Math.abs(b) * 1.5) horizontalBaselines += 1;
   }
 
-  const singleCharItemRatio = singleCharItems / items.length;
   const verticalRunRatio = multiCharItems.length === 0 ? 0 : verticalRuns / multiCharItems.length;
   const horizontalRunRatio = multiCharItems.length === 0 ? 0 : horizontalRuns / multiCharItems.length;
   const verticalBaselineRatio = verticalBaselines / items.length;
   const horizontalBaselineRatio = horizontalBaselines / items.length;
   const sequence = glyphSequenceRatios(items);
-
-  let orientation: WritingOrientation = "unknown";
-
-  if (verticalRunRatio >= 0.6 && verticalRunRatio > horizontalRunRatio) {
-    orientation = "vertical";
-  } else if (horizontalRunRatio >= 0.6 && horizontalRunRatio > verticalRunRatio) {
-    orientation = "horizontal";
-  } else if (
-    singleCharItemRatio >= 0.7 &&
-    sequence.vertical >= 0.6 &&
-    sequence.vertical > sequence.horizontal
-  ) {
-    orientation = "vertical";
-  } else if (
-    singleCharItemRatio >= 0.7 &&
-    sequence.horizontal >= 0.6 &&
-    sequence.horizontal > sequence.vertical
-  ) {
-    orientation = "horizontal";
-  } else if (singleCharItemRatio >= 0.7 && verticalBaselineRatio >= 0.6) {
-    orientation = "vertical";
-  } else if (singleCharItemRatio >= 0.7 && horizontalBaselineRatio >= 0.6) {
-    orientation = "horizontal";
-  } else if (verticalBaselineRatio > horizontalBaselineRatio * 1.5) {
-    orientation = "vertical";
-  } else if (horizontalBaselineRatio > verticalBaselineRatio * 1.5) {
-    orientation = "horizontal";
-  }
-
-  if (orientation === "unknown") orientation = attachedRunOrientation(items);
+  const rawMetrics: OrientationMetrics = {
+    singleCharItemRatio,
+    verticalRunRatio,
+    horizontalRunRatio,
+    verticalBaselineRatio,
+    horizontalBaselineRatio,
+    sequenceVerticalRatio: sequence.vertical,
+    sequenceHorizontalRatio: sequence.horizontal,
+  };
+  const metricDecision = decideMetricOrientation(rawMetrics);
 
   return {
-    orientation,
+    orientation: metricDecision.orientation,
     metrics: {
       singleCharItemRatio: round(singleCharItemRatio, 4),
       verticalRunRatio: round(verticalRunRatio, 4),
@@ -255,48 +188,10 @@ function detectOrientation(items: InspectTextItem[]): {
       sequenceVerticalRatio: round(sequence.vertical, 4),
       sequenceHorizontalRatio: round(sequence.horizontal, 4),
     },
+    attachedRunEvidence: metricDecision.orientation === "unknown"
+      ? measureAttachedRunEvidence(items)
+      : emptyAttachedRunEvidence(),
   };
-}
-
-type MutableGroup = {
-  position: number;
-  positions: number[];
-  items: InspectTextItem[];
-};
-
-function clusterByPosition(
-  items: InspectTextItem[],
-  axis: "x" | "y",
-  tolerance: number,
-): MutableGroup[] {
-  const coordinate = (item: InspectTextItem) => (axis === "x" ? item.displayX : item.displayY);
-  const ordered = [...items].sort((left, right) => coordinate(left) - coordinate(right));
-  const groups: MutableGroup[] = [];
-
-  for (const item of ordered) {
-    const value = coordinate(item);
-    let bestGroup: MutableGroup | undefined;
-    let bestDistance = Number.POSITIVE_INFINITY;
-
-    for (const group of groups) {
-      const distance = Math.abs(value - group.position);
-      if (distance <= tolerance && distance < bestDistance) {
-        bestGroup = group;
-        bestDistance = distance;
-      }
-    }
-
-    if (!bestGroup) {
-      groups.push({ position: value, positions: [value], items: [item] });
-      continue;
-    }
-
-    bestGroup.positions.push(value);
-    bestGroup.items.push(item);
-    bestGroup.position = median(bestGroup.positions);
-  }
-
-  return groups;
 }
 
 type GroupBuildResult = {
@@ -309,21 +204,6 @@ type PhysicalColumn = {
   itemCount: number;
   text: string;
 };
-
-function estimateNormalPitch(columns: PhysicalColumn[], bodyFontSize: number): number {
-  const gaps: number[] = [];
-  for (let index = 1; index < columns.length; index += 1) {
-    const previous = columns[index - 1];
-    const current = columns[index];
-    if (!previous || !current) continue;
-    const gap = previous.position - current.position;
-    if (gap > Math.max(1, bodyFontSize * 0.6)) gaps.push(gap);
-  }
-
-  if (gaps.length >= 2) return lowerQuartile(gaps);
-  if (bodyFontSize > 0) return bodyFontSize * 1.65;
-  return gaps[0] ?? 0;
-}
 
 function mergeVerticalColumns(
   columns: PhysicalColumn[],
@@ -339,11 +219,17 @@ function mergeVerticalColumns(
     };
   }
 
-  const normalPitch = estimateNormalPitch(columns, bodyFontSize);
-  const paragraphGapThreshold =
-    normalPitch > 0
-      ? Math.max(normalPitch * 1.55, normalPitch + bodyFontSize * 1.25)
-      : Number.POSITIVE_INFINITY;
+  const gaps = columns.slice(1).map((column, index) => {
+    const previous = columns[index];
+    return previous ? previous.position - column.position : 0;
+  });
+  const spacing = estimateNormalSpacing(
+    gaps,
+    bodyFontSize,
+    Math.max(1, bodyFontSize * 0.6),
+  );
+  const normalPitch = spacing.normal;
+  const paragraphThreshold = paragraphGapThreshold(normalPitch, bodyFontSize);
 
   const groups: FlowGroup[] = [];
   const boundaries: FlowBoundary[] = [];
@@ -358,7 +244,7 @@ function mergeVerticalColumns(
     if (index > 0) {
       const previousColumn = columns[index - 1];
       const gap = previousColumn ? previousColumn.position - column.position : 0;
-      if (gap >= paragraphGapThreshold && blockText.length > 0) {
+      if (gap >= paragraphThreshold && blockText.length > 0) {
         groups.push({
           position: round(blockPosition, 2),
           itemCount: blockItemCount,
@@ -369,6 +255,8 @@ function mergeVerticalColumns(
         boundaries.push({
           gap: round(gap, 2),
           normalPitch: round(normalPitch, 2),
+          normalPitchSource: spacing.source,
+          normalPitchSampleCount: spacing.sampleCount,
           gapRatio: round(gapRatio, 3),
           estimatedLineBreaks: Math.min(20, Math.max(1, Math.round(gapRatio))),
         });
@@ -395,18 +283,17 @@ function mergeVerticalColumns(
 }
 
 function buildVerticalGroups(items: InspectTextItem[], bodyFontSize: number): GroupBuildResult {
-  const tolerance = Math.max(1.5, bodyFontSize * 0.42);
-  const physicalColumns = clusterByPosition(items, "x", tolerance)
+  const physicalColumns = clusterTextItemsByAxis(items, "x", ordinaryCrossAxisTolerance(bodyFontSize))
     .sort((left, right) => right.position - left.position)
-    .map((group) => {
-      const orderedItems = [...group.items].sort((left, right) => {
+    .map((cluster) => {
+      const orderedItems = [...cluster.items].sort((left, right) => {
         const yDiff = left.displayY - right.displayY;
         if (Math.abs(yDiff) > 0.5) return yDiff;
         return right.fontSize - left.fontSize;
       });
 
       return {
-        position: group.position,
+        position: cluster.position,
         itemCount: orderedItems.length,
         text: orderedItems.map((item) => item.text).join(""),
       };
@@ -417,14 +304,13 @@ function buildVerticalGroups(items: InspectTextItem[], bodyFontSize: number): Gr
 }
 
 function buildHorizontalGroups(items: InspectTextItem[], bodyFontSize: number): GroupBuildResult {
-  const tolerance = Math.max(1.5, bodyFontSize * 0.42);
-  const groups = clusterByPosition(items, "y", tolerance)
+  const groups = clusterTextItemsByAxis(items, "y", ordinaryCrossAxisTolerance(bodyFontSize))
     .sort((left, right) => left.position - right.position)
-    .map((group) => {
-      const orderedItems = [...group.items].sort((left, right) => left.displayX - right.displayX);
+    .map((cluster) => {
+      const orderedItems = [...cluster.items].sort((left, right) => left.displayX - right.displayX);
 
       return {
-        position: round(group.position, 2),
+        position: round(cluster.position, 2),
         itemCount: orderedItems.length,
         text: orderedItems.map((item) => item.text).join(""),
       };
@@ -433,67 +319,17 @@ function buildHorizontalGroups(items: InspectTextItem[], bodyFontSize: number): 
   return { groups, boundaries: [] };
 }
 
-type SequenceColumn = {
-  anchorX: number;
-  positions: number[];
-  startY: number;
-  items: InspectTextItem[];
-};
-
-function buildVerticalGlyphSequenceGroups(
+function buildVerticalGlyphGroups(
   items: InspectTextItem[],
   bodyFontSize: number,
 ): GroupBuildResult {
-  if (items.length === 0) return { groups: [], boundaries: [] };
-
-  const shiftThreshold = Math.max(8, bodyFontSize * 1.25);
-  const columns: SequenceColumn[] = [];
-  let current: SequenceColumn | undefined;
-  let previous: InspectTextItem | undefined;
-
-  for (const item of items) {
-    if (!current) {
-      current = {
-        anchorX: item.displayX,
-        positions: [item.displayX],
-        startY: item.displayY,
-        items: [item],
-      };
-      columns.push(current);
-      previous = item;
-      continue;
-    }
-
-    const xShift = Math.abs(item.displayX - current.anchorX);
-    const yRestart = previous
-      ? item.displayY < previous.displayY - bodyFontSize * 0.5 ||
-        item.displayY <= current.startY + bodyFontSize * 1.5
-      : false;
-
-    if (xShift > shiftThreshold && yRestart) {
-      current = {
-        anchorX: item.displayX,
-        positions: [item.displayX],
-        startY: item.displayY,
-        items: [item],
-      };
-      columns.push(current);
-    } else {
-      current.positions.push(item.displayX);
-      current.items.push(item);
-    }
-
-    previous = item;
-  }
-
-  const physicalColumns = columns
+  const physicalColumns = clusterVerticalGlyphColumns(items, bodyFontSize)
     .map((column) => ({
-      position: median(column.positions),
+      position: column.position,
       itemCount: column.items.length,
       text: column.items.map((item) => item.text.trim()).join(""),
     }))
-    .filter((column) => column.text.length > 0)
-    .sort((left, right) => right.position - left.position);
+    .filter((column) => column.text.length > 0);
 
   return mergeVerticalColumns(physicalColumns, bodyFontSize);
 }
@@ -517,30 +353,33 @@ function renderSourceSpacingText(groups: FlowGroup[], boundaries: FlowBoundary[]
   return text;
 }
 
-export function reconstructPageFlow(page: InspectPage): PageFlowResult {
+export function reconstructPageFlow(
+  page: InspectPage,
+  marginProfile?: DocumentMarginProfile,
+  bodyFontInput?: PageBodyFontInput,
+): PageFlowResult {
   const nonEmptyItems = page.textItems.filter((item) => item.text.trim().length > 0);
-  const bodyFontSize = dominantFontSize(nonEmptyItems);
+  const bodyFontEvidence = bodyFontInput?.evidence ?? measureBodyFontEvidence(nonEmptyItems);
+  const bodyFontSize = bodyFontInput?.size ?? bodyFontEvidence.size;
+  const bodyFontSource = bodyFontInput?.source ?? "page-local";
+  const itemEvidence = collectTextItemEvidence(page, bodyFontSize, marginProfile);
 
-  const marginNoiseItems = nonEmptyItems.filter((item) => isMarginNoise(item, page, bodyFontSize));
-  const marginNoiseSet = new Set(marginNoiseItems);
-  const contentItems = nonEmptyItems.filter((item) => !marginNoiseSet.has(item));
+  const marginNoiseItems = itemEvidence
+    .filter((entry) => entry.visible && entry.marginNoise)
+    .map((entry) => entry.item);
+  const contentEvidence = itemEvidence.filter((entry) => entry.visible && !entry.marginNoise);
+  const annotationItems = contentEvidence
+    .filter((entry) => entry.annotationSized)
+    .map((entry) => entry.item);
+  const primaryItems = contentEvidence
+    .filter((entry) => !entry.annotationSized)
+    .map((entry) => entry.item);
 
-  const annotationThreshold = bodyFontSize * 0.75;
-  const annotationItems = contentItems.filter(
-    (item) => bodyFontSize > 0 && item.fontSize < annotationThreshold,
-  );
-  const annotationSet = new Set(annotationItems);
-  const primaryItems = contentItems.filter((item) => !annotationSet.has(item));
-
-  const { orientation, metrics } = detectOrientation(primaryItems);
+  const { orientation, metrics, attachedRunEvidence } = detectOrientation(primaryItems);
 
   let built: GroupBuildResult = { groups: [], boundaries: [] };
-  if (
-    orientation === "vertical" &&
-    metrics.singleCharItemRatio >= 0.7 &&
-    metrics.sequenceVerticalRatio >= 0.6
-  ) {
-    built = buildVerticalGlyphSequenceGroups(primaryItems, bodyFontSize);
+  if (orientation === "vertical" && verticalTextLayoutMode(primaryItems) === "glyph") {
+    built = buildVerticalGlyphGroups(primaryItems, bodyFontSize);
   } else if (orientation === "vertical") {
     built = buildVerticalGroups(primaryItems, bodyFontSize);
   } else if (orientation === "horizontal") {
@@ -550,11 +389,14 @@ export function reconstructPageFlow(page: InspectPage): PageFlowResult {
   return {
     orientation,
     bodyFontSize: round(bodyFontSize, 2),
+    bodyFontEvidence,
+    bodyFontSource,
     primaryItemCount: primaryItems.length,
     annotationItemCount: annotationItems.length,
     marginNoiseItemCount: marginNoiseItems.length,
     groupCount: built.groups.length,
     metrics,
+    attachedRunEvidence,
     groups: built.groups,
     boundaries: built.boundaries,
     text: renderLogicalText(built.groups),

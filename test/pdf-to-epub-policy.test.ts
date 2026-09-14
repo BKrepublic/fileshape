@@ -24,11 +24,34 @@ function pdfBytes(content: string): Buffer {
   return Buffer.from(text);
 }
 
+function storedZipEntryText(bytes: Uint8Array, expectedPath: string): string {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const decoder = new TextDecoder();
+  let offset = 0;
+
+  while (offset + 30 <= bytes.length && view.getUint32(offset, true) === 0x04034b50) {
+    const method = view.getUint16(offset + 8, true);
+    const compressedSize = view.getUint32(offset + 18, true);
+    const nameLength = view.getUint16(offset + 26, true);
+    const extraLength = view.getUint16(offset + 28, true);
+    const nameStart = offset + 30;
+    const dataStart = nameStart + nameLength + extraLength;
+    const entryPath = decoder.decode(bytes.slice(nameStart, nameStart + nameLength));
+    if (entryPath === expectedPath) {
+      assert.equal(method, 0, `${expectedPath} must remain a stored ZIP entry in this fixture`);
+      return decoder.decode(bytes.slice(dataStart, dataStart + compressedSize));
+    }
+    offset = dataStart + compressedSize;
+  }
+
+  assert.fail(`missing ZIP entry ${expectedPath}`);
+}
+
 const unresolvedPdf = () => pdfBytes(
   "BT /F1 20 Tf 1 0 0 1 100 500 Tm (Body) Tj ET\nBT /F1 10 Tf 1 0 0 1 400 100 Tm (note) Tj ET",
 );
 
-test("PDF-to-EPUB conversion preserves unresolved annotation text by default", async () => {
+test("PDF-to-EPUB conversion retains unresolved annotation as hidden provenance by default", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "fileshape-policy-default-"));
   try {
     const input = path.join(directory, "unresolved.pdf");
@@ -41,10 +64,14 @@ test("PDF-to-EPUB conversion preserves unresolved annotation text by default", a
     });
 
     assert.equal(result.unresolvedAnnotationCount, 1);
-    const epubText = new TextDecoder().decode(await readFile(output));
-    assert.match(epubText, /fileshape-unresolved-annotation/);
-    assert.match(epubText, />note<\/p>/);
-    assert.doesNotMatch(epubText, /<ruby>note/);
+    const epub = new Uint8Array(await readFile(output));
+    const content = storedZipEntryText(epub, "OEBPS/text/page-0001.xhtml");
+    assert.match(content, /fileshape-unresolved-provenance-set/);
+    assert.match(content, /hidden="hidden" class="fileshape-unresolved-provenance"/);
+    assert.match(content, />note<\/span>/);
+    assert.doesNotMatch(content, /fileshape-unresolved-annotation/);
+    assert.doesNotMatch(content, /fileshape-unresolved-notes/);
+    assert.doesNotMatch(content, /<ruby>note/);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

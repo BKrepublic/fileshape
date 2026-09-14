@@ -13,7 +13,7 @@ import { inferStructuralHeadings } from "./heading-inference.js";
 import { buildDocumentFromInspection } from "./pdf-document-pipeline.js";
 import { inspectPdfBytes } from "./pdf-inspector-core.js";
 import { associateRubySpans, type RubySpan } from "./ruby-spans.js";
-import { reconstructPageFlow } from "./text-flow.js";
+import { estimateBodyFontSize } from "./text-flow.js";
 import type { EpubNavigationSummary } from "./epub-navigation.js";
 import type { EpubRubyMode } from "./epub-xhtml.js";
 import type { PdfJsResourceConfig } from "./pdf-inspection-model.js";
@@ -110,13 +110,14 @@ export async function convertPdfBytesToEpubWithResources(
       },
       onPageInspected: (completedPages, _totalPages, page) => {
         // Ruby association needs glyph geometry only while this page is live.
-        // Keep the compact source-backed result and drop the heavy glyph
-        // evidence before inspection advances to the next page.
-        const flow = reconstructPageFlow(page);
+        // It only needs the compact body-font estimate, not full orientation,
+        // grouping or spacing reconstruction. The full flow pass runs once later
+        // during document construction after heavy glyph evidence is released.
+        const bodyFontSize = estimateBodyFontSize(page.textItems);
 
         precomputedRubySpans.set(
           page.page,
-          associateRubySpans(page, flow.bodyFontSize),
+          associateRubySpans(page, bodyFontSize),
         );
 
         delete page.operatorGlyphs;
@@ -181,9 +182,11 @@ export async function convertPdfBytesToEpubWithResources(
       },
     },
   );
-  const structuralHeadings = inspection.outline && inspection.outline.length > 0
-    ? []
-    : inferStructuralHeadings(document, inspection);
+  // Source outline navigation and rendered structural headings are independent
+  // evidence channels. Keep both: the outline remains the authoritative EPUB TOC,
+  // while recurring source-backed block style may still define logical XHTML
+  // boundaries and heading markup inside those outline sections.
+  const structuralHeadings = inferStructuralHeadings(document, inspection);
   control?.throwIfCancelled?.();
   const serializationStartUnits = 1 + inspection.pageCount * 3;
   control?.onProgress?.({
@@ -196,7 +199,7 @@ export async function convertPdfBytesToEpubWithResources(
     0,
   );
   const effectiveUnresolvedPolicy: UnresolvedRubyPolicy = effectiveOptions.unresolvedRubyPolicy
-    ?? "preserve-as-page-note";
+    ?? "preserve-as-hidden-provenance";
   const coverImageResourceId = effectiveOptions.coverOccurrence === undefined
     ? undefined
     : resolveCoverImageResourceId(document, effectiveOptions.coverOccurrence);

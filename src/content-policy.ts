@@ -6,7 +6,10 @@ import {
 import type { RubySpan } from "./ruby-spans.js";
 import type { SourceTextRef } from "./source-text.js";
 
-export type UnresolvedRubyPolicy = "error" | "preserve-as-page-note";
+export type UnresolvedRubyPolicy =
+  | "error"
+  | "preserve-as-page-note"
+  | "preserve-as-hidden-provenance";
 
 export type PreservedUnresolvedAnnotation = {
   kind: "unresolved-annotation";
@@ -20,6 +23,7 @@ export type PreservedUnresolvedAnnotation = {
 export type EpubContentPolicyPage = {
   sourcePage: number;
   notes: PreservedUnresolvedAnnotation[];
+  hiddenProvenance: PreservedUnresolvedAnnotation[];
 };
 
 export type EpubContentPolicyResult = {
@@ -48,6 +52,24 @@ function firstUnresolvedError(document: FileShapeDocument): Error | undefined {
   );
 }
 
+function preserveAnnotation(
+  document: FileShapeDocument,
+  sourcePage: number,
+  span: RubySpan,
+): PreservedUnresolvedAnnotation {
+  if (span.annotationSourceRanges.length === 0) {
+    throw new Error(`page ${sourcePage} unresolved ruby has no annotation source ranges`);
+  }
+  return {
+    kind: "unresolved-annotation",
+    sourcePage,
+    reason: span.reason,
+    text: resolveSourceRanges(document.source, span.annotationSourceRanges),
+    sourceRanges: cloneRefs(span.annotationSourceRanges),
+    alternatives: span.alternatives.map(cloneRefs),
+  };
+}
+
 export function applyEpubContentPolicy(
   document: FileShapeDocument,
   options: EpubContentPolicyOptions = {},
@@ -61,22 +83,14 @@ export function applyEpubContentPolicy(
   }
 
   const pages = document.pages.map((page): EpubContentPolicyPage => {
-    const notes = policy === "preserve-as-page-note"
-      ? page.unresolvedRuby.map((span): PreservedUnresolvedAnnotation => {
-          if (span.annotationSourceRanges.length === 0) {
-            throw new Error(`page ${page.sourcePage} unresolved ruby has no annotation source ranges`);
-          }
-          return {
-            kind: "unresolved-annotation",
-            sourcePage: page.sourcePage,
-            reason: span.reason,
-            text: resolveSourceRanges(document.source, span.annotationSourceRanges),
-            sourceRanges: cloneRefs(span.annotationSourceRanges),
-            alternatives: span.alternatives.map(cloneRefs),
-          };
-        })
-      : [];
-    return { sourcePage: page.sourcePage, notes };
+    const preserved = policy === "error"
+      ? []
+      : page.unresolvedRuby.map((span) => preserveAnnotation(document, page.sourcePage, span));
+    return {
+      sourcePage: page.sourcePage,
+      notes: policy === "preserve-as-page-note" ? preserved : [],
+      hiddenProvenance: policy === "preserve-as-hidden-provenance" ? preserved : [],
+    };
   });
 
   return { document, pages };

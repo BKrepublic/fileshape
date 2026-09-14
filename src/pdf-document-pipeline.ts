@@ -1,14 +1,20 @@
+import { buildDocumentBodyFontContext } from "./body-font-context.js";
 import {
   assertDocumentModel,
   buildFileShapeDocument,
   type FileShapeDocument,
 } from "./document-model.js";
 import { resolveDocumentOrientations } from "./document-orientation.js";
+import { buildDocumentMarginProfile } from "./margin-recurrence.js";
+import { summarizeOrientationEvidence } from "./orientation-evidence.js";
 import type { InspectResult } from "./pdf-inspection-model.js";
 import { reconstructPhysicalLayout } from "./physical-layout.js";
 import { associateRubySpans, type RubySpan } from "./ruby-spans.js";
 import { buildSemanticBlocks } from "./semantic-blocks.js";
-import { reconstructPageFlow, type PageFlowResult } from "./text-flow.js";
+import {
+  reconstructPageFlow,
+  type PageFlowResult,
+} from "./text-flow.js";
 
 export type PdfDocumentPipelinePage = {
   page: number;
@@ -44,14 +50,31 @@ export function buildDocumentFromInspection(
   control?: PdfDocumentPipelineControl,
 ): PdfDocumentPipelineResult {
   const totalPages = inspection.pages.length;
+  const bodyFontContext = buildDocumentBodyFontContext(inspection.pages);
+  const bodyFontSizes = new Map(
+    inspection.pages.map((page) => [
+      page.page,
+      bodyFontContext.resolutions.get(page.page)?.size ?? 0,
+    ]),
+  );
+  const marginProfile = buildDocumentMarginProfile(inspection.pages, bodyFontSizes);
   const flows = inspection.pages.map((page, index) => {
-    const flow = reconstructPageFlow(page);
+    const bodyFontResolution = bodyFontContext.resolutions.get(page.page);
+    const flow = reconstructPageFlow(page, marginProfile, bodyFontResolution);
     control?.onFlowAnalyzed?.(index + 1, totalPages);
     return { page, flow };
   });
 
   const orientations = resolveDocumentOrientations(
-    flows.map(({ page, flow }) => ({ page: page.page, orientation: flow.orientation })),
+    flows.map(({ page, flow }) => ({
+      page: page.page,
+      orientation: flow.orientation,
+      evidence: summarizeOrientationEvidence(
+        flow.orientation,
+        flow.metrics,
+        flow.attachedRunEvidence,
+      ),
+    })),
   );
   const resolvedByPage = new Map(orientations.map((entry) => [entry.page, entry]));
 
@@ -59,7 +82,16 @@ export function buildDocumentFromInspection(
   const documentPages = flows.map(({ page, flow }, index) => {
     const resolved = resolvedByPage.get(page.page);
     const orientation = resolved?.resolved ?? flow.orientation;
-    const layout = reconstructPhysicalLayout(page, orientation, flow.bodyFontSize);
+    const layout = reconstructPhysicalLayout(
+      page,
+      orientation,
+      flow.bodyFontSize,
+      marginProfile,
+    );
+    // Precomputed ruby spans used the page-local body size while glyph geometry
+    // was still live. body-font-context permits a document prior only when the
+    // annotation/body role partition is identical under both sizes, so reusing
+    // those exact spans remains valid without retaining glyphs across pages.
     const rubySpans = precomputedRubySpans === undefined
       ? associateRubySpans(page, flow.bodyFontSize)
       : precomputedRubySpans.get(page.page);

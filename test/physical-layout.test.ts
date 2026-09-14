@@ -94,12 +94,49 @@ test("reconstructs vertical glyph columns from geometry when PDF source order is
   );
 });
 
-test("excludes a smaller lower-margin page number before it can merge into a body column", () => {
+test("uses source order only for locally overlapping vertical glyph origins", () => {
+  const items = [
+    item({ text: "は", displayX: 700, displayY: 100 }),
+    item({ text: "「", displayX: 706, displayY: 114 }),
+    // The next glyph has a shifted display origin that visually precedes the
+    // punctuation even though source extraction says it follows it.
+    item({ text: "暁", displayX: 700, displayY: 109 }),
+    item({ text: "～", displayX: 700, displayY: 128 }),
+  ];
+
+  const layout = reconstructPhysicalLayout(page(items), "vertical", 14);
+
+  assert.equal(layout.units.length, 1);
+  assert.equal(layout.units[0]?.text, "は「暁～");
+  assert.deepEqual(
+    layout.units[0]?.sourceRanges?.map((range) => range.itemIndex),
+    [0, 1, 2, 3],
+  );
+});
+
+test("large vertical separations still use geometry instead of source order", () => {
+  const items = [
+    item({ text: "後", displayX: 700, displayY: 160 }),
+    item({ text: "先", displayX: 700, displayY: 100 }),
+    item({ text: "中", displayX: 700, displayY: 130 }),
+  ];
+
+  const layout = reconstructPhysicalLayout(page(items), "vertical", 14);
+
+  assert.equal(layout.units.length, 1);
+  assert.equal(layout.units[0]?.text, "先中後");
+  assert.deepEqual(
+    layout.units[0]?.sourceRanges?.map((range) => range.itemIndex),
+    [1, 2, 0],
+  );
+});
+
+test("excludes short smaller lower-margin text before it can merge into a body column", () => {
   const items = [
     item({ text: "本", displayX: 410, displayY: 100 }),
     item({ text: "文", displayX: 410, displayY: 114 }),
-    // Mirrors N8440FE-style pagination: about 89% down the page and close
-    // enough in X that it would otherwise be clustered into the body column.
+    // A compact smaller run near the page edge can be close enough in X to
+    // merge into a body column unless edge geometry is filtered first.
     item({ text: "3", displayX: 400, displayY: 534, fontSize: 12, width: 8, height: 12 }),
   ];
 
@@ -107,4 +144,18 @@ test("excludes a smaller lower-margin page number before it can merge into a bod
 
   assert.deepEqual(layout.units.map((unit) => unit.text), ["本文"]);
   assert.equal(layout.units[0]?.itemCount, 2);
+});
+
+test("physical vertical reconstruction follows shared sequence-aware layout mode", () => {
+  const items = [
+    item({ text: "右", displayX: 700, displayY: 100 }),
+    item({ text: "左", displayX: 690, displayY: 100 }),
+  ];
+
+  const layout = reconstructPhysicalLayout(page(items), "vertical", 14);
+
+  // Single-character dominance alone used to select the wider glyph-column
+  // tolerance and merge these origins. Their sequence is horizontal evidence,
+  // so the shared mode remains run-based and preserves two physical columns.
+  assert.deepEqual(layout.units.map((unit) => unit.text), ["右", "左"]);
 });

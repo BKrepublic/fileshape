@@ -1,6 +1,6 @@
 import type { FileShapeDocument } from "./document-model.js";
 import { normalizeEpubNavigationText } from "./epub-navigation-text.js";
-import type { EpubXhtmlPage } from "./epub-xhtml.js";
+import type { EpubInferredHeading, EpubXhtmlPage } from "./epub-xhtml.js";
 
 function xmlText(value: string): string {
   return value
@@ -37,17 +37,25 @@ function resolvedOutlineEntries(document: FileShapeDocument, pages: EpubXhtmlPag
   return entries;
 }
 
+function pageHeadings(page: EpubXhtmlPage): EpubInferredHeading[] {
+  if (page.headings !== undefined) return page.headings;
+  return page.heading === undefined ? [] : [page.heading];
+}
+
 function inferredHeadingEntries(pages: EpubXhtmlPage[]): Array<{ title: string; href: string }> {
-  return pages.flatMap((page) => page.heading === undefined
-    ? []
-    : [{ title: page.heading.title, href: `${page.href}#${page.heading.targetId}` }]);
+  return pages.flatMap((page) =>
+    pageHeadings(page).map((heading) => ({
+      title: heading.title,
+      href: `${page.href}#${heading.targetId}`,
+    })));
 }
 
 function fallbackPageEntries(pages: EpubXhtmlPage[]): Array<{ title: string; href: string }> {
-  return pages.map((page) => ({
-    title: `Page ${page.sourcePage}`,
-    href: `${page.href}#source-page-${page.sourcePage}`,
-  }));
+  return pages.flatMap((page) =>
+    page.sourcePages.map((sourcePage) => ({
+      title: `Page ${sourcePage}`,
+      href: `${page.href}#source-page-${sourcePage}`,
+    })));
 }
 
 export function serializeLegacyNcx(

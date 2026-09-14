@@ -1,6 +1,14 @@
+import {
+  clusterTextItemsByAxis,
+  clusterVerticalGlyphColumns,
+  ordinaryCrossAxisTolerance,
+  verticalTextLayoutMode,
+} from "./layout-clustering.js";
+import type { DocumentMarginProfile } from "./margin-recurrence.js";
 import type { InspectPage, InspectTextItem } from "./pdf-inspection-model.js";
 import type { WritingOrientation } from "./text-flow.js";
 import { fullTextRef, type SourceTextRef } from "./source-text.js";
+import { collectTextItemEvidence } from "./text-item-evidence.js";
 
 export type PhysicalTextUnit = {
   index: number;
@@ -32,83 +40,22 @@ export type PhysicalPageLayout = {
   gaps: PhysicalGap[];
 };
 
-function charCount(text: string): number {
-  return [...text.trim()].length;
-}
-
-function median(values: number[]): number {
-  if (values.length === 0) return 0;
-  const sorted = [...values].sort((a, b) => a - b);
-  const middle = Math.floor(sorted.length / 2);
-  if (sorted.length % 2 === 1) return sorted[middle] ?? 0;
-  return ((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2;
-}
-
 function round(value: number, digits = 2): number {
   const factor = 10 ** digits;
   return Math.round(value * factor) / factor;
 }
 
-function isMarginNoise(item: InspectTextItem, page: InspectPage, bodyFontSize: number): boolean {
-  const count = charCount(item.text);
-  if (count === 0 || count > 8) return false;
-  const nearTop = item.displayY < page.height * 0.08;
-  // N8440FE and similar official Narou PDF exports place the page number at
-  // roughly 88.9% of page height, while body glyphs can legitimately extend
-  // to about 87%. The old 90% cutoff therefore allowed the smaller page number
-  // to survive and, because its X coordinate can be close to a body column,
-  // merge into that column as if it were story text.
-  const nearBottom = item.displayY > page.height * 0.88;
-  const smallerThanBody = bodyFontSize > 0 && item.fontSize < bodyFontSize * 0.98;
-  return (nearTop || nearBottom) && smallerThanBody;
-}
-
-function primaryItems(page: InspectPage, bodyFontSize: number): InspectTextItem[] {
-  return page.textItems.map((item, index) => ({ ...item, source: item.source ?? fullTextRef(page.page, index, item.text) })).filter((item) => {
-    if (item.text.trim().length === 0) return false;
-    if (isMarginNoise(item, page, bodyFontSize)) return false;
-    if (bodyFontSize > 0 && item.fontSize < bodyFontSize * 0.75) return false;
-    return true;
-  });
-}
-
-type MutableUnit = {
-  positions: number[];
-  items: InspectTextItem[];
-};
-
-function clusterByAxis(
-  items: InspectTextItem[],
-  axis: "x" | "y",
-  tolerance: number,
-): MutableUnit[] {
-  const coordinate = (item: InspectTextItem) => (axis === "x" ? item.displayX : item.displayY);
-  const ordered = [...items].sort((a, b) => coordinate(a) - coordinate(b));
-  const units: MutableUnit[] = [];
-
-  for (const item of ordered) {
-    const value = coordinate(item);
-    let best: MutableUnit | undefined;
-    let bestDistance = Number.POSITIVE_INFINITY;
-
-    for (const unit of units) {
-      const position = median(unit.positions);
-      const distance = Math.abs(value - position);
-      if (distance <= tolerance && distance < bestDistance) {
-        best = unit;
-        bestDistance = distance;
-      }
-    }
-
-    if (best) {
-      best.positions.push(value);
-      best.items.push(item);
-    } else {
-      units.push({ positions: [value], items: [item] });
-    }
-  }
-
-  return units;
+function primaryItems(
+  page: InspectPage,
+  bodyFontSize: number,
+  marginProfile?: DocumentMarginProfile,
+): InspectTextItem[] {
+  return collectTextItemEvidence(page, bodyFontSize, marginProfile)
+    .filter((entry) => entry.visible && !entry.marginNoise && !entry.annotationSized)
+    .map(({ item, itemIndex }) => ({
+      ...item,
+      source: item.source ?? fullTextRef(page.page, itemIndex, item.text),
+    }));
 }
 
 function inlineBounds(
@@ -181,25 +128,12 @@ function buildVerticalGlyphUnits(
 ): PhysicalTextUnit[] {
   if (items.length === 0) return [];
 
-  // Single-glyph PDFs do not guarantee that PDF.js emits text items grouped by
-  // visual column. Some producers interleave glyph operators by row or drawing
-  // order. Reconstruct columns from display geometry first, then establish the
-  // Japanese vertical reading order explicitly: columns right-to-left and glyphs
-  // top-to-bottom. The wider tolerance keeps shifted punctuation in its body
-  // column while still separating ordinary neighbouring columns.
-  const tolerance = Math.max(8, bodyFontSize * 1.25);
-  return clusterByAxis(items, "x", tolerance)
-    .map((unit) => {
-      const orderedItems = [...unit.items].sort((a, b) =>
-        a.displayY - b.displayY || a.displayX - b.displayX);
-      return {
-        position: median(unit.positions),
-        items: orderedItems,
-        text: orderedItems.map((item) => item.text.trim()).join(""),
-      };
-    })
+  return clusterVerticalGlyphColumns(items, bodyFontSize)
+    .map((column) => ({
+      ...column,
+      text: column.items.map((item) => item.text.trim()).join(""),
+    }))
     .filter((column) => column.text.length > 0)
-    .sort((a, b) => b.position - a.position)
     .map((column, index) =>
       makeUnit(index, column.position, column.items, column.text, "vertical", inlineSize),
     );
@@ -210,18 +144,17 @@ function buildVerticalRunUnits(
   bodyFontSize: number,
   inlineSize: number,
 ): PhysicalTextUnit[] {
-  const tolerance = Math.max(1.5, bodyFontSize * 0.42);
-  return clusterByAxis(items, "x", tolerance)
-    .map((unit) => {
-      const orderedItems = [...unit.items].sort((a, b) => a.displayY - b.displayY);
+  return clusterTextItemsByAxis(items, "x", ordinaryCrossAxisTolerance(bodyFontSize))
+    .map((cluster) => {
+      const orderedItems = [...cluster.items].sort((left, right) => left.displayY - right.displayY);
       return {
-        position: median(unit.positions),
+        position: cluster.position,
         items: orderedItems,
         text: orderedItems.map((item) => item.text).join(""),
       };
     })
     .filter((unit) => unit.text.trim().length > 0)
-    .sort((a, b) => b.position - a.position)
+    .sort((left, right) => right.position - left.position)
     .map((unit, index) =>
       makeUnit(index, unit.position, unit.items, unit.text, "vertical", inlineSize),
     );
@@ -232,18 +165,17 @@ function buildHorizontalUnits(
   bodyFontSize: number,
   inlineSize: number,
 ): PhysicalTextUnit[] {
-  const tolerance = Math.max(1.5, bodyFontSize * 0.42);
-  return clusterByAxis(items, "y", tolerance)
-    .map((unit) => {
-      const orderedItems = [...unit.items].sort((a, b) => a.displayX - b.displayX);
+  return clusterTextItemsByAxis(items, "y", ordinaryCrossAxisTolerance(bodyFontSize))
+    .map((cluster) => {
+      const orderedItems = [...cluster.items].sort((left, right) => left.displayX - right.displayX);
       return {
-        position: median(unit.positions),
+        position: cluster.position,
         items: orderedItems,
         text: orderedItems.map((item) => item.text).join(""),
       };
     })
     .filter((unit) => unit.text.trim().length > 0)
-    .sort((a, b) => a.position - b.position)
+    .sort((left, right) => left.position - right.position)
     .map((unit, index) =>
       makeUnit(index, unit.position, unit.items, unit.text, "horizontal", inlineSize),
     );
@@ -272,18 +204,16 @@ export function reconstructPhysicalLayout(
   page: InspectPage,
   orientation: WritingOrientation,
   bodyFontSize: number,
+  marginProfile?: DocumentMarginProfile,
 ): PhysicalPageLayout {
-  const items = primaryItems(page, bodyFontSize);
-  const singleCharRatio =
-    items.length === 0 ? 0 : items.filter((item) => charCount(item.text) === 1).length / items.length;
+  const items = primaryItems(page, bodyFontSize, marginProfile);
   const inlineSize = orientation === "horizontal" ? page.width : page.height;
 
   let units: PhysicalTextUnit[] = [];
   if (orientation === "vertical") {
-    units =
-      singleCharRatio >= 0.7
-        ? buildVerticalGlyphUnits(items, bodyFontSize, inlineSize)
-        : buildVerticalRunUnits(items, bodyFontSize, inlineSize);
+    units = verticalTextLayoutMode(items) === "glyph"
+      ? buildVerticalGlyphUnits(items, bodyFontSize, inlineSize)
+      : buildVerticalRunUnits(items, bodyFontSize, inlineSize);
   } else if (orientation === "horizontal") {
     units = buildHorizontalUnits(items, bodyFontSize, inlineSize);
   }

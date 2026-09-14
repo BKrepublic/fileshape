@@ -28,7 +28,9 @@
         "pdfjs-dist"
       ],
       "reachableLocalModules": [
+        "src/attached-run-evidence.ts",
         "src/binary-runtime.ts",
+        "src/body-font-context.ts",
         "src/content-policy.ts",
         "src/cover-policy.ts",
         "src/display-geometry.ts",
@@ -42,6 +44,11 @@
         "src/epub-styles.ts",
         "src/epub-xhtml.ts",
         "src/heading-inference.ts",
+        "src/layout-clustering.ts",
+        "src/margin-noise.ts",
+        "src/margin-recurrence.ts",
+        "src/orientation-decision.ts",
+        "src/orientation-evidence.ts",
         "src/pdf-document-pipeline.ts",
         "src/pdf-image-adapter.ts",
         "src/pdf-image-resource-core.ts",
@@ -55,7 +62,9 @@
         "src/ruby-spans.ts",
         "src/semantic-blocks.ts",
         "src/source-text.ts",
-        "src/text-flow.ts"
+        "src/spacing-evidence.ts",
+        "src/text-flow.ts",
+        "src/text-item-evidence.ts"
       ]
     }
   ],

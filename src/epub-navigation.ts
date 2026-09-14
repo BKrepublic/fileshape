@@ -12,15 +12,19 @@ export type EpubNavigationOptions = {
   stylesheetHref?: string;
 };
 
+type NavigationHeading = {
+  title: string;
+  sourcePage: number;
+  targetId: string;
+};
+
 type NavigationPage = {
   sourcePage: number;
   sourcePages?: number[];
   href: string;
-  heading?: {
-    title: string;
-    sourcePage: number;
-    targetId: string;
-  };
+  headings?: NavigationHeading[];
+  /** Compatibility with older focused callers that expose only one leading heading. */
+  heading?: NavigationHeading;
 };
 
 function text(value: string): string {
@@ -34,6 +38,11 @@ function attribute(value: string): string {
 function label(item: DocumentNavigationItem): string {
   const title = item.title.trim().length > 0 ? item.title : "Untitled entry";
   return text(normalizeEpubNavigationText(title));
+}
+
+function pageHeadings(page: NavigationPage): NavigationHeading[] {
+  if (page.headings !== undefined) return page.headings;
+  return page.heading === undefined ? [] : [page.heading];
 }
 
 export function serializeEpubNavigation(
@@ -73,12 +82,11 @@ export function serializeEpubNavigation(
   }
 
   const outline = render(document.navigation ?? []);
-  const inferredHeadings = pages
-    .filter((page) => page.heading !== undefined)
-    .map((page) => {
-      const heading = page.heading!;
-      return `<li><a href="${attribute(`${page.href}#${heading.targetId}`)}">${text(normalizeEpubNavigationText(heading.title))}</a></li>`;
-    })
+  const inferredHeadingEntries = pages.flatMap((page) =>
+    pageHeadings(page).map((heading) => ({ page, heading })));
+  const inferredHeadings = inferredHeadingEntries
+    .map(({ page, heading }) =>
+      `<li><a href="${attribute(`${page.href}#${heading.targetId}`)}">${text(normalizeEpubNavigationText(heading.title))}</a></li>`)
     .join("\n");
   const sourcePages = pages.flatMap((page) => page.sourcePages ?? [page.sourcePage]);
   const pageItems = sourcePages
@@ -98,8 +106,8 @@ export function serializeEpubNavigation(
   const sourceCounts = navigationCounts(document.navigation ?? []);
   const counts = outline.html.length > 0
     ? sourceCounts
-    : inferredHeadings.length > 0
-      ? { total: pages.filter((page) => page.heading !== undefined).length, unresolved: 0 }
+    : inferredHeadingEntries.length > 0
+      ? { total: inferredHeadingEntries.length, unresolved: 0 }
       : sourceCounts;
   const stylesheet = options.stylesheetHref === undefined
     ? ""

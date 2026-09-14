@@ -3,7 +3,12 @@ import test from "node:test";
 import type { FileShapeDocument, DocumentTextBlock } from "../src/document-model.js";
 import { serializeEpubXhtml } from "../src/epub-xhtml.js";
 
-function block(page: number, index: number, text: string): DocumentTextBlock {
+function block(
+  page: number,
+  index: number,
+  text: string,
+  edgeGeometry?: DocumentTextBlock["edgeGeometry"],
+): DocumentTextBlock {
   return {
     kind: "text",
     sourcePage: page,
@@ -16,8 +21,20 @@ function block(page: number, index: number, text: string): DocumentTextBlock {
       text,
       sourceRanges: [{ page, itemIndex: index, charStart: 0, charEnd: text.length }],
     }],
+    ...(edgeGeometry === undefined ? {} : { edgeGeometry }),
   };
 }
+
+const continuingEnd = {
+  firstUnitInlineStartRatio: 0.1,
+  lastUnitInlineEndRatio: 0.95,
+  lastUnitInlineCoverageRatio: 0.8,
+};
+const continuingStart = {
+  firstUnitInlineStartRatio: 0.1,
+  lastUnitInlineEndRatio: 0.6,
+  lastUnitInlineCoverageRatio: 0.5,
+};
 
 function fixture(): FileShapeDocument {
   const heading = "雨の日";
@@ -43,7 +60,7 @@ function fixture(): FileShapeDocument {
         imageOccurrences: [],
         unresolvedRuby: [],
         unmappedExactRuby: [],
-        blocks: [block(1, 0, heading), block(1, 1, first)],
+        blocks: [block(1, 0, heading), block(1, 1, first, continuingEnd)],
       },
       {
         kind: "page",
@@ -53,7 +70,7 @@ function fixture(): FileShapeDocument {
         imageOccurrences: [],
         unresolvedRuby: [],
         unmappedExactRuby: [],
-        blocks: [block(2, 0, second)],
+        blocks: [block(2, 0, second, continuingStart)],
       },
     ],
   };
@@ -94,9 +111,9 @@ test("serializer adds no formatting whitespace at any continued physical page bo
       ],
     },
     pages: [
-      { kind: "page", sourcePage: 1, rotation: 0, orientation: "vertical", imageOccurrences: [], unresolvedRuby: [], unmappedExactRuby: [], blocks: [block(1, 0, heading), block(1, 1, "　A、")] },
-      { kind: "page", sourcePage: 2, rotation: 0, orientation: "vertical", imageOccurrences: [], unresolvedRuby: [], unmappedExactRuby: [], blocks: [block(2, 0, "B、")] },
-      { kind: "page", sourcePage: 3, rotation: 0, orientation: "vertical", imageOccurrences: [], unresolvedRuby: [], unmappedExactRuby: [], blocks: [block(3, 0, "C。")] },
+      { kind: "page", sourcePage: 1, rotation: 0, orientation: "vertical", imageOccurrences: [], unresolvedRuby: [], unmappedExactRuby: [], blocks: [block(1, 0, heading), block(1, 1, "　A、", continuingEnd)] },
+      { kind: "page", sourcePage: 2, rotation: 0, orientation: "vertical", imageOccurrences: [], unresolvedRuby: [], unmappedExactRuby: [], blocks: [block(2, 0, "B、", continuingEnd)] },
+      { kind: "page", sourcePage: 3, rotation: 0, orientation: "vertical", imageOccurrences: [], unresolvedRuby: [], unmappedExactRuby: [], blocks: [block(3, 0, "C。", continuingStart)] },
     ],
   };
 
