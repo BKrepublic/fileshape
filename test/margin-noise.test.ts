@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { InspectPage, InspectTextItem } from "../src/pdf-inspection-model.js";
-import { isShortMarginNoise } from "../src/margin-noise.js";
+import {
+  isShortMarginNoise,
+  measureMarginNoiseEvidence,
+} from "../src/margin-noise.js";
 
 function page(height = 600): InspectPage {
   return {
@@ -51,7 +54,29 @@ test("equivalent page and font scaling preserves the margin decision", () => {
   assert.equal(scaled, original);
 });
 
-test("short small text outside the edge band remains content", () => {
+test("compact margin evidence preserves normalized geometry under equivalent scaling", () => {
+  const original = measureMarginNoiseEvidence(item(), page(), 14);
+  const scaled = measureMarginNoiseEvidence(
+    item({ displayY: 1068, height: 24, width: 24, fontSize: 24 }),
+    page(1200),
+    28,
+  );
+
+  assert.deepEqual(scaled, original);
+  assert.equal(original.edgeSide, "bottom");
+  assert.equal(original.localCandidate, true);
+  assert.equal(original.shortEnough, true);
+  assert.equal(original.smallerThanBody, true);
+  assert.equal(original.insideEdgeBand, true);
+});
+
+test("short small text outside the edge band remains content but keeps measured evidence", () => {
+  const evidence = measureMarginNoiseEvidence(item({ displayY: 480 }), page(), 14);
+  assert.equal(evidence.localCandidate, false);
+  assert.equal(evidence.edgeSide, "none");
+  assert.equal(evidence.shortEnough, true);
+  assert.equal(evidence.smallerThanBody, true);
+  assert.equal(evidence.insideEdgeBand, false);
   assert.equal(isShortMarginNoise(item({ displayY: 480 }), page(), 14), false);
 });
 
