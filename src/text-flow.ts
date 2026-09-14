@@ -1,7 +1,10 @@
 import {
   clusterTextItemsByAxis,
   clusterVerticalGlyphColumns,
+  glyphSequenceRatios,
   ordinaryCrossAxisTolerance,
+  singleCharItemRatio as measureSingleCharItemRatio,
+  verticalTextLayoutMode,
 } from "./layout-clustering.js";
 import type { InspectPage, InspectTextItem } from "./pdf-inspection-model.js";
 import {
@@ -80,48 +83,6 @@ function dominantFontSize(items: InspectTextItem[]): number {
   return bestSize;
 }
 
-function glyphSequenceRatios(items: InspectTextItem[]): {
-  vertical: number;
-  horizontal: number;
-} {
-  const glyphs = items.filter((item) => charCount(item.text) === 1);
-  if (glyphs.length < 2) return { vertical: 0, horizontal: 0 };
-
-  let usable = 0;
-  let vertical = 0;
-  let horizontal = 0;
-
-  for (let index = 1; index < glyphs.length; index += 1) {
-    const previous = glyphs[index - 1];
-    const current = glyphs[index];
-    if (!previous || !current) continue;
-
-    const maxFontSize = Math.max(previous.fontSize, current.fontSize, 1);
-    const minFontSize = Math.min(previous.fontSize, current.fontSize);
-    if (minFontSize / maxFontSize < 0.75) continue;
-
-    const dx = Math.abs(current.displayX - previous.displayX);
-    const dy = Math.abs(current.displayY - previous.displayY);
-    const distance = Math.hypot(dx, dy);
-
-    if (distance < 0.5 || distance > maxFontSize * 2.75) continue;
-
-    if (dy > dx * 1.5) {
-      vertical += 1;
-      usable += 1;
-    } else if (dx > dy * 1.5) {
-      horizontal += 1;
-      usable += 1;
-    }
-  }
-
-  if (usable === 0) return { vertical: 0, horizontal: 0 };
-  return {
-    vertical: vertical / usable,
-    horizontal: horizontal / usable,
-  };
-}
-
 /** A compact run has no reliable aspect-ratio vote. It may still continue a
  * long run when its origin is adjacent to that run's inline endpoint. Require
  * all remaining items to attach; isolated text and competing axes stay unknown.
@@ -177,7 +138,7 @@ function detectOrientation(items: InspectTextItem[]): {
     };
   }
 
-  const singleCharItems = items.filter((item) => charCount(item.text) === 1).length;
+  const singleCharItemRatio = measureSingleCharItemRatio(items);
   const multiCharItems = items.filter((item) => charCount(item.text) >= 2);
   const verticalRuns = multiCharItems.filter((item) => item.height > item.width * 1.5).length;
   const horizontalRuns = multiCharItems.filter((item) => item.width > item.height * 1.5).length;
@@ -191,7 +152,6 @@ function detectOrientation(items: InspectTextItem[]): {
     if (Math.abs(a) > Math.abs(b) * 1.5) horizontalBaselines += 1;
   }
 
-  const singleCharItemRatio = singleCharItems / items.length;
   const verticalRunRatio = multiCharItems.length === 0 ? 0 : verticalRuns / multiCharItems.length;
   const horizontalRunRatio = multiCharItems.length === 0 ? 0 : horizontalRuns / multiCharItems.length;
   const verticalBaselineRatio = verticalBaselines / items.length;
@@ -409,11 +369,7 @@ export function reconstructPageFlow(page: InspectPage): PageFlowResult {
   const { orientation, metrics } = detectOrientation(primaryItems);
 
   let built: GroupBuildResult = { groups: [], boundaries: [] };
-  if (
-    orientation === "vertical" &&
-    metrics.singleCharItemRatio >= 0.7 &&
-    metrics.sequenceVerticalRatio >= 0.6
-  ) {
+  if (orientation === "vertical" && verticalTextLayoutMode(primaryItems) === "glyph") {
     built = buildVerticalGlyphGroups(primaryItems, bodyFontSize);
   } else if (orientation === "vertical") {
     built = buildVerticalGroups(primaryItems, bodyFontSize);
