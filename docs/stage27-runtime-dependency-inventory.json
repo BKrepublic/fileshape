@@ -59,6 +59,7 @@
         "src/ruby-spans.ts",
         "src/semantic-blocks.ts",
         "src/source-text.ts",
+        "src/spacing-evidence.ts",
         "src/text-flow.ts",
         "src/text-item-evidence.ts"
       ]
