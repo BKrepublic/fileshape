@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { DocumentPage, FileShapeDocument } from "../src/document-model.js";
+import { buildDocumentNavigation, type SourceOutlineItem } from "../src/document-navigation.js";
 import { serializeEpubNavigation } from "../src/epub-navigation.js";
 import { serializeEpubXhtml } from "../src/epub-xhtml.js";
 
@@ -45,22 +46,9 @@ function documentFixture(texts: string[]): FileShapeDocument {
   };
 }
 
-function addOutlineNavigation(document: FileShapeDocument): void {
-  document.navigation = [
-    {
-      kind: "outline",
-      title: "Source section A",
-      sourceOutlinePath: [0],
-      target: { status: "resolved", sourcePage: 2 },
-      children: [{
-        kind: "outline",
-        title: "Source section B",
-        sourceOutlinePath: [0, 0],
-        target: { status: "resolved", sourcePage: 4 },
-        children: [],
-      }],
-    },
-  ];
+function attachOutline(document: FileShapeDocument, outline: SourceOutlineItem[]): void {
+  document.source.outline = outline;
+  document.navigation = buildDocumentNavigation(outline);
 }
 
 const structuralHeadings = [
@@ -117,7 +105,17 @@ test("resolved source outline destinations group physical pages without inventin
     "section B",
     "body B",
   ]);
-  addOutlineNavigation(document);
+  attachOutline(document, [{
+    title: "Source section A",
+    destination: null,
+    target: { status: "resolved", sourcePage: 2 },
+    items: [{
+      title: "Source section B",
+      destination: null,
+      target: { status: "resolved", sourcePage: 4 },
+      items: [],
+    }],
+  }]);
 
   const xhtml = serializeEpubXhtml(document);
   assert.equal(xhtml.pages.length, 3);
@@ -136,28 +134,27 @@ test("resolved source outline destinations group physical pages without inventin
   assert.match(navigation.xhtml, /page-0004\.xhtml#source-page-4">Source section B<\/a>/);
 });
 
-test("outline-backed logical groups split again when writing orientation changes", () => {
+test("outline-backed XHTML keeps mixed writing orientations in scoped runs", () => {
   const document = documentFixture([
     "section",
     "vertical body",
     "horizontal insert",
     "horizontal continuation",
   ]);
-  document.navigation = [{
-    kind: "outline",
+  attachOutline(document, [{
     title: "Section",
-    sourceOutlinePath: [0],
+    destination: null,
     target: { status: "resolved", sourcePage: 1 },
-    children: [],
-  }];
+    items: [],
+  }]);
   document.pages[2]!.orientation = "horizontal";
   document.pages[3]!.orientation = "horizontal";
 
   const xhtml = serializeEpubXhtml(document);
-  assert.deepEqual(xhtml.pages.map((page) => page.sourcePages), [
-    [1, 2],
-    [3, 4],
-  ]);
-  assert.match(xhtml.pages[0]?.xhtml ?? "", /writing-mode: vertical-rl/);
-  assert.match(xhtml.pages[1]?.xhtml ?? "", /writing-mode: horizontal-tb/);
+  assert.deepEqual(xhtml.pages.map((page) => page.sourcePages), [[1, 2, 3, 4]]);
+  const body = xhtml.pages[0]?.xhtml ?? "";
+  assert.match(body, /class="fileshape-page fileshape-mixed-orientation"/);
+  assert.match(body, /class="fileshape-orientation-run fileshape-vertical" style="writing-mode: vertical-rl;"/);
+  assert.match(body, /class="fileshape-orientation-run fileshape-horizontal" style="writing-mode: horizontal-tb;"/);
+  assert.ok(body.indexOf("vertical body") < body.indexOf("horizontal insert"));
 });
