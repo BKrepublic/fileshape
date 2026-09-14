@@ -30,6 +30,7 @@
       "reachableLocalModules": [
         "src/attached-run-evidence.ts",
         "src/binary-runtime.ts",
+        "src/body-font-context.ts",
         "src/content-policy.ts",
         "src/cover-policy.ts",
         "src/display-geometry.ts",
