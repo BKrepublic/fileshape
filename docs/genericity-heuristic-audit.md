@@ -1,124 +1,104 @@
 # Genericity heuristic audit
 
-Purpose: FileShape must generalize to unknown PDFs at large scale. The nine-book corpus is diagnostic evidence, not the product domain. A rule is acceptable only when it is justified by source-observable evidence that can occur in arbitrary PDFs. Sample-specific identifiers, linguistic/content semantics, and sample-derived geometry are never production inference features.
-
-This audit deliberately does **not** declare every fixed number bad. It records what each decision observes, whether it is normalized, where its evidence is scoped, whether confidence survives downstream, which failure class introduced it, and which successful output property must be preserved while the implementation is generalized.
+Purpose: FileShape must generalize to unknown PDFs at large scale. The local nine-PDF verification set is diagnostic evidence, not the product domain. Production inference must be justified by source-observable evidence that can occur in arbitrary PDFs; filenames, work/site identity, hand-picked pages, linguistic content and sample IDs are never inference features.
 
 ## Classification
 
-- **A — source-derived/general**: directly based on PDF structure or document-internal statistics and not tied to one known layout.
-- **B — empirical threshold**: content-agnostic, but a fixed cutoff/multiplier needs calibration and metamorphic testing before it can be trusted at large scale.
-- **C — sample-shaped evidence**: history/code/comments show that a value or rule was introduced to repair one known corpus geometry or linguistic pattern. It may still describe a real general phenomenon, but its current calibration is not generic evidence.
-- **D — architectural generality blocker**: data flow freezes a local decision too early, duplicates one classification in multiple stages, or uses physical pagination/serialization state as if it were semantic structure.
+- **A — source-derived/general**: directly based on PDF/document evidence and not tied to one known layout.
+- **B — empirical threshold**: content-agnostic fixed cutoff/multiplier that still needs calibration or metamorphic coverage.
+- **C — sample-shaped calibration**: a general phenomenon whose current constants were introduced from a known failure case.
+- **D — architectural generality blocker**: duplicated/collapsed evidence, physical pagination used as semantic structure, or a stage that makes a hard decision before stronger context exists.
 
-## Invariants for the replacement design
+## Current invariants
 
-- Production inference may use text/glyph geometry, transforms, relative font/style distributions, page dimensions, line/column pitch, whitespace/gap distributions, recurring layout patterns, neighbouring/document consistency, resolved PDF outline destinations and exact source provenance.
-- Production inference must not use filename, work/site/title identity, chapter words, story count, hand-picked pages, sample IDs, or language-specific Unicode punctuation/content semantics.
-- Uniform scale, small font-size changes, font-family substitution, margin/page-size changes and equivalent pagination should preserve text order, paragraph relations, heading/section relations and ruby association whenever source evidence remains equivalent.
-- The accepted long-sample EPUB behaviour is a regression target. Generalization is an internal inference change, not permission to replace the already-good output model.
-- Confidence/evidence objects added to the production pipeline must remain compact. Do not retain glyph arrays, operator evidence or full heavy page intermediates across the document and regress the bounded-memory work from #25.
+- Allowed evidence: glyph/text geometry, transforms, relative font/style distributions, page dimensions, line/column pitch, whitespace/gap distributions, recurrence, neighbouring/document consistency, resolved PDF outline destinations and exact source provenance.
+- Forbidden evidence: filename/work/site/title identity, chapter words, story count, hand-picked pages, sample IDs, or language-specific punctuation/content semantics.
+- Uniform scaling, font substitution, margin/page-size changes and equivalent TextItem emission should preserve semantic order and relations whenever source evidence remains equivalent.
+- Compact evidence may survive across stages; heavy glyph/operator intermediates must still be released per page.
+- Acceptance rules are not relaxed to satisfy the local verification PDFs.
 
-## Detailed inventory
+## Closed architectural blockers
 
-| File / function | Decision | Current rule | Input evidence | Normalization | Scope | Confidence retained? | Provenance / failure class | Generality risk | Recommended direction | Must preserve |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `text-flow.ts::dominantFontSize` | body-font estimate | char-weighted mode, font size bucketed to 0.1pt | item font size + source text length | partly absolute (0.1pt bucket) | page | no | initial geometry reconstruction (`5f8ca83`) | B: page-local mode can be unstable on covers/mixed pages | expose compact style histogram / document prior; use page evidence as observation | current body/annotation separation where unambiguous |
-| `text-flow.ts::isMarginNoise` | remove header/footer-like item | chars `<=8`; Y `<8%` or `>90%`; size `<98%` body | position, page height, font ratio, text length only | mostly normalized; fixed char count | page | no, binary delete | initial geometry reconstruction (`5f8ca83`) | B: short legitimate marginal/body text can be removed; recurrence ignored | classify marginality as evidence; use recurring position/style across pages before removal | page-number/header suppression without body loss |
-| `text-flow.ts::glyphSequenceRatios` | infer axis from single-glyph stream | font ratio `>=0.75`; distance `0.5..2.75*font`; axis dominance `1.5x` | glyph-item positions/sizes | mostly font-relative; `0.5` absolute floor | page | ratio survives, candidate filtering does not | single-glyph orientation work | B | keep sequence vote but preserve usable-count/sample strength and calibrate filters from distributions | single-glyph vertical/horizontal recognition |
-| `text-flow.ts::attachedRunOrientation` | resolve sparse unknown orientation | anchor `>=3*font`, aspect `>1.5`; pending extent `<=1.5*font`; font ratio `>=0.75`; cross `<=0.5*size`; gap `<=0.75*size`; unique axis | item geometry/font ratios | relative | page | no, returns hard label | `97bb12c` documents the last unresolved corpus page and its measured geometry before defining these exact bounds | C | retain as a geometric evidence channel, not a final override; calibrate with generated perturbations and expose strength/coverage | sparse endpoint continuation that currently works |
-| `text-flow.ts::detectOrientation` | page writing orientation | run vote `>=0.6`; single-char `>=0.7`; sequence `>=0.6`; baseline vote `>=0.6`; superiority `1.5x`; fallback to attached run | aspect, transform direction, sequence geometry | ratios | page | **no**: metrics remain but reason/strength of selected label is lost | initial detector plus later repair | D/B | return `OrientationObservation` with per-channel votes, support counts, winning margin and provisional label | current high-confidence labels |
-| `text-flow.ts::clusterByPosition` / vertical+horizontal builders | line/column membership | tolerance `max(1.5, 0.42*bodyFont)` | cross-axis positions | mixed absolute/relative | page | no | initial flow reconstruction | B | derive tolerance from cross-axis residual/pitch distribution with font-relative fallback | stable line/column grouping |
-| `text-flow.ts::estimateNormalPitch` | ordinary column pitch | accept gap `>max(1,0.6*font)`; lower quartile; fallback `1.65*font` | column positions/font | distribution + fixed gates | page | no uncertainty | spacing reconstruction | B | retain robust quantile evidence; report sample count/dispersion; fallback should be explicit low-confidence evidence | existing paragraph-gap behaviour |
-| `text-flow.ts::mergeVerticalColumns` | paragraph boundary | gap `>=max(1.55*pitch, pitch+1.25*font)` | pitch + inter-column gap | relative | page | no, binary | introduced during glyph-heavy paragraph repair (`b9e0ade`) | B/C: plausible feature, calibration introduced during one repair path | convert to boundary score using gap distribution, coverage and neighbouring-page/document evidence | current logical paragraph grouping |
-| `text-flow.ts::buildVerticalGlyphSequenceGroups` | detect a new glyph column | X shift `>max(8,1.25*font)` plus Y restart `<prev-0.5*font` or `<=start+1.5*font` | item order + coordinates/font | mixed absolute/relative | page | no | added in glyph-heavy vertical repair (`b9e0ade`) | C/B: depends on emission order and fixed geometry | reconstruct columns from geometry first; treat source item order as weak evidence only; metamorphic single-vs-multi-glyph test | glyph-heavy vertical reading order |
-| `text-flow.ts::buildVerticalGroups` | near-equal Y tie order | if `|dy|<=0.5`, larger font first | Y + font size | absolute 0.5pt | page | no | initial flow reconstruction | B | normalize to measured coordinate noise / glyph scale | shifted punctuation order |
-| `text-flow.ts::renderSourceSpacingText` | fidelity line-break count | round gap/pitch, clamp to `1..20` | inferred boundary ratio | relative with absolute cap | page | no | spacing-fidelity feature | B, lower semantic risk | keep separate from logical structure; test only fidelity semantics | source-spacing diagnostic/fidelity view |
-| `text-flow.ts::reconstructPageFlow` | annotation split | font `<0.75*body` | font size | relative | page | no, binary | shared early-stage convention | B/D because repeated elsewhere | centralize one item evidence/classification result; preserve raw ratio | body/ruby separation |
-| `text-flow.ts::reconstructPageFlow` | choose glyph-sequence builder | orientation vertical + single-char `>=0.7` + seq vertical `>=0.6` | already-computed metrics | ratios | page | no | duplicates orientation gates | D | selected reconstruction mode should follow observation/evidence, not repeat cutoffs independently | current glyph-heavy output |
-| `physical-layout.ts::isMarginNoise` | remove marginal item | chars `<=8`; top `<8%`; bottom `>88%`; font `<98%` body | geometry/font/text length | mostly normalized | page | no | **explicitly changed in `48e0ec0` from 90% to 88% because N8440FE page number was at ~88.9%** | **C, high** | replace fixed footer band with repeated marginal pattern evidence (position/style/recurrence); do not merely choose a new percentage | suppress footer/page-number noise |
-| `physical-layout.ts::primaryItems` | primary vs annotation/margin | repeats margin rule + `<0.75*body` annotation split | same source items | relative | page | no | duplicated classifier | **D, high**: already diverged from `text-flow` (88% vs 90%) | compute compact item/page evidence once and consume it in flow/layout/ruby | identical source inclusion across stages |
-| `physical-layout.ts::inlineBounds` | item inline extent floor | `max(|extent|,0.8*font,1)` | dimensions/font | mixed | page/unit | no | defensive geometry | B | retain as explicit geometry fallback with reliability flag | stable coverage ratios for degenerate PDF boxes |
-| `physical-layout.ts::buildVerticalGlyphUnits` | glyph column cluster | tolerance `max(8,1.25*font)` | X positions/font | mixed | page | no | single-glyph repair path | B/C | share column estimator with text-flow instead of independent reconstruction | punctuation stays with intended column |
-| `physical-layout.ts::buildVerticalRunUnits` / `buildHorizontalUnits` | line/column cluster | `max(1.5,0.42*bodyFont)` | cross-axis positions | mixed | page | no | duplicate of flow grouping | D/B | centralize clustering evidence/result | existing physical units |
-| `physical-layout.ts::reconstructPhysicalLayout` | choose glyph vs run vertical builder | single-char ratio `>=0.7` | text-item character count | ratio | page | no | duplicate mode switch | D | consume the same emission-mode evidence chosen upstream | current glyph-heavy layout |
-| `semantic-blocks.ts::estimateNormalGap` | ordinary unit gap | lower quartile; one gap as-is; fallback `1.65*font` | physical gaps/font | distribution + fallback | page | no dispersion/confidence | semantic reconstruction | B | return estimate + sample count/dispersion/confidence | existing ordinary spacing |
-| `semantic-blocks.ts::looksLikePhysicalWrap` | join adjacent physical units | gap `<=max(1.35*normal, normal+max(2,0.35*font))`; previous end `>=0.78`; coverage `>=0.50`; next start `<=0.32` | normalized coverage + gap | mostly normalized; absolute 2pt floor | page | no, binary | physical-wrap repair | B | represent as `BoundaryEvidence`; combine independent features and calibrate metamorphically | wrapped line/column joins |
-| `semantic-blocks.ts::buildSemanticBlocks` | force large-gap split | `gap>max(1.55*normal, normal+1.25*font)` | gap/pitch/font | relative | page | no | paragraph separator | B | confidence score with distribution tails; preserve fail-closed split when evidence strong | paragraph boundaries |
-| `document-orientation.ts::resolveDocumentOrientations` | fill ambiguous run | only `unknown`; both nearest known sides must agree; max run 8 pages | hard page labels + physical page distance | **page-count based** | document | no input confidence | `d9b3a71` sparse page context resolver | **D, high**: cannot repair weak false positives; 8 pages changes meaning under pagination | resolve confidence-weighted observations/segments; allow weak known label revision while protecting strong transitions | conservative transition rejection and no blind edge guessing |
-| `heading-inference.ts::styleKey` / body style | distinguish recurring source styles | exact font name + size to 0.01pt; weighted by source range length | source font/style provenance | document recurrence; size quantization | document | recurrence weight retained internally | source-backed heading refactor | A/B | keep opaque style recurrence; metamorphic font substitution/size perturbation must preserve relative structure | content-agnostic heading evidence |
-| `heading-inference.ts::inferStructuralHeadings` | heading candidate | **first block of each physical page only**, style differs from body | source page boundary + style | not pagination invariant | document, candidate page-local | no explicit confidence | structural heading inference | **D, high**: repagination can move a valid heading away from page start | treat page-leading as one feature, not eligibility; combine style recurrence, whitespace/boundary and outline destination evidence | currently accepted chapter starts/TOC |
-| `heading-inference.ts::inferStructuralHeadings` | minimum recurrence | document pages `>=20 ? 3 : 2` | physical page count + candidate recurrence | page-count based | document | no | structural heading inference | B/D: page-size/pagination can cross the 20-page switch | derive evidence strength from recurrence probability/support rather than page-count step | avoid one-off decorative headings |
-| `heading-inference.ts::selectMajorCandidates` | distinguish major vs auxiliary starts | page-number gap mode; burst `>=20%`; mode `<0.75*median`; split `median/2` | **source page-number cadence** | physical-page units | document | no | cadence-based heading repair | **D/B, high**: logical heading identity changes when pagination changes | use logical spacing/style hierarchy/outline evidence; page cadence may be weak supporting evidence only | current major-section filtering |
-| `heading-inference.ts::dominantRecurringClusters` | accept one heading style family | strongest count `>=3x` runner-up | style recurrence counts | document-relative | document | binary dominance | dominant heading family repair | B | retain runner-up margin as confidence rather than discard all context | fail-closed behaviour on competing styles |
-| `ruby-association.ts::associateRubyCandidates` | coarse annotation→run candidate | annotation `<0.75*body`; axis dot `>=0.99`; size ratio `0.35..0.75`; side distance `0.45..1.35`; overlap `>=0.6`; ±`0.5` span | display geometry/font ratio | mostly scale-relative | page | ambiguity is preserved | geometry-only first pass | B, medium | keep fail-closed; calibrate scale/skew perturbations; centralize annotation classifier | never invent ruby from text semantics |
-| `ruby-spans.ts::associateRubySpans` | exact contiguous ruby span | axis/side `0.999`; annotation-size similarity `0.9`; grouping side `0.15`; gap `0.35`; orthogonality `0.01`; base size `0.35..0.75`; side `0.45..1.35`; overlap/continuity bounds | exact glyph provenance + measured geometry | mostly scale-relative | page | **yes at result level** (`exact` vs unresolved + reason/alternatives) | provenance repair | B, lower risk because it fails closed | preserve fail-closed provenance; test affine/scale/font perturbations before relaxing anything | exact source-backed ruby and unresolved alternatives |
-| `pdf-document-pipeline.ts::buildDocumentFromInspection` | document orientation handoff | passes only `{page, orientation}` to resolver | collapsed page label | n/a | document | **no** | current architecture | **D, high** | pass compact `OrientationObservation`; do not retain released glyph evidence | #25 memory bound + existing page outputs |
-| `pdf-document-pipeline.ts` / `pdf-to-epub-core.ts` | repeated flow analysis | page flow computed during inspection for ruby body size, then reconstructed later | compact page geometry after glyph release | n/a | document | duplicated results | memory/provenance pipeline | D/B | centralize compact page evidence once if it reduces divergence without retaining heavy geometry | current glyph release / cleanup behaviour |
-| `pdf-to-epub-core.ts` | outline vs inferred headings | if source outline exists, `structuralHeadings=[]` | outline presence only | document | binary | current navigation integration | **D, high** | resolved outline destinations and rendered heading evidence are distinct; allow outline targets to contribute section-boundary evidence without forcing `<h1>` promotion | exact source outline navigation |
-| `epub-xhtml.ts::logicalGroups` | XHTML grouping fallback | with no inferred headings, **one XHTML resource per source PDF page** | physical page boundary | none | document | no | safe provenance fallback | **D, high**: physical pagination becomes logical serialization | introduce upstream logical-flow/section boundaries; preserve source-page anchors/page-list separately | current provenance and navigation targets |
-| `epub-xhtml.ts::continuesAcrossSourcePage` | paragraph continuation across physical pages | same orientation/no notes/no boundary image/no heading; then checks leading fullwidth whitespace/opening brackets and trailing Japanese/ASCII sentence punctuation | **rendered text characters plus structure** | linguistic/content-specific | page boundary inside an existing logical group | no | introduced in `2abc749`; commit comment even cites one concrete Japanese sentence split | **C/D, critical**: explicitly forbidden Unicode/content semantics; serializer is inferring structure | move continuation decision upstream into semantic/document boundary evidence using geometry, fill/indent, style and source continuity; serializer only renders the decision | accepted cross-page paragraph continuity |
-| `epub-xhtml.ts::continuesAcrossSourcePage` + `logicalGroups` | whether cross-page join can even run | join is evaluated only inside a logical group; no headings => groups are single physical pages; source outline currently suppresses inferred headings | grouping state | none | document | no | interaction of two individually conservative features | **D, critical**: outline-bearing documents can retain physical page breaks by construction | decouple section grouping from heading rendering and outline navigation; compute logical boundaries once | good 266-story continuity plus correct outline navigation |
-| `epub-xhtml.ts::serializeLogicalXhtml` | writing mode of multi-page logical resource | body uses orientation of the first source page | page orientation | none | logical group | no | serializer simplification | D/B for mixed-orientation documents | logical grouping must split on incompatible writing-mode transitions or render scoped orientation wrappers | current vertical/horizontal presentation |
-| `content-policy.ts` + `pdf-to-epub-core.ts` | unresolved annotation presentation | core overrides policy to `preserve-as-page-note`; XHTML emits visible Notes section | unresolved provenance | n/a | page/output | reason retained | fidelity-first policy | D/product-policy risk: reader-hostile annotation fragments become body-visible | keep unresolved source evidence, but separate provenance retention from reader-visible presentation; do not weaken association to reduce note counts | no silent source-data loss |
-| `document-navigation.ts` / `epub-navigation.ts` | source outline mapping | resolved outline destination maps to source-page anchor even when XHTML groups pages | source outline target + page anchors | source-backed | document | unresolved reason retained | explicit structure inventory | A | keep; reuse resolved destinations as structural evidence upstream without changing labels | exact outline labels/targets/page-list |
+| Area | Current state | Remaining risk |
+| --- | --- | --- |
+| item role evidence | `text-item-evidence.ts` computes visible/body/annotation/margin observations once for flow, physical layout and ruby consumers | **B**: annotation ratio `0.75` and margin-noise constants remain empirical |
+| margin noise | `margin-noise.ts` owns one scale-aware edge-band rule; the old divergent 88%/90% consumers are gone | **B**: shortness `<=8`, font `<0.98*body`, 6–12%/4em edge band still need broad calibration; document recurrence is not yet used |
+| line/column clustering | `layout-clustering.ts` owns ordinary and vertical-glyph clustering; flow and physical reconstruction consume the same geometry-first helpers | **B**: `0.42`, `1.25`, `8` and local overlap tolerances remain empirical |
+| vertical reconstruction mode | flow and physical layout share `verticalTextLayoutMode`; single-glyph representation no longer selects different algorithms in different stages | **B**: existing `0.7` single-char and `0.6` vertical-sequence thresholds remain calibration debt |
+| vertical glyph ordering | geometry is primary; source item order is used only for local overlap when complete source indices exist | **B**: overlap/noise windows remain empirical |
+| spacing/pitch estimation | `spacing-evidence.ts` is the source of truth for normal spacing and paragraph-gap threshold; evidence retains `source` and `sampleCount`; one gap does not masquerade as a distribution | **B/C**: `1.65`, `1.55`, `1.25` and minimum-gap gates remain empirical |
+| attached-run orientation | `attached-run-evidence.ts` retains anchor/pending/attachment evidence; it no longer hard-labels a page | **B/C**: geometric windows (`3x`, `1.5x`, `0.75`, `0.5`, `0.75`) originated from a sparse failure class and still need perturbation coverage |
+| document orientation | metric-backed labels are stable; unknown runs consume compact channel evidence; attached-run evidence can be placed on a matching side of a real orientation transition; raw weak tendencies still require agreeing stable context | **B**: metric thresholds remain empirical, but the old page-count/run-length semantic rule is gone |
+| orientation handoff | `pdf-document-pipeline.ts` passes compact metric + attached-run evidence into document resolution; decision provenance is no longer reconstructed after the fact | no known D blocker in this handoff |
+| heading page-leading gate | recurring source-backed non-body style can be structural even when the block is not first on a physical page | **B**: style quantization/dominance calibration remains empirical |
+| heading document-length gate | recurrence is independent of total physical page count; the old `>=20 pages` switch is gone | no known D blocker for document length |
+| heading page-cadence inference | source-page-number cadence no longer promotes/demotes heading candidates | **B**: dominant-family `3x` support margin remains empirical |
+| outline vs inferred headings | source outline navigation and rendered/inferred headings coexist; outline presence no longer suppresses inferred structure | no known D blocker in the coexistence rule |
+| logical XHTML grouping | no-heading documents are grouped by logical/serialization constraints rather than one XHTML per physical PDF page; blank/image-only pages stay standalone | **B**: soft/hard estimated XHTML size budgets are serialization heuristics |
+| cross-page continuation | continuation is geometry-only via retained edge geometry; Unicode/punctuation sentence heuristics are gone | **B**: edge thresholds (`0.78`, `0.50`, `0.32`) remain empirical |
+| mixed orientation XHTML | grouped XHTML uses scoped orientation runs instead of inheriting the first source page's writing mode for all content | no known D blocker in presentation scoping |
+| unresolved annotation presentation | default conversion retains unresolved source evidence as hidden provenance; reader-visible Notes are not the default | product policy is separated from association correctness |
 
-## Provenance findings that matter
+## Open genericity debt
 
-### 1. Explicit sample-shaped footer threshold
+| File / function | Decision | Current issue | Class | Next direction |
+| --- | --- | --- | --- | --- |
+| `pdf-to-epub-core.ts` + `pdf-document-pipeline.ts` | page flow analysis | inspection callback calls `reconstructPageFlow()` only to obtain body font for ruby, then document build reconstructs the page flow again | **D/B** | expose the compact body-font estimator independently so glyph-live ruby extraction does not execute the full flow pipeline twice; keep heavy glyph release unchanged |
+| `heading-inference.ts::uniquePerSourcePage` + `epub-xhtml.ts::logicalGroups` | multiple structural headings | more than one indistinguishable candidate on the same physical source page is omitted because EPUB grouping currently assumes at most one structural boundary per source page | **D** | represent section boundaries at `(sourcePage, semanticBlockIndex)` granularity and allow a source page to be split logically without losing its page anchor |
+| `text-flow.ts::dominantFontSize` | body-font estimate | page-local char-weighted mode bucketed to 0.1pt | **B** | retain compact style evidence/document prior when mixed/cover pages make the page mode weak |
+| `margin-noise.ts::isShortMarginNoise` | marginal text removal | geometric edge/shortness rule has no document recurrence evidence | **B/C** | treat recurrence as supporting evidence before deleting plausible legitimate marginal text; preserve current suppression regression |
+| `semantic-blocks.ts` | wrap/paragraph decisions | edge and gap decisions are still binary empirical thresholds | **B** | preserve the current geometry-only contract while retaining richer boundary evidence for calibration |
+| `heading-inference.ts::dominantRecurringClusters` | choose heading family | strongest recurring style must have `>=3x` runner-up page support | **B** | retain support/margin as confidence instead of only a binary dominance result |
+| `ruby-association.ts` / `ruby-spans.ts` | ruby geometry | many fixed geometric windows remain | **B** | keep exact association fail-closed; calibrate through affine/scale/jitter metamorphic tests, never by weakening provenance |
 
-`48e0ec0` changed `physical-layout.ts` bottom-margin filtering from 90% to 88% and records the measured N8440FE page-number position (~88.9%) and body extent (~87%) as the reason. The runtime does not branch on the filename, but the numeric calibration is still fitted to one known layout. This is the clearest direct C-class rule.
+## Provenance notes
 
-### 2. Sparse attached-run fallback was calibrated from the final unresolved corpus page
+### Margin calibration
 
-`97bb12c` is careful and content-agnostic, but its validation note starts from one last unresolved page and records its exact run dimensions/offset before defining the `3x`, `1.5x`, `0.75`, `0.5`, `0.75` bounds. That does not make the phenomenon invalid; it means the current constants are a hypothesis derived from one failure class, not yet a corpus-independent model. Preserve the behaviour while moving the rule into a confidence/evidence channel and testing perturbations.
+The historical `48e0ec0` 88% footer repair was sample-shaped. That literal page-band divergence is no longer present: margin classification is centralized and scale-aware. The replacement is still empirical, so this item moves from a D/C duplication problem to B/C calibration debt rather than disappearing entirely.
 
-### 3. Cross-page continuation is explicitly linguistic and sample-led
+### Sparse attached-run calibration
 
-`2abc749` introduced `continuesAcrossSourcePage()` with a comment describing a concrete Japanese sentence split and implemented the decision with Japanese opening/closing punctuation and indentation characters. This violates the current genericity contract even though it improved the known output. The replacement must preserve the observed continuity from geometry/layout/source-boundary evidence rather than recognize sentence syntax.
+The original attached-run hard label was introduced from the final unresolved local verification case. It is now only compact geometry evidence. Page orientation remains metric-backed or document-context-backed; attached geometry cannot silently overwrite a metric-backed label. The constants still need generated perturbation coverage.
 
-### 4. Physical pagination leaks into heading inference in three independent ways
+### Cross-page continuation
 
-Heading eligibility requires the first block on a source page, recurrence changes at a 20-page document threshold, and major/auxiliary separation uses gaps measured in source-page numbers. These rules can change after page-size or pagination transformation even when logical text/style structure is equivalent. This is exactly what pagination metamorphic tests should expose.
+The former language-specific punctuation/indentation inference has been removed. Continuation is now driven by source-backed edge geometry and structural/image boundaries. This closes the critical C/D content-semantic dependency while leaving the numeric geometry thresholds as B-class calibration debt.
 
-## What the existing gates actually guarantee
+### Heading inference
 
-- `verify-semantic-samples`: selected fixed semantic regressions, currently useful for known orientation/ordering examples; not a general readability proof.
-- `verify-stage2-corpus-v2`: corpus coverage/non-empty semantic output/orientation resolution/font-pair parity; can pass when two variants share the same wrong inference.
-- `verify-epub-corpus`: package/EPUBCheck/outline/image/archive integrity; not paragraph/readability semantics.
-- browser private corpus test: browser-vs-Node implementation parity; identical bugs pass.
-- `verify-generic-corpus-quality`: currently diagnostic/provisional. It must not become a product-design oracle that requires one XHTML per PDF page or any other accidental current shape.
-- `audit:genericity`: diagnostic distribution report only. Its `DIAGNOSTIC_WEAK_MARGIN` is not production evidence and must remain so.
+Page-leading eligibility, physical-document-length recurrence thresholds and source-page cadence have all been removed. Current heading inference uses recurring opaque source styles and fails closed when style families compete. The remaining pagination leak is narrower: two structural boundaries on the same physical source page cannot yet be represented independently.
 
-The replacement gates must therefore test semantic invariants and transformations, not byte identity or accidental resource counts.
+## Current verification checkpoint
 
-## Required metamorphic tests
+At branch checkpoint `d480e5d092cc243e8e655734eda77fa8cce3ee27` the local gates reported:
 
-Each generated transformation should preserve a normalized semantic signature: ordered source-backed text blocks, paragraph continuation/split relations, writing-orientation segments, heading/section boundary relations, exact/unresolved ruby source relations, and source-page provenance independently of XHTML resource count.
+- TypeScript/type-targeted orientation tests: PASS.
+- Unit suite: 291/291 PASS.
+- Orientation audit: 9 PDFs / 5,141 pages, detected unknown 13 -> resolved unknown 0, known repaired 0.
+- Generic PDF quality verification: 9/9 PDFs and 5,141/5,141 pages PASS.
+- No GitHub Actions or hosted CI is part of this verification policy.
 
-1. Uniform coordinate/font scale up/down.
-2. Small font-size perturbation that preserves style hierarchy.
-3. Font-family substitution while preserving style recurrence classes.
-4. Margin translation and page-size change.
-5. Re-pagination: move an equivalent logical block across a physical page boundary and change total page count.
-6. Outline add/remove with equivalent resolved section destinations; navigation source evidence may change, body semantics must not.
+These PDFs remain diagnostics only. Passing them is necessary regression evidence, not proof of generality.
+
+## Metamorphic coverage to preserve/extend
+
+1. Uniform coordinate/font scaling.
+2. Small font-size perturbation preserving style hierarchy.
+3. Font-family substitution preserving style recurrence roles.
+4. Margin translation and page-size changes.
+5. Equivalent logical content moved across physical page boundaries.
+6. Outline add/remove without body-semantic changes.
 7. Equivalent single-glyph vs multi-glyph TextItem emission.
-8. Small coordinate jitter/skew within PDF extraction noise.
-9. Header/footer recurrence added at varying normalized margin positions.
-10. Mixed-orientation segment insertion to prove document context does not steamroll a real transition.
+8. Small coordinate jitter/skew within extraction noise.
+9. Header/footer recurrence at varying normalized positions.
+10. Mixed-orientation transitions that document context must not steamroll.
+11. Multiple logical section boundaries within one physical source page.
 
 ## Immediate engineering order
 
-1. **Freeze the accepted long-sample semantic/output properties as regression assertions, not byte parity.** In particular preserve its text order, paragraph continuity, navigation targets and ruby provenance.
-2. **Add metamorphic unit/fixture tests before changing thresholds.** Start with orientation and cross-page boundary evidence because those currently contain the highest-risk hard decisions.
-3. **Introduce compact `OrientationObservation`.** Keep every current evidence channel and support count; add winning margin/confidence; preserve the provisional label for compatibility.
-4. **Make document orientation confidence-aware.** It may revise weak known observations, but must preserve strong local evidence and explicit transitions. Remove pagination-sensitive `8 pages` as the semantic basis of confidence.
-5. **Centralize item evidence/classification.** Body/annotation/marginal evidence must be computed once so `text-flow`, `physical-layout` and ruby stages cannot diverge. Do not retain heavy glyph evidence.
-6. **Replace sample-derived margin filtering with recurrence evidence.** Position band, style, shortness and recurrence are evidence; no fixed “N8440-like” footer coordinate is a rule.
-7. **Move cross-page continuity out of the XHTML serializer.** Introduce source-backed boundary evidence upstream; no Unicode punctuation semantics in the decision. Keep the exact currently-good rendered continuation as a regression target.
-8. **Decouple logical grouping from heading rendering/navigation.** Source outline destinations, inferred heading evidence and XHTML grouping are separate outputs of one structural model. Physical source-page markers remain provenance, not section boundaries.
-9. **Make heading inference pagination-resistant.** Page-leading and page cadence may be weak supporting features, never eligibility gates. Preserve source-exact labels and fail-closed behaviour when style evidence genuinely competes.
-10. **Keep ruby fail-closed.** Calibrate geometric windows with metamorphic transformations; never relax provenance just to improve corpus counts. Reader-facing unresolved-note policy is a separate layer.
-11. Run the cheap unit/metamorphic gates first, then the existing semantic selected checks, then the 9-PDF corpus gates once per meaningful production change. Do not repeatedly spend the full corpus to tune one number.
-
-The acceptance target is not “9/9 known books pass.” It is: parser decisions are functions of generic PDF/document evidence; equivalent documents remain semantically equivalent under layout transformations; the accepted good output stays good; and the nine private samples act only as independent diagnostics against regression/overfit.
+1. Remove the duplicate full page-flow pass used only to obtain body-font size for glyph-live ruby extraction.
+2. Add focused regression/metamorphic coverage for that refactor and re-run the existing unit + semantic gates before spending the full 9-PDF verification set.
+3. Then address multiple structural headings on one source page by moving logical section boundaries to `(sourcePage, semanticBlockIndex)` granularity.
+4. Keep empirical threshold tuning separate from architectural cleanup. Do not tune constants against the nine local PDFs.
+5. Keep ruby exact association fail-closed and unresolved provenance intact throughout.
