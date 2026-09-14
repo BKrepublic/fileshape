@@ -41,7 +41,7 @@ Purpose: FileShape must generalize to unknown PDFs at large scale. The local nin
 | heading family confidence | `inferStructuralHeadingEvidence()` retains every recurring family’s page support, support share, selected state, strongest/runner-up support, support margin, dominance ratio and decision; `inferStructuralHeadings()` remains the compatibility wrapper using the unchanged `3x` rule | **B**: the `3x` dominance threshold itself remains empirical |
 | multiple headings on one source page | heading inference retains every recurring block candidate; XHTML renders block-granular heading anchors; NAV/NCX enumerate all anchors in one resource without splitting or losing the physical source-page marker | no known D blocker in same-page heading representation |
 | outline vs inferred headings | source outline navigation and rendered/inferred headings coexist; outline presence no longer suppresses inferred structure | no known D blocker in the coexistence rule |
-| logical XHTML grouping | no-heading documents are grouped by logical/serialization constraints rather than one XHTML per physical PDF page; blank/image-only pages stay standalone | **B**: soft/hard estimated XHTML size budgets are serialization heuristics |
+| logical XHTML grouping | no-heading documents are grouped by logical/serialization constraints rather than one XHTML per physical PDF page; exact soft/hard boundaries, continuation interaction, page redistribution, standalone blank/image-only pages and navigation anchors are directly tested | **B**: soft/hard estimated XHTML size budgets remain empirical serialization heuristics, but current strict boundary behavior is explicit |
 | cross-page continuation | continuation is geometry-only via retained edge geometry; Unicode/punctuation sentence heuristics are gone | **B**: edge thresholds remain empirical |
 | mixed orientation XHTML | grouped XHTML uses scoped orientation runs instead of inheriting the first source page's writing mode for all content | no known D blocker in presentation scoping |
 | unresolved annotation presentation | default conversion retains unresolved source evidence as hidden provenance; reader-visible Notes are not the default | product policy is separated from association correctness |
@@ -51,7 +51,7 @@ Purpose: FileShape must generalize to unknown PDFs at large scale. The local nin
 | File / function | Decision | Current issue | Class | Next direction |
 | --- | --- | --- | --- | --- |
 | `spacing-evidence.ts` | normal spacing and paragraph-gap thresholds | `1.65`, `1.55`, `1.25` remain empirical | **B/C** | boundary/metamorphic coverage is now locked; any future calibration needs independent generic evidence and must preserve `source`, `sampleCount`, scale normalization and current consumer comparison semantics |
-| logical XHTML grouping / serialization budgets | resource grouping | soft/hard estimated XHTML size budgets remain empirical serialization heuristics | **B** | expose/lock threshold behavior with synthetic size perturbations without tying grouping to physical PDF pagination |
+| logical XHTML grouping / serialization budgets | resource grouping | soft/hard estimated XHTML size budgets remain empirical serialization heuristics | **B** | boundary/metamorphic coverage is now locked; any future calibration needs independent reader/serializer evidence and must preserve continuation, standalone-page and NAV/NCX/source-anchor guarantees |
 | `ruby-association.ts` / `ruby-spans.ts` | ruby geometry | exact association still uses fixed geometric windows for annotation/body size, side distance, overlap, line grouping, continuity and ambiguity | **B** | keep exact association fail-closed; current perturbation behavior is directly tested, so any future calibration must preserve those provenance guarantees |
 | `attached-run-evidence.ts` | sparse endpoint attachment | fixed geometric windows remain | **B/C** | coverage locks scale/translation, jitter and threshold boundaries; calibrate only with independent evidence, never by promoting it to a local hard label |
 | orientation decision thresholds | page orientation metrics | `0.7`, `0.6`, `1.5x`-style gates are empirical | **B** | boundary and precedence behavior is explicit; any calibration change must remain provenance-preserving and fail closed on ties |
@@ -83,6 +83,14 @@ Paragraph-gap coverage locks both multiplier branches and their exact tie, unifo
 
 Local verification at checkpoint `ee270030ca1f668f9a5b1403eb8a7f4d77e307ab` passed typecheck, 34/34 focused spacing/direct-consumer tests, 345/345 unit tests and 7/7 semantic checks. Production code and the `1.65`, `1.55`, `1.25` calibrations were unchanged, so the nine-PDF diagnostic set was not rerun.
 
+### Logical XHTML serialization budgets
+
+Synthetic public-serializer tests now lock the exact estimated-character budgets without exporting test-only production internals. A non-continuing group remains intact below and at the soft budget and splits one estimated character above it. Source-backed paragraph continuation may cross the soft budget; it remains intact at the hard budget and splits one estimated character above it, matching the current strict `>` comparisons.
+
+Equivalent logical text redistributed across different source-page boundaries remains in one logical resource while under budget. Blank and image-only source pages stay explicit standalone resources, every source-page anchor survives, and both EPUB3 NAV and legacy NCX point to the resulting standalone targets.
+
+Local verification at checkpoint `c2b42a8747573e4619f71050339b257057b72dd8` passed typecheck, 29/29 focused logical-flow/navigation/NCX/package tests, 349/349 unit tests and 7/7 semantic checks. Production serialization code and size constants were unchanged, so the nine-PDF diagnostic set was not rerun.
+
 ### Heading family confidence
 
 Page-leading eligibility, physical-document-length gates and page cadence are gone. `inferStructuralHeadingEvidence()` exposes the complete recurring-family competition while leaving historical behavior intact: a single recurring family is accepted directly; when multiple families recur, the strongest still needs at least `3x` the runner-up independent page support. Tests distinguish clear dominance from competing families using support/share/margin/ratio evidence rather than a hidden boolean only.
@@ -111,12 +119,12 @@ The initial ordinary-tolerance boundary fixture exposed only an IEEE-754 test-co
 
 ## Current verification checkpoint
 
-At branch checkpoint `ee270030ca1f668f9a5b1403eb8a7f4d77e307ab` the local gates reported:
+At branch checkpoint `c2b42a8747573e4619f71050339b257057b72dd8` the local gates reported:
 
-- Focused spacing / semantic-block / text-flow tests: 34/34 PASS.
-- Unit suite: 345/345 PASS.
+- Focused logical-flow / navigation / NCX / package tests: 29/29 PASS.
+- Unit suite: 349/349 PASS.
 - Semantic verification: 7/7 PASS.
-- The worktree was clean after the checkpoint commit; the branch was intentionally one local commit ahead of `origin/fix/generic-corpus-reflow` pending this audit update.
+- The worktree was clean after the checkpoint commit; the branch was intentionally three local commits ahead of `origin/fix/generic-corpus-reflow` pending this audit update.
 - The latest production-changing full verification remains the body-font document-context checkpoint: 9/9 PDFs and 5,141/5,141 pages PASS, detected unknown 5 -> resolved 0, known repaired 0, body-font prior substitutions 0, 6,272 local margin candidates, 5,947 recurring suppressions and 325 isolated candidates retained.
 - No GitHub Actions or hosted CI is part of this verification policy.
 
@@ -143,12 +151,12 @@ The nine PDFs remain diagnostics only; passing them is regression evidence, not 
 17. Orientation threshold ties and precedence must remain explicit rather than depending on comparison-order accidents.
 18. Layout clustering must preserve partitions under uniform scale/translation and make inclusive/strict threshold boundaries explicit.
 19. Spacing estimation preserves normalized decisions under uniform scale and retains sparse-sample provenance instead of pretending one observation is a distribution; current minimum-gap and paragraph-threshold boundary semantics are explicit.
-20. Serialization grouping must remain independent of physical PDF pagination under equivalent logical content and estimated resource size.
+20. Serialization grouping remains independent of physical PDF pagination under equivalent logical content and estimated resource size; exact soft/hard budget boundaries, continuation, standalone-page and navigation-anchor behavior are explicit.
 
 ## Immediate engineering order
 
 1. Spacing evidence boundary/metamorphic coverage is complete at `ee270030ca1f668f9a5b1403eb8a7f4d77e307ab`; do not recalibrate its constants without independent generic evidence.
-2. Continue with logical XHTML grouping / serialization-size budgets using the same evidence-first, pagination-independent approach.
-3. Lock exact soft/hard boundaries, small synthetic size perturbations, continuation interaction, equivalent logical content across source-page boundaries, standalone blank/image-only behavior, and NAV/NCX/source-page anchors before considering calibration.
+2. Logical XHTML grouping / serialization-size boundary coverage is complete at `c2b42a8747573e4619f71050339b257057b72dd8`; do not recalibrate its budgets without independent reader/serializer evidence.
+3. Continue with the heading-family `3x` dominance threshold: lock the exact inclusive boundary, the nearest integer support below it, retained support/share/margin/ratio evidence, and invariance to unrelated body-page padding without changing the rule.
 4. Keep threshold tuning separate from evidence plumbing. Do not tune constants against the nine local PDFs.
 5. Keep ruby exact association fail-closed, unresolved provenance intact, metric-backed orientation immutable, and the existing acceptance rules unchanged.
