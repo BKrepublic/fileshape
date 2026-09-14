@@ -25,7 +25,14 @@ function sampleFlow(): PageFlowResult {
       { position: 600, itemCount: 1, text: "本文B" },
     ],
     boundaries: [
-      { gap: 100, normalPitch: 25, gapRatio: 4, estimatedLineBreaks: 4 },
+      {
+        gap: 100,
+        normalPitch: 25,
+        normalPitchSource: "distribution",
+        normalPitchSampleCount: 4,
+        gapRatio: 4,
+        estimatedLineBreaks: 4,
+      },
     ],
     text: "本文A\n本文B",
     sourceSpacingText: "本文A\n\n\n\n本文B",
