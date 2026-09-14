@@ -63,6 +63,9 @@ type FileAudit = {
   annotationFractionQ50: number;
   annotationFractionQ90: number;
   pagesWithMarginNoise: number;
+  marginCandidates: number;
+  recurringMarginCandidates: number;
+  retainedOneOffMarginCandidates: number;
   suspicious: PageAudit[];
 };
 
@@ -143,6 +146,8 @@ async function auditFile(filePath: string): Promise<FileAudit> {
     inspection.pages.map((page) => [page.page, estimateBodyFontSize(page.textItems)]),
   );
   const marginProfile = buildDocumentMarginProfile(inspection.pages, bodyFontSizes);
+  const marginEvidence = [...marginProfile.evidenceByItem.values()];
+  const recurringMarginCandidates = marginEvidence.filter((entry) => entry.recurring).length;
   const flows = inspection.pages.map((page) => ({
     page: page.page,
     flow: reconstructPageFlow(page, marginProfile),
@@ -240,6 +245,9 @@ async function auditFile(filePath: string): Promise<FileAudit> {
     annotationFractionQ50: round(quantile(annotationFractions, 0.5), 3),
     annotationFractionQ90: round(quantile(annotationFractions, 0.9), 3),
     pagesWithMarginNoise: pages.filter((page) => page.marginNoiseItems > 0).length,
+    marginCandidates: marginEvidence.length,
+    recurringMarginCandidates,
+    retainedOneOffMarginCandidates: marginEvidence.length - recurringMarginCandidates,
     suspicious,
   };
 }
@@ -256,6 +264,9 @@ function printSummary(result: FileAudit): void {
     + ` resolved=${r.vertical}/${r.horizontal}/${r.unknown}`
     + ` unknownFilled=${result.contextFilledUnknown}`
     + ` knownRepaired=${result.contextRepairedKnown}`
+    + ` marginCandidates=${result.marginCandidates}`
+    + ` recurringRemoved=${result.recurringMarginCandidates}`
+    + ` retainedOneOff=${result.retainedOneOffMarginCandidates}`
     + repaired,
   );
 }
@@ -278,6 +289,7 @@ function printAudit(result: FileAudit): void {
   console.log(`  bodyFont q10/q50/q90=${result.bodyFontQ10}/${result.bodyFontQ50}/${result.bodyFontQ90}`);
   console.log(`  evidenceMargin q10/q50/q90=${result.evidenceMarginQ10}/${result.evidenceMarginQ50}/${result.evidenceMarginQ90}`);
   console.log(`  annotationFraction q50/q90=${result.annotationFractionQ50}/${result.annotationFractionQ90} pagesWithMarginNoise=${result.pagesWithMarginNoise}`);
+  console.log(`  marginCandidates=${result.marginCandidates} recurringRemoved=${result.recurringMarginCandidates} retainedOneOff=${result.retainedOneOffMarginCandidates}`);
   for (const page of result.suspicious) console.log(`  SUSPECT ${pageLabel(page)}`);
 }
 
@@ -317,13 +329,19 @@ async function main(): Promise<void> {
   const totalKnownRepaired = results.reduce((sum, result) => sum + result.contextRepairedKnown, 0);
   const totalDetectedUnknown = results.reduce((sum, result) => sum + result.detected.unknown, 0);
   const totalResolvedUnknown = results.reduce((sum, result) => sum + result.resolved.unknown, 0);
+  const totalMarginCandidates = results.reduce((sum, result) => sum + result.marginCandidates, 0);
+  const totalRecurringMarginCandidates = results.reduce((sum, result) => sum + result.recurringMarginCandidates, 0);
+  const totalRetainedOneOff = results.reduce((sum, result) => sum + result.retainedOneOffMarginCandidates, 0);
 
   console.log(RULE);
   console.log(
     `TOTAL pdfs=${results.length} pages=${totalPages}`
     + ` unknown=${totalDetectedUnknown}->${totalResolvedUnknown}`
     + ` unknownFilled=${totalUnknownFilled}`
-    + ` knownRepaired=${totalKnownRepaired}`,
+    + ` knownRepaired=${totalKnownRepaired}`
+    + ` marginCandidates=${totalMarginCandidates}`
+    + ` recurringRemoved=${totalRecurringMarginCandidates}`
+    + ` retainedOneOff=${totalRetainedOneOff}`,
   );
   if (DETAILED) {
     console.log(`DETAIL isolatedKnownFlips=${totalFlips} weakKnownDiagnostic=${totalWeak}`);
