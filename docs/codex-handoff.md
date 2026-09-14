@@ -7,13 +7,13 @@ This file is the concise continuation point for autonomous FileShape work. Read 
 - Repository: `BKrepublic/fileshape`
 - Local workdir: `/data/experiment/fileshape`
 - Working branch: `fix/generic-corpus-reflow`
-- Last locally verified code checkpoint: `03100035408c9c2a6bf48e16d4ab65e6dd6b92dd`
+- Last locally verified code checkpoint: `813d7dbd986093f0738c317138f4d0e12a1f78a4`
 - At that checkpoint:
-  - focused layout-clustering / flow / physical-layout / genericity-metamorphic tests: PASS
-  - unit suite: `333/333 PASS`
+  - focused continuation / semantic-block / logical-XHTML tests: `25/25 PASS`
+  - unit suite: `356/356 PASS`
   - semantic verification: PASS
-  - branch/worktree clean and aligned with origin
-- Commits after `031000...` at handoff time are documentation-only. The production/test code state remains the locally verified state unless Codex changes it.
+  - production code unchanged throughout the spacing, serialization-budget, heading-dominance and continuation-edge coverage work
+- The worktree was clean at `813d7db...`; the branch was seven local commits ahead of origin before this documentation update.
 
 Before work, synchronize the local checkout with origin using fish-compatible commands. Do not repeat already-closed engineering stages merely because the documentation commit is newer than the locally verified code checkpoint.
 
@@ -47,10 +47,14 @@ Do not redo these stages unless a new regression proves a real defect:
 - mixed-orientation XHTML scoping
 - body-font compact evidence plus conservative document prior
 - semantic-boundary compact evidence
+- spacing scale/provenance/minimum-gap/paragraph-threshold boundary coverage
 - heading-family support/share/margin/ratio evidence
+- heading-family exact `3x` dominance and body-page-padding coverage
 - ruby geometry perturbation coverage
 - attached-run/orientation threshold and perturbation coverage
 - layout-clustering scale/translation/boundary/metamorphic coverage
+- logical XHTML soft/hard size-budget, continuation, standalone-page and navigation-anchor coverage
+- shared continuation-edge exact-boundary, consumer-agreement and text-independence coverage
 
 See `docs/genericity-heuristic-audit.md` for the exact evidence and remaining B/C debt.
 
@@ -73,34 +77,16 @@ Do not rerun the full nine-PDF quality set for test-only or documentation-only c
 
 Continue from the open B/C debt in `docs/genericity-heuristic-audit.md`.
 
-### 1. Spacing evidence first
+### Completed evidence-first checkpoints
 
-Inspect `src/spacing-evidence.ts` and all consumers. The current empirical constants include the ordinary-spacing fallback and paragraph-gap multipliers (`1.65`, `1.55`, `1.25`) plus minimum-gap handling.
+- Spacing evidence: scale and translation invariance, all sparse provenance states, strict minimum-gap filtering, exact paragraph-threshold branches and consumer comparison semantics; checkpoint `ee270030ca1f668f9a5b1403eb8a7f4d77e307ab`.
+- Logical XHTML grouping: soft/hard exact boundaries, small synthetic size perturbations, continuation interaction, pagination-independent redistribution, standalone blank/image-only pages and NAV/NCX/source anchors; checkpoint `c2b42a8747573e4619f71050339b257057b72dd8`.
+- Heading-family dominance: inclusive `3x`, nearest integer below, retained competition evidence and unrelated body-page padding; checkpoint `f01268faa41d6da2d49b4f5218ad2d01ae34e7c7`.
+- Shared continuation edge: inclusive `0.78`/`0.5`/`0.32`, independent outside perturbations, semantic/XHTML consumer agreement and text-independence; checkpoint `813d7dbd986093f0738c317138f4d0e12a1f78a4`.
 
-First add behavior-preserving focused coverage. Do not change constants merely because they look arbitrary.
+### Next evidence-first target
 
-Required coverage should include, where applicable:
-
-- uniform scale invariance
-- translation invariance where coordinates are involved
-- sparse evidence provenance (`distribution`, `font-fallback`, `single-observation`, `none`)
-- exact inclusive/strict boundary behavior
-- small spacing perturbations around current thresholds
-- paragraph-gap decisions preserving the same normalized relation under uniform scale
-- one observation must never silently become a distribution
-
-If a new test exposes an unexpected boundary, diagnose whether it is a fixture/math artifact or a real production defect before changing production code.
-
-### 2. Then serialization grouping budgets
-
-After spacing evidence is locally green, inspect logical XHTML grouping / estimated serialization-size thresholds. Preserve these invariants:
-
-- grouping is driven by logical/serialization constraints, not physical PDF pagination
-- equivalent logical content moved across source-page boundaries should not create arbitrary resource structure changes
-- blank/image-only page behavior stays explicit
-- existing NAV/NCX/source-page anchor guarantees stay intact
-
-Again, add evidence/boundary/metamorphic coverage before calibrating constants.
+Inspect margin recurrence without changing its current gates first. Lock the conjunction of at least two supporting pages and at least 20% of text-bearing pages, exact normalized clustering bucket boundaries, and invariance to unrelated body-page insertion. Preserve isolated one-off content and shared flow/physical-layout decisions. Do not calibrate against the nine diagnostic PDFs.
 
 ## Verification discipline
 

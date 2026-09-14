@@ -42,7 +42,7 @@ Purpose: FileShape must generalize to unknown PDFs at large scale. The local nin
 | multiple headings on one source page | heading inference retains every recurring block candidate; XHTML renders block-granular heading anchors; NAV/NCX enumerate all anchors in one resource without splitting or losing the physical source-page marker | no known D blocker in same-page heading representation |
 | outline vs inferred headings | source outline navigation and rendered/inferred headings coexist; outline presence no longer suppresses inferred structure | no known D blocker in the coexistence rule |
 | logical XHTML grouping | no-heading documents are grouped by logical/serialization constraints rather than one XHTML per physical PDF page; exact soft/hard boundaries, continuation interaction, page redistribution, standalone blank/image-only pages and navigation anchors are directly tested | **B**: soft/hard estimated XHTML size budgets remain empirical serialization heuristics, but current strict boundary behavior is explicit |
-| cross-page continuation | continuation is geometry-only via retained edge geometry; Unicode/punctuation sentence heuristics are gone | **B**: edge thresholds remain empirical |
+| cross-page continuation | continuation is geometry-only via retained edge geometry; exact inclusive `0.78` end, `0.5` coverage and `0.32` start boundaries plus immediate outside perturbations are shared by same-page semantic joining and XHTML grouping tests | **B**: edge thresholds remain empirical, but current fail-closed boundary behavior and text-independence are explicit |
 | mixed orientation XHTML | grouped XHTML uses scoped orientation runs instead of inheriting the first source page's writing mode for all content | no known D blocker in presentation scoping |
 | unresolved annotation presentation | default conversion retains unresolved source evidence as hidden provenance; reader-visible Notes are not the default | product policy is separated from association correctness |
 
@@ -74,6 +74,14 @@ The nine-PDF checkpoint reported `bodyFontPrior=0`, so the document prior did no
 ### Semantic boundary evidence
 
 Same-page wrap/paragraph reconstruction remains geometry-only. `SemanticBoundaryDecision` retains the threshold values and intermediate booleans that produced the final `join/reason` decision. Local verification at checkpoint `499a4fa91664326f6abeedd4555665d48fdf1c9d` passed typecheck, focused tests, 307/307 unit tests and semantic verification with no formula change.
+
+### Continuation edge geometry
+
+The shared continuation gate accepts exact `previousEndRatio >= 0.78`, `previousCoverageRatio >= 0.5`, and `nextStartRatio <= 0.32` boundaries. Direct helper tests and both consumers independently reject a `1e-6` perturbation outside each channel while holding the other two at equality.
+
+Same-page semantic reconstruction joins only the accepted geometry. Cross-page XHTML tests use combined estimated content above the soft serialization budget and below the hard budget, proving that accepted geometry keeps one logical resource while each rejected channel yields two resources. Punctuation and plain-text variants produce the same decision, so content meaning never enters the gate.
+
+Local verification at checkpoint `813d7dbd986093f0738c317138f4d0e12a1f78a4` passed typecheck, 25/25 focused continuation/semantic/XHTML tests, 356/356 unit tests and 7/7 semantic checks. Production continuation code and thresholds were unchanged, so the nine-PDF diagnostic set was not rerun.
 
 ### Spacing evidence thresholds
 
@@ -119,12 +127,12 @@ The initial ordinary-tolerance boundary fixture exposed only an IEEE-754 test-co
 
 ## Current verification checkpoint
 
-At branch checkpoint `f01268faa41d6da2d49b4f5218ad2d01ae34e7c7` the local gates reported:
+At branch checkpoint `813d7dbd986093f0738c317138f4d0e12a1f78a4` the local gates reported:
 
-- Focused heading-inference / direct-consumer tests: 11/11 PASS.
-- Unit suite: 352/352 PASS.
+- Focused continuation / semantic-block / logical-XHTML tests: 25/25 PASS.
+- Unit suite: 356/356 PASS.
 - Semantic verification: 7/7 PASS.
-- The worktree was clean after the checkpoint commit; the branch was intentionally five local commits ahead of `origin/fix/generic-corpus-reflow` pending this audit update.
+- The worktree was clean after the checkpoint commit; the branch was intentionally seven local commits ahead of `origin/fix/generic-corpus-reflow` pending this audit update.
 - The latest production-changing full verification remains the body-font document-context checkpoint: 9/9 PDFs and 5,141/5,141 pages PASS, detected unknown 5 -> resolved 0, known repaired 0, body-font prior substitutions 0, 6,272 local margin candidates, 5,947 recurring suppressions and 325 isolated candidates retained.
 - No GitHub Actions or hosted CI is part of this verification policy.
 
@@ -153,11 +161,12 @@ The nine PDFs remain diagnostics only; passing them is regression evidence, not 
 19. Spacing estimation preserves normalized decisions under uniform scale and retains sparse-sample provenance instead of pretending one observation is a distribution; current minimum-gap and paragraph-threshold boundary semantics are explicit.
 20. Serialization grouping remains independent of physical PDF pagination under equivalent logical content and estimated resource size; exact soft/hard budget boundaries, continuation, standalone-page and navigation-anchor behavior are explicit.
 21. Heading-family dominance keeps its exact inclusive `3x` support boundary, fails closed below it, and remains independent of unrelated body-page insertion and padding.
+22. The shared continuation edge gate keeps exact inclusive boundaries, fails closed independently outside every channel, and remains independent of punctuation or text meaning in both semantic and XHTML consumers.
 
 ## Immediate engineering order
 
 1. Spacing evidence boundary/metamorphic coverage is complete at `ee270030ca1f668f9a5b1403eb8a7f4d77e307ab`; do not recalibrate its constants without independent generic evidence.
 2. Logical XHTML grouping / serialization-size boundary coverage is complete at `c2b42a8747573e4619f71050339b257057b72dd8`; do not recalibrate its budgets without independent reader/serializer evidence.
 3. Heading-family dominance boundary/metamorphic coverage is complete at `f01268faa41d6da2d49b4f5218ad2d01ae34e7c7`; do not recalibrate the `3x` rule without independent generic evidence.
-4. Continue with the shared cross-page/same-page continuation edge gate: lock exact inclusive `0.78`, `0.5`, and `0.32` boundaries, immediate outside perturbations, text-independence, and agreement between semantic-block and XHTML grouping consumers without changing the rule.
-5. Keep threshold tuning separate from evidence plumbing. Do not tune constants against the nine local PDFs; keep ruby exact association fail-closed, unresolved provenance intact, metric-backed orientation immutable, and all existing acceptance rules unchanged.
+4. Shared cross-page/same-page continuation boundary coverage is complete at `813d7dbd986093f0738c317138f4d0e12a1f78a4`; do not recalibrate its edge thresholds without independent generic evidence.
+5. The next evidence-first B-class target is margin recurrence: lock the conjunction of at least two supporting pages and at least 20% of text-bearing pages, exact normalized clustering bucket boundaries, and invariance to unrelated body-page insertion before considering calibration. Keep ruby exact association fail-closed, metric-backed orientation immutable, and all acceptance rules unchanged.
