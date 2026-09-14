@@ -12,6 +12,11 @@ import {
   type OrientationMetrics,
   type WritingOrientation,
 } from "./orientation-decision.js";
+import {
+  estimateNormalSpacing,
+  paragraphGapThreshold,
+  type SpacingEstimateSource,
+} from "./spacing-evidence.js";
 import { collectTextItemEvidence } from "./text-item-evidence.js";
 
 export type { WritingOrientation } from "./orientation-decision.js";
@@ -25,6 +30,8 @@ export type FlowGroup = {
 export type FlowBoundary = {
   gap: number;
   normalPitch: number;
+  normalPitchSource: SpacingEstimateSource;
+  normalPitchSampleCount: number;
   gapRatio: number;
   estimatedLineBreaks: number;
 };
@@ -52,13 +59,6 @@ function round(value: number, digits = 3): number {
 
 function charCount(text: string): number {
   return [...text.trim()].length;
-}
-
-function lowerQuartile(values: number[]): number {
-  if (values.length === 0) return 0;
-  const sorted = [...values].sort((left, right) => left - right);
-  const index = Math.floor((sorted.length - 1) * 0.25);
-  return sorted[index] ?? 0;
 }
 
 function dominantFontSize(items: InspectTextItem[]): number {
@@ -195,21 +195,6 @@ type PhysicalColumn = {
   text: string;
 };
 
-function estimateNormalPitch(columns: PhysicalColumn[], bodyFontSize: number): number {
-  const gaps: number[] = [];
-  for (let index = 1; index < columns.length; index += 1) {
-    const previous = columns[index - 1];
-    const current = columns[index];
-    if (!previous || !current) continue;
-    const gap = previous.position - current.position;
-    if (gap > Math.max(1, bodyFontSize * 0.6)) gaps.push(gap);
-  }
-
-  if (gaps.length >= 2) return lowerQuartile(gaps);
-  if (bodyFontSize > 0) return bodyFontSize * 1.65;
-  return gaps[0] ?? 0;
-}
-
 function mergeVerticalColumns(
   columns: PhysicalColumn[],
   bodyFontSize: number,
@@ -224,11 +209,17 @@ function mergeVerticalColumns(
     };
   }
 
-  const normalPitch = estimateNormalPitch(columns, bodyFontSize);
-  const paragraphGapThreshold =
-    normalPitch > 0
-      ? Math.max(normalPitch * 1.55, normalPitch + bodyFontSize * 1.25)
-      : Number.POSITIVE_INFINITY;
+  const gaps = columns.slice(1).map((column, index) => {
+    const previous = columns[index];
+    return previous ? previous.position - column.position : 0;
+  });
+  const spacing = estimateNormalSpacing(
+    gaps,
+    bodyFontSize,
+    Math.max(1, bodyFontSize * 0.6),
+  );
+  const normalPitch = spacing.normal;
+  const paragraphThreshold = paragraphGapThreshold(normalPitch, bodyFontSize);
 
   const groups: FlowGroup[] = [];
   const boundaries: FlowBoundary[] = [];
@@ -243,7 +234,7 @@ function mergeVerticalColumns(
     if (index > 0) {
       const previousColumn = columns[index - 1];
       const gap = previousColumn ? previousColumn.position - column.position : 0;
-      if (gap >= paragraphGapThreshold && blockText.length > 0) {
+      if (gap >= paragraphThreshold && blockText.length > 0) {
         groups.push({
           position: round(blockPosition, 2),
           itemCount: blockItemCount,
@@ -254,6 +245,8 @@ function mergeVerticalColumns(
         boundaries.push({
           gap: round(gap, 2),
           normalPitch: round(normalPitch, 2),
+          normalPitchSource: spacing.source,
+          normalPitchSampleCount: spacing.sampleCount,
           gapRatio: round(gapRatio, 3),
           estimatedLineBreaks: Math.min(20, Math.max(1, Math.round(gapRatio))),
         });
