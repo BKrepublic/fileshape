@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { attachedRunTendency } from "../src/attached-run-evidence.js";
 import { buildDocumentFromInspection } from "../src/pdf-document-pipeline.js";
 import { convertPdfToEpub } from "../src/pdf-to-epub.js";
 import type { InspectPage, InspectResult, InspectTextItem } from "../src/pdf-inspector.js";
@@ -66,6 +67,13 @@ function ambiguousHorizontalEvidenceItems(): InspectTextItem[] {
   });
 }
 
+function attachedVerticalEvidenceItems(): InspectTextItem[] {
+  const anchor = item("anchor", 200, 700, 10, 60);
+  const pending = item("xy", 195, 640, 8, 10);
+  pending.displayTransform = [0, 10, -10, 0, pending.displayX, pending.displayY];
+  return [anchor, pending];
+}
+
 function inspection(pages: InspectPage[]): InspectResult {
   return { file: "fixture.pdf", byteLength: 1, pageCount: pages.length, pages };
 }
@@ -119,6 +127,23 @@ test("document context resolves a short unknown page between matching orientatio
   const result = buildDocumentFromInspection(inspection(pages), "doc:context");
   assert.equal(result.document.pages[1]?.orientation, "horizontal");
   assert.equal(result.document.pages[1]?.blocks[0]?.inlines[0]?.kind, "text");
+});
+
+test("pipeline keeps attached-run geometry provisional until document context agrees", () => {
+  const pages = [
+    page(1, [item("vertical anchor one", 200, 700, 10, 180)]),
+    page(2, attachedVerticalEvidenceItems()),
+    page(3, [item("vertical anchor two", 200, 700, 10, 180)]),
+  ];
+  const result = buildDocumentFromInspection(inspection(pages), "doc:attached-context");
+  const middle = result.pages.find((entry) => entry.page === 2);
+
+  assert.ok(middle);
+  assert.equal(middle.flow.orientation, "unknown");
+  assert.equal(attachedRunTendency(middle.flow.attachedRunEvidence), "vertical");
+  assert.equal(middle.orientation, "vertical");
+  assert.equal(result.document.pages[1]?.orientation, "vertical");
+  assert.ok((result.document.pages[1]?.blocks.length ?? 0) > 0);
 });
 
 test("document build reports both flow-analysis and page-build progress", () => {
