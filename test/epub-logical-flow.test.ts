@@ -122,7 +122,7 @@ test("structural headings become EPUB TOC entries while PDF pages remain page-li
   assert.match(navigation.xhtml, /page-0003\.xhtml#source-page-4">Page 4<\/a>/);
 });
 
-test("resolved source outline destinations group physical pages without inventing headings", () => {
+test("resolved source outline destinations target anchors without changing XHTML grouping", () => {
   const document = documentFixture([
     "front matter",
     "section A",
@@ -143,20 +143,15 @@ test("resolved source outline destinations group physical pages without inventin
   }]);
 
   const xhtml = serializeEpubXhtml(document);
-  assert.equal(xhtml.pages.length, 3);
-  assert.deepEqual(xhtml.pages.map((page) => page.sourcePages), [
-    [1],
-    [2, 3],
-    [4, 5],
-  ]);
-  assert.equal(xhtml.pages[1]?.heading, undefined);
-  assert.equal(xhtml.pages[2]?.heading, undefined);
+  assert.equal(xhtml.pages.length, 1);
+  assert.deepEqual(xhtml.pages[0]?.sourcePages, [1, 2, 3, 4, 5]);
+  assert.equal(xhtml.pages[0]?.heading, undefined);
 
   const navigation = serializeEpubNavigation(document, "Book", "en", xhtml.pages);
   assert.equal(navigation.summary.mode, "outline");
   assert.equal(navigation.summary.outlineEntries, 2);
-  assert.match(navigation.xhtml, /page-0002\.xhtml#source-page-2">Source section A<\/a>/);
-  assert.match(navigation.xhtml, /page-0004\.xhtml#source-page-4">Source section B<\/a>/);
+  assert.match(navigation.xhtml, /page-0001\.xhtml#source-page-2">Source section A<\/a>/);
+  assert.match(navigation.xhtml, /page-0001\.xhtml#source-page-4">Source section B<\/a>/);
 });
 
 test("outline-backed XHTML keeps mixed writing orientations in scoped runs", () => {
