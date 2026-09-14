@@ -31,6 +31,7 @@
     "verify:stage2": "tsx src/verify-stage2-corpus-v2.ts",
     "verify:n8440-oracle": "tsx src/verify-n8440-oracle.ts",
     "verify:epub": "tsx src/verify-epub-corpus.ts",
+    "verify:generic-corpus": "tsx src/verify-generic-corpus-quality.ts",
     "setup:epubcheck": "tsx src/setup-epubcheck.ts",
     "verify:epubcheck": "tsx --test test/epubcheck.integration.ts",
     "fixture:reader": "tsx src/reading-system-fixture.ts",
@@ -48,7 +49,7 @@
     "verify:browser": "npm run typecheck:browser-tests && npm run build:browser && npm run verify:browser-static && playwright test --config playwright.config.ts",
     "verify:browser-private": "npm run typecheck:browser-tests && npm run build:browser && playwright test --config playwright.private.config.ts",
     "verify:local": "npm test && npm run verify:runtime-deps && npm run verify:browser && npm run setup:epubcheck && npm run verify:epubcheck && git diff --check",
-    "verify:local-private": "npm run setup:epubcheck && npm run verify:ruby && npm run verify:semantic && npm run verify:stage2 && npm run verify:epub -- --epubcheck && npm run verify:browser-private"
+    "verify:local-private": "npm run setup:epubcheck && npm run verify:ruby && npm run verify:semantic && npm run verify:stage2 && npm run verify:epub -- --epubcheck && npm run verify:generic-corpus && npm run verify:browser-private"
   },
   "dependencies": {
     "pdfjs-dist": "6.3.289"
