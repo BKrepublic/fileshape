@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import type { InspectPage, InspectTextItem } from "../src/pdf-inspection-model.js";
-import { estimateBodyFontSize, reconstructPageFlow } from "../src/text-flow.js";
+import {
+  estimateBodyFontSize,
+  measureBodyFontEvidence,
+  reconstructPageFlow,
+} from "../src/text-flow.js";
 
 function item(text: string, fontSize: number): InspectTextItem {
   return {
@@ -42,13 +46,43 @@ test("compact body-font estimate matches the full flow contract", () => {
     item("ordinary body text ordinary body text", 14),
     item("note", 9),
   ];
+  const evidence = measureBodyFontEvidence(textItems);
+  const flow = reconstructPageFlow(page(textItems));
+
+  assert.equal(evidence.size, 14);
   assert.equal(estimateBodyFontSize(textItems), 14);
-  assert.equal(reconstructPageFlow(page(textItems)).bodyFontSize, 14);
+  assert.equal(flow.bodyFontSize, 14);
+  assert.deepEqual(flow.bodyFontEvidence, evidence);
+  assert.ok(evidence.dominantSupportRatio > 0.7);
+  assert.ok(evidence.dominanceMarginRatio > 0.5);
 });
 
-test("body-font estimate keeps the existing char-weighted tie behavior", () => {
+test("body-font evidence keeps the existing char-weighted tie behavior without hiding ambiguity", () => {
   const textItems = [item("aa", 12), item("bb", 14)];
+  const evidence = measureBodyFontEvidence(textItems);
+
   assert.equal(estimateBodyFontSize(textItems), 14);
+  assert.deepEqual(evidence, {
+    size: 14,
+    totalWeight: 4,
+    dominantWeight: 2,
+    runnerUpWeight: 2,
+    dominantSupportRatio: 0.5,
+    dominanceMarginRatio: 0,
+    bucketCount: 2,
+  });
+});
+
+test("body-font evidence is empty instead of inventing confidence without usable text", () => {
+  assert.deepEqual(measureBodyFontEvidence([item("   ", 14), item("x", 0)]), {
+    size: 0,
+    totalWeight: 0,
+    dominantWeight: 0,
+    runnerUpWeight: 0,
+    dominantSupportRatio: 0,
+    dominanceMarginRatio: 0,
+    bucketCount: 0,
+  });
 });
 
 test("glyph-live ruby prepass does not execute the full page-flow pipeline", async () => {
