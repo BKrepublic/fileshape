@@ -213,18 +213,6 @@ function validateStructuralHeadings(
     a.sourcePage - b.sourcePage || a.semanticBlockIndex - b.semanticBlockIndex);
 }
 
-function outlineBoundaryPages(document: FileShapeDocument): Set<number> {
-  const boundaries = new Set<number>();
-  const visit = (items: NonNullable<FileShapeDocument["navigation"]>): void => {
-    for (const item of items) {
-      if (item.target.status === "resolved") boundaries.add(item.target.sourcePage);
-      visit(item.children);
-    }
-  };
-  visit(document.navigation ?? []);
-  return boundaries;
-}
-
 const LOGICAL_XHTML_SOFT_ESTIMATED_CHARS = 256 * 1024;
 const LOGICAL_XHTML_HARD_ESTIMATED_CHARS = 1024 * 1024;
 const PAGE_MARKUP_ESTIMATE = 128;
@@ -238,6 +226,10 @@ function estimatedPageXhtmlChars(page: DocumentPage): number {
       0,
     )
     + page.imageOccurrences.length * IMAGE_MARKUP_ESTIMATE;
+}
+
+function isStandaloneSourcePage(page: DocumentPage): boolean {
+  return page.blocks.length === 0;
 }
 
 function hasBoundaryImage(previous: DocumentPage, current: DocumentPage): boolean {
@@ -272,7 +264,6 @@ function hasGeometricPageContinuation(
 function logicalGroups(
   pages: DocumentPage[],
   headings: EpubInferredHeading[],
-  outlineBoundaries: ReadonlySet<number>,
 ): Array<{ pages: DocumentPage[]; heading?: EpubInferredHeading }> {
   const headingByPage = new Map<number, EpubInferredHeading>();
   for (const heading of headings) {
@@ -282,18 +273,17 @@ function logicalGroups(
     headingByPage.set(heading.sourcePage, heading);
   }
 
-  const boundaryPages = new Set(outlineBoundaries);
-  for (const page of headingByPage.keys()) boundaryPages.add(page);
-
   const groups: Array<{ pages: DocumentPage[]; heading?: EpubInferredHeading }> = [];
   let current: { pages: DocumentPage[]; heading?: EpubInferredHeading } | undefined;
   let currentEstimatedChars = 0;
 
   for (const page of pages) {
     const heading = headingByPage.get(page.sourcePage);
-    const startsStructuralBoundary = boundaryPages.has(page.sourcePage);
-    const pageEstimatedChars = estimatedPageXhtmlChars(page);
     const previous = current?.pages.at(-1);
+    const startsStructuralBoundary = heading !== undefined;
+    const startsStandaloneBoundary = current !== undefined &&
+      (isStandaloneSourcePage(page) || (previous !== undefined && isStandaloneSourcePage(previous)));
+    const pageEstimatedChars = estimatedPageXhtmlChars(page);
     const nextEstimatedChars = currentEstimatedChars + pageEstimatedChars;
     const exceedsSoftBudget = current !== undefined &&
       nextEstimatedChars > LOGICAL_XHTML_SOFT_ESTIMATED_CHARS;
@@ -305,7 +295,12 @@ function logicalGroups(
     const startsSerializationChunk = exceedsHardBudget ||
       (exceedsSoftBudget && !continuesParagraph);
 
-    if (current === undefined || startsStructuralBoundary || startsSerializationChunk) {
+    if (
+      current === undefined ||
+      startsStructuralBoundary ||
+      startsStandaloneBoundary ||
+      startsSerializationChunk
+    ) {
       if (current) groups.push(current);
       current = {
         pages: [page],
@@ -474,11 +469,10 @@ export function serializeEpubXhtml(
   );
   const headings = validateStructuralHeadings(document, options.structuralHeadings ?? []);
   const headingByPage = new Map(headings.map((heading) => [heading.sourcePage, heading]));
-  const outlineBoundaries = outlineBoundaryPages(document);
 
   return {
     documentId: document.id,
-    pages: logicalGroups(document.pages, headings, outlineBoundaries).map((group) => {
+    pages: logicalGroups(document.pages, headings).map((group) => {
       const firstPage = group.pages[0];
       if (!firstPage) throw new Error("logical EPUB group is empty");
       return {
