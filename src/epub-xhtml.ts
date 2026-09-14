@@ -225,44 +225,19 @@ function outlineBoundaryPages(document: FileShapeDocument): Set<number> {
   return boundaries;
 }
 
-function logicalGroups(
-  pages: DocumentPage[],
-  headings: EpubInferredHeading[],
-  outlineBoundaries: ReadonlySet<number>,
-): Array<{ pages: DocumentPage[]; heading?: EpubInferredHeading }> {
-  const headingByPage = new Map<number, EpubInferredHeading>();
-  for (const heading of headings) {
-    if (headingByPage.has(heading.sourcePage)) {
-      throw new Error(`multiple structural headings on source page ${heading.sourcePage} are not yet supported`);
-    }
-    headingByPage.set(heading.sourcePage, heading);
-  }
+const LOGICAL_XHTML_SOFT_ESTIMATED_CHARS = 256 * 1024;
+const LOGICAL_XHTML_HARD_ESTIMATED_CHARS = 1024 * 1024;
+const PAGE_MARKUP_ESTIMATE = 128;
+const BLOCK_MARKUP_ESTIMATE = 160;
+const IMAGE_MARKUP_ESTIMATE = 256;
 
-  const boundaryPages = new Set(outlineBoundaries);
-  for (const page of headingByPage.keys()) boundaryPages.add(page);
-  if (boundaryPages.size === 0) return pages.map((page) => ({ pages: [page] }));
-
-  const groups: Array<{ pages: DocumentPage[]; heading?: EpubInferredHeading }> = [];
-  let current: { pages: DocumentPage[]; heading?: EpubInferredHeading } | undefined;
-
-  for (const page of pages) {
-    const heading = headingByPage.get(page.sourcePage);
-    const startsBoundary = boundaryPages.has(page.sourcePage);
-
-    if (current === undefined || startsBoundary) {
-      if (current) groups.push(current);
-      current = {
-        pages: [page],
-        ...(heading === undefined ? {} : { heading }),
-      };
-      continue;
-    }
-
-    current.pages.push(page);
-  }
-
-  if (current) groups.push(current);
-  return groups;
+function estimatedPageXhtmlChars(page: DocumentPage): number {
+  return PAGE_MARKUP_ESTIMATE
+    + page.blocks.reduce(
+      (total, block) => total + BLOCK_MARKUP_ESTIMATE + blockPlainText(block).length,
+      0,
+    )
+    + page.imageOccurrences.length * IMAGE_MARKUP_ESTIMATE;
 }
 
 function hasBoundaryImage(previous: DocumentPage, current: DocumentPage): boolean {
@@ -270,15 +245,12 @@ function hasBoundaryImage(previous: DocumentPage, current: DocumentPage): boolea
     current.imageOccurrences.some((occurrence) => occurrence.placementIndex === 0);
 }
 
-function continuesAcrossSourcePage(
+function hasGeometricPageContinuation(
   previous: DocumentPage,
   current: DocumentPage,
-  previousNotes: PreservedUnresolvedAnnotation[],
-  currentNotes: PreservedUnresolvedAnnotation[],
-  headingByPage: Map<number, EpubInferredHeading>,
+  headingByPage: ReadonlyMap<number, EpubInferredHeading>,
 ): boolean {
   if (previous.orientation !== current.orientation) return false;
-  if (previousNotes.length > 0 || currentNotes.length > 0) return false;
   if (hasBoundaryImage(previous, current)) return false;
   const previousBlock = previous.blocks.at(-1);
   const currentBlock = current.blocks[0];
@@ -295,6 +267,71 @@ function continuesAcrossSourcePage(
     previousEdge.lastUnitInlineCoverageRatio,
     currentEdge.firstUnitInlineStartRatio,
   );
+}
+
+function logicalGroups(
+  pages: DocumentPage[],
+  headings: EpubInferredHeading[],
+  outlineBoundaries: ReadonlySet<number>,
+): Array<{ pages: DocumentPage[]; heading?: EpubInferredHeading }> {
+  const headingByPage = new Map<number, EpubInferredHeading>();
+  for (const heading of headings) {
+    if (headingByPage.has(heading.sourcePage)) {
+      throw new Error(`multiple structural headings on source page ${heading.sourcePage} are not yet supported`);
+    }
+    headingByPage.set(heading.sourcePage, heading);
+  }
+
+  const boundaryPages = new Set(outlineBoundaries);
+  for (const page of headingByPage.keys()) boundaryPages.add(page);
+
+  const groups: Array<{ pages: DocumentPage[]; heading?: EpubInferredHeading }> = [];
+  let current: { pages: DocumentPage[]; heading?: EpubInferredHeading } | undefined;
+  let currentEstimatedChars = 0;
+
+  for (const page of pages) {
+    const heading = headingByPage.get(page.sourcePage);
+    const startsStructuralBoundary = boundaryPages.has(page.sourcePage);
+    const pageEstimatedChars = estimatedPageXhtmlChars(page);
+    const previous = current?.pages.at(-1);
+    const nextEstimatedChars = currentEstimatedChars + pageEstimatedChars;
+    const exceedsSoftBudget = current !== undefined &&
+      nextEstimatedChars > LOGICAL_XHTML_SOFT_ESTIMATED_CHARS;
+    const exceedsHardBudget = current !== undefined &&
+      nextEstimatedChars > LOGICAL_XHTML_HARD_ESTIMATED_CHARS;
+    const continuesParagraph = previous === undefined
+      ? false
+      : hasGeometricPageContinuation(previous, page, headingByPage);
+    const startsSerializationChunk = exceedsHardBudget ||
+      (exceedsSoftBudget && !continuesParagraph);
+
+    if (current === undefined || startsStructuralBoundary || startsSerializationChunk) {
+      if (current) groups.push(current);
+      current = {
+        pages: [page],
+        ...(heading === undefined ? {} : { heading }),
+      };
+      currentEstimatedChars = pageEstimatedChars;
+      continue;
+    }
+
+    current.pages.push(page);
+    currentEstimatedChars = nextEstimatedChars;
+  }
+
+  if (current) groups.push(current);
+  return groups;
+}
+
+function continuesAcrossSourcePage(
+  previous: DocumentPage,
+  current: DocumentPage,
+  previousNotes: PreservedUnresolvedAnnotation[],
+  currentNotes: PreservedUnresolvedAnnotation[],
+  headingByPage: Map<number, EpubInferredHeading>,
+): boolean {
+  if (previousNotes.length > 0 || currentNotes.length > 0) return false;
+  return hasGeometricPageContinuation(previous, current, headingByPage);
 }
 
 function renderSourcePageItems(
