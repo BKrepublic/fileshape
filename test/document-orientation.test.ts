@@ -1,15 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { OrientationEvidenceSummary } from "../src/orientation-evidence.js";
+import type {
+  OrientationDecisionSource,
+  OrientationEvidenceSummary,
+} from "../src/orientation-evidence.js";
 import { resolveDocumentOrientations } from "../src/document-orientation.js";
 
 function evidence(
   provisional: "vertical" | "horizontal",
   vertical: number,
   horizontal: number,
+  decisionSource: OrientationDecisionSource = "run",
 ): OrientationEvidenceSummary {
   return {
     provisional,
+    decisionSource,
     vertical,
     horizontal,
     margin: Math.abs(vertical - horizontal),
@@ -40,10 +45,10 @@ test("fills a short unknown run when both surrounding pages agree", () => {
   );
 });
 
-test("repairs a known label when its own evidence is tied and stable neighbors agree", () => {
+test("repairs an attached-run fallback when stable neighbors agree", () => {
   const result = resolveDocumentOrientations([
     { page: 1, orientation: "vertical", evidence: evidence("vertical", 0.9, 0.1) },
-    { page: 2, orientation: "horizontal", evidence: evidence("horizontal", 0.6, 0.6) },
+    { page: 2, orientation: "horizontal", evidence: evidence("horizontal", 0.6, 0.6, "attached-run") },
     { page: 3, orientation: "vertical", evidence: evidence("vertical", 0.8, 0.2) },
   ]);
 
@@ -52,10 +57,10 @@ test("repairs a known label when its own evidence is tied and stable neighbors a
   assert.equal(result[1]?.source, "document-context");
 });
 
-test("does not label a matching ambiguous page as document-context when nothing changes", () => {
+test("does not label a matching attached-run fallback as document-context when nothing changes", () => {
   const result = resolveDocumentOrientations([
     { page: 1, orientation: "vertical", evidence: evidence("vertical", 0.9, 0.1) },
-    { page: 2, orientation: "vertical", evidence: evidence("vertical", 0.5, 0.5) },
+    { page: 2, orientation: "vertical", evidence: evidence("vertical", 0.5, 0.5, "attached-run") },
     { page: 3, orientation: "vertical", evidence: evidence("vertical", 0.8, 0.2) },
   ]);
 
@@ -63,11 +68,11 @@ test("does not label a matching ambiguous page as document-context when nothing 
   assert.equal(result[1]?.source, "detected");
 });
 
-test("repairs a mixed unknown and contested run only when stable neighbors agree", () => {
+test("repairs a mixed unknown and attached-run fallback only when stable neighbors agree", () => {
   const result = resolveDocumentOrientations([
     { page: 1, orientation: "vertical", evidence: evidence("vertical", 0.9, 0.1) },
     { page: 2, orientation: "unknown" },
-    { page: 3, orientation: "horizontal", evidence: evidence("horizontal", 0.7, 0.7) },
+    { page: 3, orientation: "horizontal", evidence: evidence("horizontal", 0.7, 0.7, "attached-run") },
     { page: 4, orientation: "vertical", evidence: evidence("vertical", 0.8, 0.1) },
   ]);
 
@@ -80,10 +85,10 @@ test("repairs a mixed unknown and contested run only when stable neighbors agree
   );
 });
 
-test("does not override a known label whose retained evidence supports it", () => {
+test("does not override a metric-backed run decision when channel maxima tie", () => {
   const result = resolveDocumentOrientations([
     { page: 1, orientation: "vertical", evidence: evidence("vertical", 0.9, 0.1) },
-    { page: 2, orientation: "horizontal", evidence: evidence("horizontal", 0.2, 0.8) },
+    { page: 2, orientation: "horizontal", evidence: evidence("horizontal", 1, 1, "run") },
     { page: 3, orientation: "vertical", evidence: evidence("vertical", 0.9, 0.1) },
   ]);
 
@@ -91,10 +96,21 @@ test("does not override a known label whose retained evidence supports it", () =
   assert.equal(result[1]?.source, "detected");
 });
 
-test("does not repair contested evidence across an orientation transition", () => {
+test("does not override a known metric-backed label whose retained source decided it", () => {
+  const result = resolveDocumentOrientations([
+    { page: 1, orientation: "vertical", evidence: evidence("vertical", 0.9, 0.1) },
+    { page: 2, orientation: "horizontal", evidence: evidence("horizontal", 0.2, 0.8, "baseline") },
+    { page: 3, orientation: "vertical", evidence: evidence("vertical", 0.9, 0.1) },
+  ]);
+
+  assert.equal(result[1]?.resolved, "horizontal");
+  assert.equal(result[1]?.source, "detected");
+});
+
+test("does not repair an attached-run fallback across an orientation transition", () => {
   const result = resolveDocumentOrientations([
     { page: 10, orientation: "vertical", evidence: evidence("vertical", 0.9, 0.1) },
-    { page: 11, orientation: "horizontal", evidence: evidence("horizontal", 0.5, 0.5) },
+    { page: 11, orientation: "horizontal", evidence: evidence("horizontal", 0.5, 0.5, "attached-run") },
     { page: 12, orientation: "horizontal", evidence: evidence("horizontal", 0.1, 0.9) },
   ]);
 
