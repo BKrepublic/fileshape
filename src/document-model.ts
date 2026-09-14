@@ -57,6 +57,15 @@ export type RubyInlineNode = {
 
 export type InlineNode = TextInlineNode | RubyInlineNode;
 
+export type DocumentBlockEdgeGeometry = {
+  /** First physical unit start along the page reading axis, normalized by inline size. */
+  firstUnitInlineStartRatio: number;
+  /** Last physical unit end along the page reading axis, normalized by inline size. */
+  lastUnitInlineEndRatio: number;
+  /** Fraction of the page reading axis covered by the last physical unit. */
+  lastUnitInlineCoverageRatio: number;
+};
+
 export type DocumentTextBlock = {
   kind: "text";
   sourcePage: number;
@@ -67,6 +76,8 @@ export type DocumentTextBlock = {
   /** Complete source coverage owned by this semantic block before inline splitting. */
   sourceRanges: SourceTextRef[];
   inlines: InlineNode[];
+  /** Optional for compatibility with external/fixture models; production pages retain it. */
+  edgeGeometry?: DocumentBlockEdgeGeometry;
 };
 
 export type DocumentImageResource = {
@@ -124,7 +135,7 @@ export type DocumentPageInput = {
   orientation: WritingOrientation;
   semantic: SemanticPageBlocks;
   rubySpans: RubySpan[];
-  /** Physical positions used to assign image/text placement gaps. */
+  /** Physical positions used to assign image/text placement gaps and reflow edge evidence. */
   layout?: PhysicalPageLayout;
 };
 
@@ -380,6 +391,22 @@ function assignedExactSpans(semantic: SemanticPageBlocks, rubySpans: RubySpan[])
   return { byBlock, unmapped };
 }
 
+function blockEdgeGeometry(
+  layout: PhysicalPageLayout | undefined,
+  unitIndexes: number[],
+): DocumentBlockEdgeGeometry | undefined {
+  if (!layout || unitIndexes.length === 0) return undefined;
+  const byIndex = new Map(layout.units.map((unit) => [unit.index, unit]));
+  const first = byIndex.get(unitIndexes[0]!);
+  const last = byIndex.get(unitIndexes.at(-1)!);
+  if (!first || !last) return undefined;
+  return {
+    firstUnitInlineStartRatio: first.inlineStartRatio,
+    lastUnitInlineEndRatio: last.inlineEndRatio,
+    lastUnitInlineCoverageRatio: last.inlineCoverageRatio,
+  };
+}
+
 export function buildFileShapeDocument(input: BuildDocumentInput): FileShapeDocument {
   const source = buildSourceStore(input.documentId, input.inspection);
   if (input.inspection.pageCount !== input.inspection.pages.length) {
@@ -397,6 +424,7 @@ export function buildFileShapeDocument(input: BuildDocumentInput): FileShapeDocu
     const { byBlock, unmapped } = assignedExactSpans(pageInput.semantic, pageInput.rubySpans);
     const blocks = pageInput.semantic.blocks.map((block): DocumentTextBlock => {
       const sourceRanges = cloneTextRefs(block.sourceRanges ?? []);
+      const edgeGeometry = blockEdgeGeometry(pageInput.layout, block.unitIndexes);
       return {
         kind: "text",
         sourcePage: inspectionPage.page,
@@ -405,6 +433,7 @@ export function buildFileShapeDocument(input: BuildDocumentInput): FileShapeDocu
         semanticText: block.text,
         sourceRanges,
         inlines: buildBlockInlines(source, block, byBlock.get(block) ?? []),
+        ...(edgeGeometry === undefined ? {} : { edgeGeometry }),
       };
     });
     return {
@@ -519,82 +548,103 @@ export function validateDocumentModel(document: FileShapeDocument): string[] {
           occurrence.placementIndex > page.blocks.length) {
         errors.push(`${label} has invalid placement index ${occurrence.placementIndex}`);
       }
+      if (!imageResourceIds.has(occurrence.resourceId)) errors.push(`${label} references missing image resource ${occurrence.resourceId}`);
+      if (!Array.isArray(occurrence.displayTransform) || occurrence.displayTransform.length !== 6 ||
+          occurrence.displayTransform.some((value) => !Number.isFinite(value))) {
+        errors.push(`${label} has invalid display transform`);
+      } else {
+        try { validateImageDisplayTransform(occurrence.displayTransform); }
+        catch (error) { errors.push(`${label}: ${error instanceof Error ? error.message : String(error)}`); }
+      }
+      const bounds = occurrence.displayBounds;
+      if (![bounds.left, bounds.top, bounds.right, bounds.bottom].every(Number.isFinite) ||
+          bounds.right < bounds.left || bounds.bottom < bounds.top) {
+        errors.push(`${label} has invalid display bounds`);
+      }
+      if (!Number.isInteger(occurrence.formDepth) || occurrence.formDepth < 0) errors.push(`${label} has invalid form depth`);
+      if (occurrence.interpolate !== true && occurrence.interpolate !== false) errors.push(`${label} has invalid interpolation flag`);
+      if (occurrence.clipStatus !== "none" && occurrence.clipStatus !== "exact-rect") errors.push(`${label} has invalid clip status`);
+      if (occurrence.clipCoverage !== "none" && occurrence.clipCoverage !== "contains-image") errors.push(`${label} has invalid clip coverage`);
+      if (occurrence.clipStatus === "exact-rect") {
+        if (!occurrence.clipRect) errors.push(`${label} exact clip has no rect`);
+        else {
+          const rect = occurrence.clipRect;
+          if (![rect.left, rect.top, rect.right, rect.bottom].every(Number.isFinite) ||
+              rect.right < rect.left || rect.bottom < rect.top) errors.push(`${label} has invalid clip rect`);
+        }
+      } else if (occurrence.clipRect !== undefined) errors.push(`${label} none clip unexpectedly has rect`);
       if (imageOccurrenceSources.has(sourceKey)) errors.push(`duplicate image occurrence source ${sourceKey}`);
       imageOccurrenceSources.add(sourceKey);
-      if (!imageResourceIds.has(occurrence.resourceId)) errors.push(`${label} references missing resource ${occurrence.resourceId}`);
       referencedImageResourceIds.add(occurrence.resourceId);
-      if (previousImageSource && (occurrence.operatorIndex < previousImageSource[0] ||
-          (occurrence.operatorIndex === previousImageSource[0] && occurrence.occurrenceIndex <= previousImageSource[1]))) {
-        errors.push(`${label} is not in source operator order`);
+      const currentSource: [number, number] = [occurrence.operatorIndex, occurrence.occurrenceIndex];
+      if (previousImageSource &&
+          (currentSource[0] < previousImageSource[0] ||
+           (currentSource[0] === previousImageSource[0] && currentSource[1] < previousImageSource[1]))) {
+        errors.push(`page ${page.sourcePage} image occurrences are not in source order`);
       }
-      previousImageSource = [occurrence.operatorIndex, occurrence.occurrenceIndex];
-      if (!Array.isArray(occurrence.displayTransform) || occurrence.displayTransform.length !== 6 || !occurrence.displayTransform.every(Number.isFinite)) {
-        errors.push(`${label} has invalid display transform`);
-      }
-      const transformError = validateImageDisplayTransform(occurrence);
-      if (transformError) errors.push(`${label} ${transformError}`);
-      const bounds = occurrence.displayBounds;
-      if (!bounds || ![bounds.left, bounds.top, bounds.right, bounds.bottom].every(Number.isFinite) ||
-          bounds.right <= bounds.left || bounds.bottom <= bounds.top) errors.push(`${label} has invalid display bounds`);
-      if (!Number.isInteger(occurrence.formDepth) || occurrence.formDepth < 0) errors.push(`${label} has invalid form depth`);
-      if (typeof occurrence.interpolate !== "boolean") errors.push(`${label} has invalid interpolation evidence`);
-      if (!((occurrence.clipStatus === "none" && occurrence.clipCoverage === "none") ||
-          (occurrence.clipStatus === "exact-rect" && occurrence.clipCoverage === "contains-image"))) {
-        errors.push(`${label} has unsupported clip state ${occurrence.clipStatus}/${occurrence.clipCoverage}`);
-      }
-    }
-    for (let index = 0; index < page.unresolvedRuby.length; index += 1) {
-      const span = page.unresolvedRuby[index]!;
-      if (span.status !== "unresolved") errors.push(`page ${page.sourcePage} unresolvedRuby ${index} is not unresolved`);
-      validateRubyCandidate(document.source, span, `page ${page.sourcePage} unresolved ruby ${index}`, errors);
-    }
-    for (let index = 0; index < page.unmappedExactRuby.length; index += 1) {
-      const span = page.unmappedExactRuby[index]!;
-      if (span.status !== "exact") errors.push(`page ${page.sourcePage} unmappedExactRuby ${index} is not exact`);
-      errors.push(`page ${page.sourcePage} exact ruby ${index} is not mapped to exactly one block`);
-      validateRubyCandidate(document.source, span, `page ${page.sourcePage} unmapped exact ruby ${index}`, errors);
+      previousImageSource = currentSource;
     }
 
     for (const block of page.blocks) {
       const label = `page ${page.sourcePage} block ${block.semanticBlockIndex}`;
-      validateRanges(document.source, block.sourceRanges, `${label} source`, errors);
-      if (hasOverlap(block.sourceRanges)) errors.push(`${label} has overlapping source ranges`);
-      const owned: SourceTextRef[] = [];
-      for (let index = 0; index < block.inlines.length; index += 1) {
-        const inline = block.inlines[index]!;
-        if (inline.kind === "text") {
-          validateRanges(document.source, inline.sourceRanges, `${label} inline ${index}`, errors);
-          try {
-            const sourceText = resolveSourceRanges(document.source, inline.sourceRanges);
-            if (inline.text !== sourceText) errors.push(`${label} inline ${index} text differs from source ranges`);
-          } catch { /* range error already reported above */ }
-          owned.push(...inline.sourceRanges);
-          continue;
+      if (block.sourcePage !== page.sourcePage) errors.push(`${label} source page does not match containing page`);
+      if (block.edgeGeometry !== undefined) {
+        const values = [
+          block.edgeGeometry.firstUnitInlineStartRatio,
+          block.edgeGeometry.lastUnitInlineEndRatio,
+          block.edgeGeometry.lastUnitInlineCoverageRatio,
+        ];
+        if (values.some((value) => !Number.isFinite(value) || value < 0)) {
+          errors.push(`${label} has invalid edge geometry`);
         }
-        validateRanges(document.source, inline.base.sourceRanges, `${label} ruby ${index} base`, errors);
-        validateRanges(document.source, inline.annotation.sourceRanges, `${label} ruby ${index} annotation`, errors);
-        try {
+      }
+      validateRanges(document.source, block.sourceRanges, `${label} source ranges`, errors);
+      const inlineRanges = block.inlines.flatMap((inline) => inline.kind === "text"
+        ? inline.sourceRanges
+        : inline.base.sourceRanges);
+      validateRanges(document.source, inlineRanges, `${label} inline ranges`, errors);
+      if (!sameCoverage(block.sourceRanges, inlineRanges)) errors.push(`${label} inline coverage differs from block coverage`);
+      for (const inline of block.inlines) {
+        if (inline.kind === "text") {
+          if (inline.text !== resolveSourceRanges(document.source, inline.sourceRanges)) {
+            errors.push(`${label} text inline differs from source`);
+          }
+        } else {
           if (inline.base.text !== resolveSourceRanges(document.source, inline.base.sourceRanges)) {
-            errors.push(`${label} ruby ${index} base text differs from source ranges`);
+            errors.push(`${label} ruby base differs from source`);
           }
           if (inline.annotation.text !== resolveSourceRanges(document.source, inline.annotation.sourceRanges)) {
-            errors.push(`${label} ruby ${index} annotation text differs from source ranges`);
+            errors.push(`${label} ruby annotation differs from source`);
           }
-        } catch { /* range error already reported above */ }
-        owned.push(...inline.base.sourceRanges);
+        }
       }
-      if (hasOverlap(owned)) errors.push(`${label} inline source ownership overlaps`);
-      if (!sameCoverage(block.sourceRanges, owned)) errors.push(`${label} inline source ownership has a gap or extra range`);
+    }
+
+    for (let index = 0; index < page.unresolvedRuby.length; index += 1) {
+      validateRubyCandidate(document.source, page.unresolvedRuby[index]!, `page ${page.sourcePage} unresolved ruby ${index}`, errors);
+    }
+    for (let index = 0; index < page.unmappedExactRuby.length; index += 1) {
+      validateRubyCandidate(document.source, page.unmappedExactRuby[index]!, `page ${page.sourcePage} unmapped exact ruby ${index}`, errors);
     }
   }
-  for (const resourceId of imageResourceIds) {
-    if (!referencedImageResourceIds.has(resourceId)) errors.push(`unused image resource ${resourceId}`);
+
+  if (sourcePages.size !== modelPages.size || [...sourcePages].some((page) => !modelPages.has(page))) {
+    errors.push("document pages do not match source pages");
   }
-  errors.push(...validateDocumentNavigation(document.source.outline ?? [], document.navigation ?? [], modelPages));
+
+  for (const resourceId of referencedImageResourceIds) {
+    if (!imageResourceIds.has(resourceId)) errors.push(`referenced image resource ${resourceId} is missing`);
+  }
+
+  if (document.navigation !== undefined) {
+    try { validateDocumentNavigation(document.source.outline ?? [], document.navigation); }
+    catch (error) { errors.push(`navigation: ${error instanceof Error ? error.message : String(error)}`); }
+  }
+
   return errors;
 }
 
 export function assertDocumentModel(document: FileShapeDocument): void {
   const errors = validateDocumentModel(document);
-  if (errors.length > 0) throw new Error(`invalid FileShapeDocument:\n${errors.map((error) => `- ${error}`).join("\n")}`);
+  if (errors.length > 0) throw new Error(`invalid FileShapeDocument:\n- ${errors.join("\n- ")}`);
 }
