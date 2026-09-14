@@ -1,6 +1,7 @@
 import { readdirSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
+import { attachedRunTendency } from "./attached-run-evidence.js";
 import { resolveDocumentOrientations } from "./document-orientation.js";
 import type { SourceOutlineItem } from "./document-navigation.js";
 import { summarizeOrientationEvidence } from "./orientation-evidence.js";
@@ -21,6 +22,8 @@ type PageAudit = {
   detected: WritingOrientation;
   resolved: WritingOrientation;
   resolutionSource: string;
+  edge: "start" | "end" | "none";
+  attachedTendency: WritingOrientation;
   bodyFontSize: number;
   primaryItems: number;
   annotationItems: number;
@@ -116,6 +119,8 @@ function pageLabel(page: PageAudit): string {
     `p${page.page}`,
     `${page.detected}->${page.resolved}`,
     `source=${page.resolutionSource}`,
+    `edge=${page.edge}`,
+    `attached=${page.attachedTendency}`,
     `margin=${page.evidenceMargin.toFixed(3)}`,
     `V/H=${page.evidenceVertical.toFixed(3)}/${page.evidenceHorizontal.toFixed(3)}`,
     `run=${m.verticalRunRatio.toFixed(2)}/${m.horizontalRunRatio.toFixed(2)}`,
@@ -154,6 +159,10 @@ async function auditFile(filePath: string): Promise<FileAudit> {
       detected: flow.orientation,
       resolved: resolved?.resolved ?? flow.orientation,
       resolutionSource: resolved?.source ?? "missing",
+      edge: page === 1 ? "start" : page === inspection.pageCount ? "end" : "none",
+      attachedTendency: evidence.attachedRun === undefined
+        ? "unknown"
+        : attachedRunTendency(evidence.attachedRun),
       bodyFontSize: flow.bodyFontSize,
       primaryItems: flow.primaryItemCount,
       annotationItems: flow.annotationItemCount,
