@@ -1,5 +1,8 @@
 import type { InspectPage, InspectTextItem } from "./pdf-inspection-model.js";
-import { isShortMarginNoise } from "./margin-noise.js";
+import {
+  measureMarginNoiseEvidence,
+  type MarginNoiseEvidence,
+} from "./margin-noise.js";
 
 export const ANNOTATION_FONT_RATIO = 0.75;
 
@@ -8,6 +11,8 @@ export type TextItemEvidence = {
   itemIndex: number;
   visible: boolean;
   bodyFontRatio?: number;
+  /** Compact local geometry retained for later document-level recurrence analysis. */
+  marginEvidence: MarginNoiseEvidence;
   marginNoise: boolean;
   annotationSized: boolean;
   bodySized: boolean;
@@ -31,12 +36,14 @@ export function collectTextItemEvidence(
     const annotationCutoff = bodyFontSize * ANNOTATION_FONT_RATIO;
     const annotationSized = bodyFontSize > 0 && item.fontSize < annotationCutoff;
     const bodySized = bodyFontSize > 0 && item.fontSize >= annotationCutoff;
+    const marginEvidence = measureMarginNoiseEvidence(item, page, bodyFontSize);
     return {
       item,
       itemIndex,
       visible,
       ...(bodyFontRatio === undefined ? {} : { bodyFontRatio }),
-      marginNoise: visible && isShortMarginNoise(item, page, bodyFontSize),
+      marginEvidence,
+      marginNoise: visible && marginEvidence.localCandidate,
       annotationSized,
       bodySized,
     };
