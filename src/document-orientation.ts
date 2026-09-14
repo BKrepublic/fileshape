@@ -64,14 +64,8 @@ function runSupportsContext(
   observations: PageOrientationObservation[],
   orientation: Exclude<WritingOrientation, "unknown">,
 ): boolean {
-  let hasSupportingEvidence = false;
-  for (const observation of observations) {
-    const tendency = ambiguousTendency(observation);
-    if (tendency === "unknown") continue;
-    if (tendency !== orientation) return false;
-    hasSupportingEvidence = true;
-  }
-  return hasSupportingEvidence;
+  return observations.length > 0 && observations.every((observation) =>
+    ambiguousTendency(observation) === orientation);
 }
 
 /**
@@ -80,11 +74,11 @@ function runSupportsContext(
  * Physical run length is deliberately irrelevant. Resolution requires:
  * - nearest stable pages on both sides;
  * - both stable pages agree on orientation;
- * - retained evidence inside the ambiguous run never tends the opposite way;
- * - at least one ambiguous page carries a directional tendency matching the anchors.
+ * - every ambiguous page carries a retained directional tendency matching them.
  *
- * This keeps evidence-free gaps unresolved and protects real writing-mode
- * transitions without making pagination itself part of the semantic decision.
+ * Neutral/evidence-free pages stay unresolved, as do runs containing any
+ * opposite tendency. This protects real writing-mode transitions without making
+ * pagination itself part of the semantic decision.
  */
 export function resolveDocumentOrientations(
   observations: PageOrientationObservation[],
