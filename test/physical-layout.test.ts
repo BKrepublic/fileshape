@@ -145,3 +145,17 @@ test("excludes short smaller lower-margin text before it can merge into a body c
   assert.deepEqual(layout.units.map((unit) => unit.text), ["本文"]);
   assert.equal(layout.units[0]?.itemCount, 2);
 });
+
+test("physical vertical reconstruction follows shared sequence-aware layout mode", () => {
+  const items = [
+    item({ text: "右", displayX: 700, displayY: 100 }),
+    item({ text: "左", displayX: 690, displayY: 100 }),
+  ];
+
+  const layout = reconstructPhysicalLayout(page(items), "vertical", 14);
+
+  // Single-character dominance alone used to select the wider glyph-column
+  // tolerance and merge these origins. Their sequence is horizontal evidence,
+  // so the shared mode remains run-based and preserves two physical columns.
+  assert.deepEqual(layout.units.map((unit) => unit.text), ["右", "左"]);
+});
