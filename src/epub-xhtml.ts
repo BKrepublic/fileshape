@@ -154,6 +154,17 @@ function orientationAttributes(page: DocumentPage): string {
   }
 }
 
+function orientationRunAttributes(orientation: DocumentPage["orientation"]): string {
+  switch (orientation) {
+    case "vertical":
+      return 'class="fileshape-orientation-run fileshape-vertical" style="writing-mode: vertical-rl;"';
+    case "horizontal":
+      return 'class="fileshape-orientation-run fileshape-horizontal" style="writing-mode: horizontal-tb;"';
+    case "unknown":
+      return 'class="fileshape-orientation-run fileshape-orientation-unknown"';
+  }
+}
+
 function pageHref(page: number): string {
   return `text/page-${String(page).padStart(4, "0")}.xhtml`;
 }
@@ -225,11 +236,9 @@ function logicalGroups(
 
   for (const page of pages) {
     const heading = headingByPage.get(page.sourcePage);
-    const previous = current?.pages.at(-1);
     const startsBoundary = boundaryPages.has(page.sourcePage);
-    const changesOrientation = previous !== undefined && previous.orientation !== page.orientation;
 
-    if (current === undefined || startsBoundary || changesOrientation) {
+    if (current === undefined || startsBoundary) {
       if (current) groups.push(current);
       current = {
         pages: [page],
@@ -359,8 +368,17 @@ function serializeLogicalXhtml(
     );
   }
 
+  const mixedOrientation = pages.some((page) => page.orientation !== firstPage.orientation);
   const bodyItems: string[] = [];
+  let activeOrientation: DocumentPage["orientation"] | undefined;
+
   for (const [index, page] of pages.entries()) {
+    if (mixedOrientation && activeOrientation !== page.orientation) {
+      if (activeOrientation !== undefined) bodyItems.push("    </section>");
+      bodyItems.push(`    <section ${orientationRunAttributes(page.orientation)}>`);
+      activeOrientation = page.orientation;
+    }
+
     bodyItems.push(...renderSourcePageItems(
       document,
       page,
@@ -372,10 +390,16 @@ function serializeLogicalXhtml(
     ));
   }
 
+  if (mixedOrientation && activeOrientation !== undefined) bodyItems.push("    </section>");
+
   // Do not inject formatting whitespace between fragments: a paragraph may
-  // remain open across a physical PDF page boundary.
+  // remain open across a physical PDF page boundary. Mixed-orientation runs are
+  // wrapped only at boundaries where continuation is already prohibited.
   const body = bodyItems.length === 0 ? "" : `\n${bodyItems.join("")}\n  `;
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE html>\n<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="${escapeXmlAttribute(language)}" lang="${escapeXmlAttribute(language)}">\n  <head>\n    <meta charset="utf-8" />\n    <title>${escapeXmlText(title)}</title>${stylesheet}\n  </head>\n  <body ${orientationAttributes(firstPage)}>${body}</body>\n</html>\n`;
+  const bodyAttributes = mixedOrientation
+    ? 'class="fileshape-page fileshape-mixed-orientation"'
+    : orientationAttributes(firstPage);
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE html>\n<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="${escapeXmlAttribute(language)}" lang="${escapeXmlAttribute(language)}">\n  <head>\n    <meta charset="utf-8" />\n    <title>${escapeXmlText(title)}</title>${stylesheet}\n  </head>\n  <body ${bodyAttributes}>${body}</body>\n</html>\n`;
 }
 
 export function serializeEpubXhtml(
