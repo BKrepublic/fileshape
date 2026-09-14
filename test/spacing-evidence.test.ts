@@ -13,7 +13,7 @@ test("normal spacing uses a robust distribution only with multiple observations"
 
 test("one observed gap remains low-confidence and falls back to body scale", () => {
   const spacing = estimateNormalSpacing([56], 14);
-  assert.equal(spacing.normal, 23.1);
+  assert.ok(Math.abs(spacing.normal - 23.1) < 1e-12);
   assert.equal(spacing.sampleCount, 1);
   assert.equal(spacing.source, "font-fallback");
 });
