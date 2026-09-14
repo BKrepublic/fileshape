@@ -42,6 +42,7 @@ type FileAudit = {
   contextFilledUnknown: number;
   contextRepairedKnown: number;
   repairedKnownPages: PageAudit[];
+  unknownPages: PageAudit[];
   isolatedKnownFlips: number[];
   weakKnownPages: PageAudit[];
   bodyFontQ10: number;
@@ -156,6 +157,9 @@ async function auditFile(filePath: string): Promise<FileAudit> {
     };
   });
 
+  const unknownPages = pages
+    .filter((page) => page.detected === "unknown")
+    .sort((a, b) => a.page - b.page);
   const weakKnownPages = pages
     .filter((page) => page.detected !== "unknown" && page.evidenceMargin < DIAGNOSTIC_WEAK_MARGIN)
     .sort((a, b) => a.evidenceMargin - b.evidenceMargin || a.page - b.page);
@@ -194,6 +198,7 @@ async function auditFile(filePath: string): Promise<FileAudit> {
     contextFilledUnknown: contextPages.filter((page) => page.detected === "unknown").length,
     contextRepairedKnown: repairedKnownPages.length,
     repairedKnownPages,
+    unknownPages,
     isolatedKnownFlips: flips,
     weakKnownPages,
     bodyFontQ10: round(quantile(bodyFonts, 0.1), 2),
@@ -234,6 +239,9 @@ function printAudit(result: FileAudit): void {
   console.log(`  contextResolved=${result.contextResolved} unknownFilled=${result.contextFilledUnknown} knownRepaired=${result.contextRepairedKnown}`);
   console.log(`  isolatedKnownFlips=${result.isolatedKnownFlips.length}${result.isolatedKnownFlips.length ? ` pages=${result.isolatedKnownFlips.slice(0, 20).join(",")}` : ""}`);
   console.log(`  weakKnown(margin<${DIAGNOSTIC_WEAK_MARGIN})=${result.weakKnownPages.length}`);
+  if (result.unknownPages.length > 0) {
+    for (const page of result.unknownPages) console.log(`  UNKNOWN ${pageLabel(page)}`);
+  }
   if (result.repairedKnownPages.length > 0) {
     console.log(`  repairedKnownPages=${result.repairedKnownPages.map((page) => page.page).join(",")}`);
   }
