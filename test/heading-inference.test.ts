@@ -42,6 +42,7 @@ function fixture(
   pageCount: number,
   headingPages: Map<number, string>,
   numericBodyPage?: number,
+  nonLeadingHeadingPages: ReadonlySet<number> = new Set(),
 ): { document: FileShapeDocument; inspection: InspectResult } {
   const inspectionPages: InspectPage[] = [];
   const documentPages: FileShapeDocument["pages"] = [];
@@ -50,9 +51,12 @@ function fixture(
   for (let page = 1; page <= pageCount; page += 1) {
     const heading = headingPages.get(page);
     const body = page === numericBodyPage ? "01 this is ordinary body text" : `ordinary body text ${page} `.repeat(8);
+    const nonLeading = heading !== undefined && nonLeadingHeadingPages.has(page);
     const textItems = heading === undefined
       ? [item(body, "BodyFace")]
-      : [item(heading, "HeadingFace"), item(body, "BodyFace")];
+      : nonLeading
+        ? [item(body, "BodyFace"), item(heading, "HeadingFace")]
+        : [item(heading, "HeadingFace"), item(body, "BodyFace")];
     inspectionPages.push({
       page,
       width: 600,
@@ -75,7 +79,9 @@ function fixture(
       orientation: "vertical",
       blocks: heading === undefined
         ? [block(page, 0, 0, body)]
-        : [block(page, 0, 0, heading), block(page, 1, 1, body)],
+        : nonLeading
+          ? [block(page, 0, 0, body), block(page, 1, 1, heading)]
+          : [block(page, 0, 0, heading), block(page, 1, 1, body)],
       imageOccurrences: [],
       unresolvedRuby: [],
       unmappedExactRuby: [],
@@ -107,7 +113,7 @@ function replaceLeadingStyle(inspection: InspectResult, pages: number[], fontNam
   }
 }
 
-test("recurring layout style and cadence identify major headings without title syntax", () => {
+test("recurring source-backed style retains every structural candidate without page cadence guesses", () => {
   const headings = new Map<number, string>([
     [2, "prefatory note"],
     [3, "Moonlight over the station"],
@@ -116,13 +122,40 @@ test("recurring layout style and cadence identify major headings without title s
     [12, "tail note"],
   ]);
   const { document, inspection } = fixture(12, headings);
+  assert.deepEqual(
+    inferStructuralHeadings(document, inspection).map(({ title, sourcePage }) => ({ title, sourcePage })),
+    [...headings].map(([sourcePage, title]) => ({ title, sourcePage })),
+  );
+});
+
+test("recurring structural style is retained regardless of physical-page leading position", () => {
+  const headings = new Map<number, string>([
+    [3, "First logical heading"],
+    [8, "Second logical heading"],
+  ]);
+  const { document, inspection } = fixture(12, headings, undefined, new Set([8]));
   assert.deepEqual(inferStructuralHeadings(document, inspection), [
-    { title: "Moonlight over the station", sourcePage: 3, semanticBlockIndex: 0 },
-    { title: "名前のない節", sourcePage: 8, semanticBlockIndex: 0 },
+    { title: "First logical heading", sourcePage: 3, semanticBlockIndex: 0 },
+    { title: "Second logical heading", sourcePage: 8, semanticBlockIndex: 1 },
   ]);
 });
 
-test("when there is no short auxiliary cadence, every recurring structural style is retained", () => {
+test("two independent occurrences remain recurring even in a long physical document", () => {
+  const headings = new Map<number, string>([
+    [5, "First section"],
+    [26, "Second section"],
+  ]);
+  const { document, inspection } = fixture(40, headings);
+  assert.deepEqual(
+    inferStructuralHeadings(document, inspection).map(({ title, sourcePage }) => ({ title, sourcePage })),
+    [
+      { title: "First section", sourcePage: 5 },
+      { title: "Second section", sourcePage: 26 },
+    ],
+  );
+});
+
+test("when there is one recurring structural style, every source-backed occurrence is retained", () => {
   const headings = new Map<number, string>([
     [1, "Beginning"],
     [4, "第二幕"],
@@ -139,7 +172,7 @@ test("when there is no short auxiliary cadence, every recurring structural style
   );
 });
 
-test("a minor recurring page-leading style cannot create false headings beside a dominant family", () => {
+test("a minor recurring non-body style cannot create false headings beside a dominant family", () => {
   const headingPages = new Map<number, string>([
     [1, "alpha"], [5, "beta"], [9, "gamma"], [13, "delta"], [17, "epsilon"],
     [21, "zeta"], [25, "eta"], [29, "theta"], [33, "iota"], [37, "kappa"],
