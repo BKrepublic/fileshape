@@ -43,20 +43,22 @@ async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   const input = argv.shift();
   if (!input || input.startsWith("--")) {
-    throw new Error("usage: npm run diagnose:reading-order -- PDF --page N --needle TEXT");
+    throw new Error("usage: npm run diagnose:reading-order -- PDF --page N --needle TEXT [--needle TEXT ...]");
   }
 
   let pageNumber: number | undefined;
-  let needle: string | undefined;
+  const needles: string[] = [];
   while (argv.length > 0) {
     const flag = argv.shift()!;
     const value = argv.shift();
     if (flag === "--page") pageNumber = positiveInteger(value, flag);
-    else if (flag === "--needle") needle = value;
-    else throw new Error(`unknown option ${flag}`);
+    else if (flag === "--needle") {
+      if (value === undefined || compactText(value).length === 0) throw new Error("--needle TEXT is required");
+      needles.push(value);
+    } else throw new Error(`unknown option ${flag}`);
   }
   if (pageNumber === undefined) throw new Error("--page N is required");
-  if (!needle || compactText(needle).length === 0) throw new Error("--needle TEXT is required");
+  if (needles.length === 0) throw new Error("at least one --needle TEXT is required");
 
   const inspection = await inspectPdf(input);
   const page = inspection.pages.find((candidate) => candidate.page === pageNumber);
@@ -65,51 +67,56 @@ async function main(): Promise<void> {
   const flow = reconstructPageFlow(page);
   const physical = reconstructPhysicalLayout(page, flow.orientation, flow.bodyFontSize);
   const semantic = buildSemanticBlocks(physical, flow.bodyFontSize);
-  const expected = compactText(needle);
   const sourceEmission = compactText(page.textItems.map((item) => item.text).join(""));
   const flowText = compactText(flow.text);
   const physicalText = compactText(physical.units.map((unit) => unit.text).join(""));
   const semanticText = compactText(semantic.text);
 
-  const stagePresence = {
-    sourceEmission: sourceEmission.includes(expected),
-    flow: flowText.includes(expected),
-    physical: physicalText.includes(expected),
-    semantic: semanticText.includes(expected),
-  };
-
-  const sourceItems = sourceSpanItemIndexes(page.textItems.map((item) => item.text), expected);
-  const sourceItemSet = new Set(sourceItems);
-  const tracedPhysicalUnits = physical.units
-    .filter((unit) => (unit.sourceRanges ?? []).some((range) => sourceItemSet.has(range.itemIndex)))
-    .map((unit) => ({
-      index: unit.index,
-      position: unit.position,
-      text: preview(unit.text, 160),
-      sourceItems: [...new Set((unit.sourceRanges ?? []).map((range) => range.itemIndex))],
-    }));
-  const tracedSemanticBlocks = semantic.blocks
-    .filter((block) => (block.sourceRanges ?? []).some((range) => sourceItemSet.has(range.itemIndex)))
-    .map((block) => ({
-      index: block.index,
-      units: block.unitIndexes,
-      text: preview(block.text, 200),
-      sourceItems: [...new Set((block.sourceRanges ?? []).map((range) => range.itemIndex))],
-    }));
-
   process.stdout.write([
     `FILE=${path.basename(input)}`,
     `PAGE=${pageNumber}`,
-    `NEEDLE=${expected}`,
     `ORIENTATION=${flow.orientation}`,
     `BODY_FONT_SIZE=${flow.bodyFontSize}`,
     `FLOW_METRICS=${JSON.stringify(flow.metrics)}`,
     `COUNTS=textItems:${page.textItems.length},flowPrimary:${flow.primaryItemCount},flowMarginNoise:${flow.marginNoiseItemCount},flowAnnotation:${flow.annotationItemCount},physicalUnits:${physical.units.length},semanticBlocks:${semantic.blocks.length}`,
-    `PRESENCE=${JSON.stringify(stagePresence)}`,
-    `SOURCE_SPAN_ITEMS=${JSON.stringify(sourceItems)}`,
-    `PHYSICAL_TRACE=${JSON.stringify(tracedPhysicalUnits)}`,
-    `SEMANTIC_TRACE=${JSON.stringify(tracedSemanticBlocks)}`,
   ].join("\n") + "\n");
+
+  for (const [needleIndex, needle] of needles.entries()) {
+    const expected = compactText(needle);
+    const stagePresence = {
+      sourceEmission: sourceEmission.includes(expected),
+      flow: flowText.includes(expected),
+      physical: physicalText.includes(expected),
+      semantic: semanticText.includes(expected),
+    };
+    const sourceItems = sourceSpanItemIndexes(page.textItems.map((item) => item.text), expected);
+    const sourceItemSet = new Set(sourceItems);
+    const tracedPhysicalUnits = physical.units
+      .filter((unit) => (unit.sourceRanges ?? []).some((range) => sourceItemSet.has(range.itemIndex)))
+      .map((unit) => ({
+        index: unit.index,
+        position: unit.position,
+        text: preview(unit.text, 160),
+        sourceItems: [...new Set((unit.sourceRanges ?? []).map((range) => range.itemIndex))],
+      }));
+    const tracedSemanticBlocks = semantic.blocks
+      .filter((block) => (block.sourceRanges ?? []).some((range) => sourceItemSet.has(range.itemIndex)))
+      .map((block) => ({
+        index: block.index,
+        units: block.unitIndexes,
+        text: preview(block.text, 200),
+        sourceItems: [...new Set((block.sourceRanges ?? []).map((range) => range.itemIndex))],
+      }));
+
+    process.stdout.write([
+      `RUN=${needleIndex + 1}`,
+      `NEEDLE=${expected}`,
+      `PRESENCE=${JSON.stringify(stagePresence)}`,
+      `SOURCE_SPAN_ITEMS=${JSON.stringify(sourceItems)}`,
+      `PHYSICAL_TRACE=${JSON.stringify(tracedPhysicalUnits)}`,
+      `SEMANTIC_TRACE=${JSON.stringify(tracedSemanticBlocks)}`,
+    ].join("\n") + "\n");
+  }
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
