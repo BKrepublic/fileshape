@@ -45,6 +45,7 @@
         "src/heading-inference.ts",
         "src/layout-clustering.ts",
         "src/margin-noise.ts",
+        "src/margin-recurrence.ts",
         "src/orientation-decision.ts",
         "src/orientation-evidence.ts",
         "src/pdf-document-pipeline.ts",
