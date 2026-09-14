@@ -44,10 +44,11 @@ function inferredHeadingEntries(pages: EpubXhtmlPage[]): Array<{ title: string; 
 }
 
 function fallbackPageEntries(pages: EpubXhtmlPage[]): Array<{ title: string; href: string }> {
-  return pages.map((page) => ({
-    title: `Page ${page.sourcePage}`,
-    href: `${page.href}#source-page-${page.sourcePage}`,
-  }));
+  return pages.flatMap((page) =>
+    page.sourcePages.map((sourcePage) => ({
+      title: `Page ${sourcePage}`,
+      href: `${page.href}#source-page-${sourcePage}`,
+    })));
 }
 
 export function serializeLegacyNcx(
