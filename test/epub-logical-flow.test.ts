@@ -51,6 +51,31 @@ function attachOutline(document: FileShapeDocument, outline: SourceOutlineItem[]
   document.navigation = buildDocumentNavigation(outline);
 }
 
+function attachSingleOutlineBoundary(document: FileShapeDocument): void {
+  attachOutline(document, [{
+    title: "Source section",
+    destination: null,
+    target: { status: "resolved", sourcePage: 1 },
+    items: [],
+  }]);
+}
+
+function setEdgeGeometry(
+  document: FileShapeDocument,
+  pageNumber: number,
+  firstUnitInlineStartRatio: number,
+  lastUnitInlineEndRatio: number,
+  lastUnitInlineCoverageRatio: number,
+): void {
+  const block = document.pages[pageNumber - 1]?.blocks[0];
+  assert.ok(block);
+  block.edgeGeometry = {
+    firstUnitInlineStartRatio,
+    lastUnitInlineEndRatio,
+    lastUnitInlineCoverageRatio,
+  };
+}
+
 const structuralHeadings = [
   { title: "序章ではない名前", sourcePage: 1, semanticBlockIndex: 0 },
   { title: "◆第二の区切り", sourcePage: 3, semanticBlockIndex: 0 },
@@ -157,4 +182,26 @@ test("outline-backed XHTML keeps mixed writing orientations in scoped runs", () 
   assert.match(body, /class="fileshape-orientation-run fileshape-vertical" style="writing-mode: vertical-rl;"/);
   assert.match(body, /class="fileshape-orientation-run fileshape-horizontal" style="writing-mode: horizontal-tb;"/);
   assert.ok(body.indexOf("vertical body") < body.indexOf("horizontal insert"));
+});
+
+test("cross-page paragraph continuation follows edge geometry even when text looks sentence-final", () => {
+  const document = documentFixture(["終端。", "「次」"]);
+  attachSingleOutlineBoundary(document);
+  setEdgeGeometry(document, 1, 0.1, 0.95, 0.8);
+  setEdgeGeometry(document, 2, 0.1, 0.6, 0.5);
+
+  const body = serializeEpubXhtml(document).pages[0]?.xhtml ?? "";
+  assert.match(body, /class="fileshape-block-continuation"/);
+  assert.equal((body.match(/<p class="fileshape-block"/g) ?? []).length, 1);
+});
+
+test("cross-page paragraph stays separate when edge geometry disagrees even without punctuation", () => {
+  const document = documentFixture(["unfinished", "continuation"]);
+  attachSingleOutlineBoundary(document);
+  setEdgeGeometry(document, 1, 0.1, 0.65, 0.55);
+  setEdgeGeometry(document, 2, 0.1, 0.7, 0.5);
+
+  const body = serializeEpubXhtml(document).pages[0]?.xhtml ?? "";
+  assert.doesNotMatch(body, /class="fileshape-block-continuation"/);
+  assert.equal((body.match(/<p class="fileshape-block"/g) ?? []).length, 2);
 });
