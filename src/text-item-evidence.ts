@@ -10,13 +10,14 @@ export type TextItemEvidence = {
   bodyFontRatio?: number;
   marginNoise: boolean;
   annotationSized: boolean;
+  bodySized: boolean;
 };
 
 /**
  * Compute compact, content-agnostic evidence shared by flow, physical layout,
  * and ruby stages. This deliberately does not assign one final semantic role:
- * margin evidence and annotation-size evidence are independent observations,
- * and each downstream stage may have a different fail-closed policy for them.
+ * margin evidence and font-size evidence are independent observations, and each
+ * downstream stage may keep its existing fail-closed policy for them.
  */
 export function collectTextItemEvidence(
   page: InspectPage,
@@ -27,7 +28,9 @@ export function collectTextItemEvidence(
     const bodyFontRatio = bodyFontSize > 0 && item.fontSize > 0
       ? item.fontSize / bodyFontSize
       : undefined;
-    const annotationSized = bodyFontSize > 0 && item.fontSize < bodyFontSize * ANNOTATION_FONT_RATIO;
+    const annotationCutoff = bodyFontSize * ANNOTATION_FONT_RATIO;
+    const annotationSized = bodyFontSize > 0 && item.fontSize < annotationCutoff;
+    const bodySized = bodyFontSize > 0 && item.fontSize >= annotationCutoff;
     return {
       item,
       itemIndex,
@@ -35,6 +38,7 @@ export function collectTextItemEvidence(
       ...(bodyFontRatio === undefined ? {} : { bodyFontRatio }),
       marginNoise: visible && isShortMarginNoise(item, page, bodyFontSize),
       annotationSized,
+      bodySized,
     };
   });
 }
