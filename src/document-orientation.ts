@@ -49,7 +49,7 @@ function ambiguousTendency(observation: PageOrientationObservation): WritingOrie
   const evidence = observation.evidence;
   if (!evidence) return "unknown";
 
-  if (evidence.singleCharItemRatio >= 0.7) {
+  if ((evidence.singleCharItemRatio ?? 0) >= 0.7) {
     const sequence = channelTendency(evidence.channels.sequence);
     if (sequence !== "unknown") return sequence;
   }
