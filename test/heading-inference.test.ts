@@ -210,6 +210,107 @@ test("a minor recurring non-body style cannot create false headings beside a dom
   ]);
 });
 
+test("heading-family dominance accepts the inclusive 3x independent-page boundary", () => {
+  const headingPages = new Map<number, string>([
+    [1, "heading one"], [5, "heading two"], [9, "heading three"],
+    [13, "heading four"], [17, "heading five"], [21, "heading six"],
+  ]);
+  const expectedHeadings = [...headingPages].map(([sourcePage, title]) => ({
+    title,
+    sourcePage,
+    semanticBlockIndex: 0,
+  }));
+  const { document, inspection } = fixture(24, headingPages);
+  replaceLeadingStyle(inspection, [3, 7], "DecorativeFace");
+
+  const evidence = inferStructuralHeadingEvidence(document, inspection);
+  assert.equal(evidence.decision, "clear-dominance");
+  assert.equal(evidence.strongestPageSupport, 6);
+  assert.equal(evidence.runnerUpPageSupport, 2);
+  assert.equal(evidence.supportMargin, 4);
+  assert.equal(evidence.dominanceRatio, 3);
+  assert.deepEqual(evidence.families.map(({ pageSupport, candidateCount, supportShare, selected }) => ({
+    pageSupport,
+    candidateCount,
+    supportShare,
+    selected,
+  })), [
+    { pageSupport: 6, candidateCount: 6, supportShare: 0.75, selected: true },
+    { pageSupport: 2, candidateCount: 2, supportShare: 0.25, selected: false },
+  ]);
+  assert.deepEqual(evidence.headings, expectedHeadings);
+  assert.deepEqual(inferStructuralHeadings(document, inspection), expectedHeadings);
+});
+
+test("heading-family dominance fails closed at the nearest integer below 3x", () => {
+  const headingPages = new Map<number, string>([
+    [1, "heading one"], [5, "heading two"], [9, "heading three"],
+    [13, "heading four"], [17, "heading five"],
+  ]);
+  const { document, inspection } = fixture(20, headingPages);
+  replaceLeadingStyle(inspection, [3, 7], "DecorativeFace");
+
+  const evidence = inferStructuralHeadingEvidence(document, inspection);
+  assert.equal(evidence.decision, "competing-families");
+  assert.equal(evidence.strongestPageSupport, 5);
+  assert.equal(evidence.runnerUpPageSupport, 2);
+  assert.equal(evidence.supportMargin, 3);
+  assert.equal(evidence.dominanceRatio, 2.5);
+  assert.deepEqual(evidence.families.map(({ pageSupport, candidateCount, supportShare, selected }) => ({
+    pageSupport,
+    candidateCount,
+    supportShare,
+    selected,
+  })), [
+    { pageSupport: 5, candidateCount: 5, supportShare: 5 / 7, selected: false },
+    { pageSupport: 2, candidateCount: 2, supportShare: 2 / 7, selected: false },
+  ]);
+  assert.deepEqual(evidence.headings, []);
+  assert.deepEqual(inferStructuralHeadings(document, inspection), []);
+});
+
+test("heading-family evidence is invariant to unrelated body-page insertion and padding", () => {
+  const baselineHeadingPages = new Map<number, string>([
+    [1, "heading one"], [5, "heading two"], [9, "heading three"],
+    [13, "heading four"], [17, "heading five"], [21, "heading six"],
+  ]);
+  const insertedHeadingPages = new Map<number, string>([
+    [3, "heading one"], [7, "heading two"], [11, "heading three"],
+    [15, "heading four"], [19, "heading five"], [23, "heading six"],
+  ]);
+  const cases = [
+    { pageCount: 24, headingPages: baselineHeadingPages },
+    { pageCount: 26, headingPages: insertedHeadingPages },
+    { pageCount: 40, headingPages: baselineHeadingPages },
+  ];
+  const evidence = cases.map(({ pageCount, headingPages }) => {
+    const { document, inspection } = fixture(pageCount, headingPages);
+    const competitorPages = [...headingPages.keys()].map((page) => page + 2).filter((page) => !headingPages.has(page)).slice(0, 2);
+    replaceLeadingStyle(inspection, competitorPages, "DecorativeFace");
+    return {
+      evidence: inferStructuralHeadingEvidence(document, inspection),
+      headings: inferStructuralHeadings(document, inspection).map(({ title }) => title),
+    };
+  });
+
+  for (const current of evidence) {
+    assert.equal(current.evidence.decision, "clear-dominance");
+    assert.equal(current.evidence.strongestPageSupport, 6);
+    assert.equal(current.evidence.runnerUpPageSupport, 2);
+    assert.equal(current.evidence.supportMargin, 4);
+    assert.equal(current.evidence.dominanceRatio, 3);
+    assert.deepEqual(current.evidence.families.map(({ pageSupport, supportShare, selected }) => ({
+      pageSupport,
+      supportShare,
+      selected,
+    })), [
+      { pageSupport: 6, supportShare: 0.75, selected: true },
+      { pageSupport: 2, supportShare: 0.25, selected: false },
+    ]);
+    assert.deepEqual(current.headings, [...baselineHeadingPages.values()]);
+  }
+});
+
 test("competing recurring non-body styles fail closed instead of guessing a heading family", () => {
   const headingPages = new Map<number, string>([
     [1, "one"], [5, "two"], [9, "three"], [13, "four"], [17, "five"],
