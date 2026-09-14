@@ -108,6 +108,11 @@ async function main(): Promise<void> {
       const visibleNoteEntries = textEntries.filter((entry) =>
         entry.data.includes(Buffer.from("fileshape-unresolved-notes")) ||
         entry.data.includes(Buffer.from("fileshape-unresolved-annotation")));
+      const provenanceEntries = textEntries.filter((entry) =>
+        entry.data.includes(Buffer.from("fileshape-unresolved-provenance")));
+      const malformedProvenanceEntries = provenanceEntries.filter((entry) =>
+        !entry.data.includes(Buffer.from('hidden="hidden" class="fileshape-unresolved-provenance-set"')) ||
+        !entry.data.includes(Buffer.from('hidden="hidden" class="fileshape-unresolved-provenance"')));
 
       // FileShape is a reflow converter. Physical PDF pages are source provenance,
       // not default EPUB spine boundaries. Corpus-specific expectations live here,
@@ -137,6 +142,12 @@ async function main(): Promise<void> {
           detail: `${visibleNoteEntries.length} spine XHTML resource(s) expose unresolved ruby/annotation fragments as reader-visible notes`,
         });
       }
+      if (malformedProvenanceEntries.length > 0) {
+        issues.push({
+          file: name,
+          detail: `${malformedProvenanceEntries.length} spine XHTML resource(s) contain unresolved provenance without the required hidden container and entry`,
+        });
+      }
     }
   } finally {
     await rm(outputDirectory, { recursive: true, force: true });
@@ -151,7 +162,7 @@ async function main(): Promise<void> {
   if (issues.length === 0) {
     console.log("FILESHAPE GENERIC CORPUS QUALITY: PASS");
     console.log(`PDFs: ${names.length}/${EXPECTED_PDF_COUNT}; pages: ${totalPages}/${EXPECTED_TOTAL_PAGES}`);
-    console.log("No physical-page spine leakage, visible unresolved-note pollution, or known reading-order regression detected.");
+    console.log("No physical-page spine leakage, visible unresolved-note pollution, malformed hidden provenance, or known reading-order regression detected.");
     console.log(RULE);
     return;
   }
