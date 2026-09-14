@@ -4,6 +4,7 @@ import {
   type FileShapeDocument,
 } from "./document-model.js";
 import { resolveDocumentOrientations } from "./document-orientation.js";
+import { summarizeOrientationEvidence } from "./orientation-evidence.js";
 import type { InspectResult } from "./pdf-inspection-model.js";
 import { reconstructPhysicalLayout } from "./physical-layout.js";
 import { associateRubySpans, type RubySpan } from "./ruby-spans.js";
@@ -51,7 +52,11 @@ export function buildDocumentFromInspection(
   });
 
   const orientations = resolveDocumentOrientations(
-    flows.map(({ page, flow }) => ({ page: page.page, orientation: flow.orientation })),
+    flows.map(({ page, flow }) => ({
+      page: page.page,
+      orientation: flow.orientation,
+      evidence: summarizeOrientationEvidence(flow.orientation, flow.metrics),
+    })),
   );
   const resolvedByPage = new Map(orientations.map((entry) => [entry.page, entry]));
 
