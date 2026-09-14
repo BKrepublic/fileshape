@@ -2,6 +2,7 @@ import {
   clusterTextItemsByAxis,
   clusterVerticalGlyphColumns,
   ordinaryCrossAxisTolerance,
+  verticalTextLayoutMode,
 } from "./layout-clustering.js";
 import type { InspectPage, InspectTextItem } from "./pdf-inspection-model.js";
 import type { WritingOrientation } from "./text-flow.js";
@@ -37,10 +38,6 @@ export type PhysicalPageLayout = {
   units: PhysicalTextUnit[];
   gaps: PhysicalGap[];
 };
-
-function charCount(text: string): number {
-  return [...text.trim()].length;
-}
 
 function round(value: number, digits = 2): number {
   const factor = 10 ** digits;
@@ -204,16 +201,13 @@ export function reconstructPhysicalLayout(
   bodyFontSize: number,
 ): PhysicalPageLayout {
   const items = primaryItems(page, bodyFontSize);
-  const singleCharRatio =
-    items.length === 0 ? 0 : items.filter((item) => charCount(item.text) === 1).length / items.length;
   const inlineSize = orientation === "horizontal" ? page.width : page.height;
 
   let units: PhysicalTextUnit[] = [];
   if (orientation === "vertical") {
-    units =
-      singleCharRatio >= 0.7
-        ? buildVerticalGlyphUnits(items, bodyFontSize, inlineSize)
-        : buildVerticalRunUnits(items, bodyFontSize, inlineSize);
+    units = verticalTextLayoutMode(items) === "glyph"
+      ? buildVerticalGlyphUnits(items, bodyFontSize, inlineSize)
+      : buildVerticalRunUnits(items, bodyFontSize, inlineSize);
   } else if (orientation === "horizontal") {
     units = buildHorizontalUnits(items, bodyFontSize, inlineSize);
   }
