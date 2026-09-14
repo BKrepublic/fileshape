@@ -112,18 +112,6 @@ function dominantRecurringClusters(candidatesByStyle: Map<string, Candidate[]>):
   return clearDominance ? [strongest.candidates] : [];
 }
 
-function uniquePerSourcePage(candidates: Candidate[]): Candidate[] {
-  const counts = new Map<number, number>();
-  for (const candidate of candidates) {
-    counts.set(candidate.sourcePage, (counts.get(candidate.sourcePage) ?? 0) + 1);
-  }
-  // EPUB logical grouping currently exposes one structural boundary per source
-  // page. When the source presents multiple indistinguishable candidates on the
-  // same page, there is not enough evidence to choose one, so omit that page
-  // rather than reintroducing first-block/page-position bias.
-  return candidates.filter((candidate) => counts.get(candidate.sourcePage) === 1);
-}
-
 /**
  * Infer only source-backed, recurring structural headings.
  *
@@ -132,6 +120,8 @@ function uniquePerSourcePage(candidates: Candidate[]): Candidate[] {
  * - the same style recurs on at least two independent source pages;
  * - one recurring non-body style family is clearly dominant when families compete.
  *
+ * Multiple source-backed heading blocks may coexist on one physical PDF page.
+ * Physical pagination is provenance, not a reason to discard one logical heading.
  * A block does not have to be the first block on a physical PDF page, and source
  * page count/cadence never promotes or demotes it. Repagination may therefore move
  * a heading between page positions without changing its logical classification.
@@ -168,8 +158,8 @@ export function inferStructuralHeadings(
     }
   }
 
-  const selected = uniquePerSourcePage(dominantRecurringClusters(candidatesByStyle).flat());
-  return selected
+  return dominantRecurringClusters(candidatesByStyle)
+    .flat()
     .sort((a, b) => a.sourcePage - b.sourcePage || a.semanticBlockIndex - b.semanticBlockIndex)
     .map(({ title, sourcePage, semanticBlockIndex }) => ({ title, sourcePage, semanticBlockIndex }));
 }
