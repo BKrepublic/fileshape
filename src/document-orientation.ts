@@ -66,20 +66,24 @@ function runSupportsContext(
 }
 
 /**
- * A physical document edge has only one stable neighbour, so weak run/baseline
- * tendencies are insufficient there. Permit one-sided context only when every
- * ambiguous page has a complete, unique attached-run geometry channel matching
- * the stable neighbour. This keeps attached geometry provisional while avoiding
- * a page-local hard label.
+ * Return a single attached-run tendency only when every page in the ambiguous
+ * run has complete, unique attached-run geometry and all pages agree. This is
+ * deliberately stricter than the raw low-confidence tendency used when both
+ * stable neighbours already agree.
  */
-function runSupportsEdgeContext(
+function attachedRunForWholeRun(
   observations: PageOrientationObservation[],
-  orientation: Exclude<WritingOrientation, "unknown">,
-): boolean {
-  return observations.length > 0 && observations.every((observation) => {
+): WritingOrientation {
+  let tendency: WritingOrientation = "unknown";
+  for (const observation of observations) {
     const attached = observation.evidence?.attachedRun;
-    return attached !== undefined && attachedRunTendency(attached) === orientation;
-  });
+    if (!attached) return "unknown";
+    const current = attachedRunTendency(attached);
+    if (current === "unknown") return "unknown";
+    if (tendency === "unknown") tendency = current;
+    else if (tendency !== current) return "unknown";
+  }
+  return tendency;
 }
 
 function fillRun(
@@ -99,18 +103,18 @@ function fillRun(
 /**
  * Resolve context-ambiguous runs from stable document context.
  *
- * Interior runs require:
- * - nearest stable pages on both sides;
- * - both stable pages agree on orientation;
- * - every ambiguous page carries a retained directional tendency matching them.
+ * When both nearest stable pages agree, retained directional tendency may fill
+ * the ambiguous run exactly as before.
  *
- * At the physical start/end of a document, one-sided resolution is narrower:
- * every ambiguous page must carry complete unique attached-run geometry that
- * matches the sole stable neighbour. Raw weak metric tendencies never justify
- * one-sided inference.
+ * When only one stable side exists, or when the two stable sides disagree at a
+ * writing-mode transition, resolution is narrower: every ambiguous page must
+ * carry complete, unique attached-run geometry, all attached tendencies must
+ * agree, and that tendency must match at least one stable neighbour. Raw weak
+ * run/baseline/sequence tendency never decides a one-sided or transition case.
  *
- * Physical run length is deliberately irrelevant. Neutral/evidence-free pages
- * stay unresolved, as do runs containing any opposite tendency.
+ * Physical run length is deliberately irrelevant. Metric-backed known labels
+ * remain immutable, and evidence-free or internally conflicting runs stay
+ * unresolved.
  */
 export function resolveDocumentOrientations(
   observations: PageOrientationObservation[],
@@ -144,18 +148,21 @@ export function resolveDocumentOrientations(
     const next = endExclusive < ordered.length ? ordered[endExclusive] : undefined;
     const ambiguousRun = ordered.slice(start, endExclusive);
 
-    if (previous && next) {
-      if (previous.orientation === "unknown" || next.orientation === "unknown") continue;
-      if (previous.orientation !== next.orientation) continue;
+    if (previous && next && previous.orientation === next.orientation) {
+      if (previous.orientation === "unknown") continue;
       if (!runSupportsContext(ambiguousRun, previous.orientation)) continue;
       fillRun(resolved, start, endExclusive, previous.orientation);
       continue;
     }
 
-    const edgeAnchor = previous ?? next;
-    if (!edgeAnchor || edgeAnchor.orientation === "unknown") continue;
-    if (!runSupportsEdgeContext(ambiguousRun, edgeAnchor.orientation)) continue;
-    fillRun(resolved, start, endExclusive, edgeAnchor.orientation);
+    const attached = attachedRunForWholeRun(ambiguousRun);
+    if (attached === "unknown") continue;
+
+    const previousMatches = previous?.orientation === attached;
+    const nextMatches = next?.orientation === attached;
+    if (!previousMatches && !nextMatches) continue;
+
+    fillRun(resolved, start, endExclusive, attached);
   }
 
   return resolved;
