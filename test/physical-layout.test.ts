@@ -131,12 +131,12 @@ test("large vertical separations still use geometry instead of source order", ()
   );
 });
 
-test("excludes a smaller lower-margin page number before it can merge into a body column", () => {
+test("excludes short smaller lower-margin text before it can merge into a body column", () => {
   const items = [
     item({ text: "本", displayX: 410, displayY: 100 }),
     item({ text: "文", displayX: 410, displayY: 114 }),
-    // Mirrors N8440FE-style pagination: about 89% down the page and close
-    // enough in X that it would otherwise be clustered into the body column.
+    // A compact smaller run near the page edge can be close enough in X to
+    // merge into a body column unless edge geometry is filtered first.
     item({ text: "3", displayX: 400, displayY: 534, fontSize: 12, width: 8, height: 12 }),
   ];
 
