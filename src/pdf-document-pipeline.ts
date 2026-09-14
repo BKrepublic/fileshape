@@ -1,3 +1,4 @@
+import { buildDocumentBodyFontContext } from "./body-font-context.js";
 import {
   assertDocumentModel,
   buildFileShapeDocument,
@@ -11,7 +12,6 @@ import { reconstructPhysicalLayout } from "./physical-layout.js";
 import { associateRubySpans, type RubySpan } from "./ruby-spans.js";
 import { buildSemanticBlocks } from "./semantic-blocks.js";
 import {
-  estimateBodyFontSize,
   reconstructPageFlow,
   type PageFlowResult,
 } from "./text-flow.js";
@@ -50,12 +50,17 @@ export function buildDocumentFromInspection(
   control?: PdfDocumentPipelineControl,
 ): PdfDocumentPipelineResult {
   const totalPages = inspection.pages.length;
+  const bodyFontContext = buildDocumentBodyFontContext(inspection.pages);
   const bodyFontSizes = new Map(
-    inspection.pages.map((page) => [page.page, estimateBodyFontSize(page.textItems)]),
+    inspection.pages.map((page) => [
+      page.page,
+      bodyFontContext.resolutions.get(page.page)?.size ?? 0,
+    ]),
   );
   const marginProfile = buildDocumentMarginProfile(inspection.pages, bodyFontSizes);
   const flows = inspection.pages.map((page, index) => {
-    const flow = reconstructPageFlow(page, marginProfile);
+    const bodyFontResolution = bodyFontContext.resolutions.get(page.page);
+    const flow = reconstructPageFlow(page, marginProfile, bodyFontResolution);
     control?.onFlowAnalyzed?.(index + 1, totalPages);
     return { page, flow };
   });
@@ -83,6 +88,10 @@ export function buildDocumentFromInspection(
       flow.bodyFontSize,
       marginProfile,
     );
+    // Precomputed ruby spans used the page-local body size while glyph geometry
+    // was still live. body-font-context permits a document prior only when the
+    // annotation/body role partition is identical under both sizes, so reusing
+    // those exact spans remains valid without retaining glyphs across pages.
     const rubySpans = precomputedRubySpans === undefined
       ? associateRubySpans(page, flow.bodyFontSize)
       : precomputedRubySpans.get(page.page);
