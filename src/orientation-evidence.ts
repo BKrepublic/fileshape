@@ -1,3 +1,4 @@
+import type { AttachedRunEvidence } from "./attached-run-evidence.js";
 import {
   decideMetricOrientation,
   type OrientationDecisionSource,
@@ -19,6 +20,8 @@ export type OrientationEvidenceSummary = {
     baseline: { vertical: number; horizontal: number };
     sequence: { vertical: number; horizontal: number };
   };
+  /** Independent sparse endpoint-attachment evidence. Never a page label by itself. */
+  attachedRun?: AttachedRunEvidence;
 };
 
 function round(value: number, digits = 4): number {
@@ -27,14 +30,15 @@ function round(value: number, digits = 4): number {
 }
 
 /**
- * Preserve the independent geometric orientation channels after page flow has
- * made its compatibility label. The max-channel score remains diagnostic only.
- * `decisionSource` is derived from the same shared metric decision used by page
- * flow, so provenance cannot drift when precedence changes.
+ * Preserve independent geometric orientation channels after page flow. The
+ * provisional label and decision source come only from the metric classifier;
+ * sparse attached-run evidence is retained separately so downstream document
+ * context can use it without pretending it already classified the page.
  */
 export function summarizeOrientationEvidence(
   orientation: WritingOrientation,
   metrics: PageFlowResult["metrics"],
+  attachedRun?: AttachedRunEvidence,
 ): OrientationEvidenceSummary {
   const vertical = Math.max(
     metrics.verticalRunRatio,
@@ -47,11 +51,8 @@ export function summarizeOrientationEvidence(
     metrics.sequenceHorizontalRatio,
   );
   const metric = decideMetricOrientation(metrics);
-  const decisionSource: OrientationDecisionSource = orientation === "unknown"
-    ? "none"
-    : metric.orientation === orientation
-      ? metric.source
-      : "attached-run";
+  const decisionSource: OrientationDecisionSource =
+    metric.orientation === orientation ? metric.source : "none";
 
   return {
     provisional: orientation,
@@ -74,5 +75,6 @@ export function summarizeOrientationEvidence(
         horizontal: metrics.sequenceHorizontalRatio,
       },
     },
+    ...(attachedRun === undefined ? {} : { attachedRun }),
   };
 }
