@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { AttachedRunEvidence } from "../src/attached-run-evidence.js";
 import { resolveDocumentOrientations } from "../src/document-orientation.js";
 import { summarizeOrientationEvidence } from "../src/orientation-evidence.js";
 
@@ -21,6 +22,11 @@ const horizontalRunWithVerticalSequence = {
   horizontalBaselineRatio: 0.88,
   sequenceVerticalRatio: 1,
   sequenceHorizontalRatio: 0,
+};
+
+const verticalAttached: AttachedRunEvidence = {
+  vertical: { anchorCount: 1, pendingCount: 2, attachedCount: 2, complete: true },
+  horizontal: { anchorCount: 0, pendingCount: 0, attachedCount: 0, complete: false },
 };
 
 test("orientation evidence exposes disagreement without discarding the decisive source", () => {
@@ -47,8 +53,8 @@ test("glyph-dominant sequence evidence outranks the minority multi-character run
   assert.deepEqual(evidence.channels.sequence, { vertical: 1, horizontal: 0 });
 });
 
-test("a known label without a metric-backed decision is identified as attached-run fallback", () => {
-  const evidence = summarizeOrientationEvidence("vertical", {
+test("attached-run geometry remains separate from the provisional metric label", () => {
+  const evidence = summarizeOrientationEvidence("unknown", {
     singleCharItemRatio: 0.2,
     verticalRunRatio: 0.5,
     horizontalRunRatio: 0,
@@ -56,9 +62,11 @@ test("a known label without a metric-backed decision is identified as attached-r
     horizontalBaselineRatio: 0.5,
     sequenceVerticalRatio: 0,
     sequenceHorizontalRatio: 0,
-  });
+  }, verticalAttached);
 
-  assert.equal(evidence.decisionSource, "attached-run");
+  assert.equal(evidence.provisional, "unknown");
+  assert.equal(evidence.decisionSource, "none");
+  assert.deepEqual(evidence.attachedRun, verticalAttached);
 });
 
 test("document orientation resolution preserves compact evidence unchanged", () => {
