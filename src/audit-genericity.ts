@@ -4,9 +4,15 @@ import process from "node:process";
 import { attachedRunTendency } from "./attached-run-evidence.js";
 import { resolveDocumentOrientations } from "./document-orientation.js";
 import type { SourceOutlineItem } from "./document-navigation.js";
+import { buildDocumentMarginProfile } from "./margin-recurrence.js";
 import { summarizeOrientationEvidence } from "./orientation-evidence.js";
 import { inspectPdf } from "./pdf-inspector.js";
-import { reconstructPageFlow, type PageFlowResult, type WritingOrientation } from "./text-flow.js";
+import {
+  estimateBodyFontSize,
+  reconstructPageFlow,
+  type PageFlowResult,
+  type WritingOrientation,
+} from "./text-flow.js";
 
 const SAMPLE_DIRECTORY = process.env.FILESHAPE_PRIVATE_CORPUS_DIR ?? "local-samples";
 const EXPECTED_PDF_COUNT = 9;
@@ -133,7 +139,14 @@ function pageLabel(page: PageAudit): string {
 
 async function auditFile(filePath: string): Promise<FileAudit> {
   const inspection = await inspectPdf(filePath);
-  const flows = inspection.pages.map((page) => ({ page: page.page, flow: reconstructPageFlow(page) }));
+  const bodyFontSizes = new Map(
+    inspection.pages.map((page) => [page.page, estimateBodyFontSize(page.textItems)]),
+  );
+  const marginProfile = buildDocumentMarginProfile(inspection.pages, bodyFontSizes);
+  const flows = inspection.pages.map((page) => ({
+    page: page.page,
+    flow: reconstructPageFlow(page, marginProfile),
+  }));
   const orientationResolution = resolveDocumentOrientations(
     flows.map(({ page, flow }) => ({
       page,
