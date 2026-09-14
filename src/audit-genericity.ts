@@ -133,13 +133,21 @@ async function auditFile(filePath: string): Promise<FileAudit> {
     flows.map(({ page, flow }) => ({
       page,
       orientation: flow.orientation,
-      evidence: summarizeOrientationEvidence(flow.orientation, flow.metrics),
+      evidence: summarizeOrientationEvidence(
+        flow.orientation,
+        flow.metrics,
+        flow.attachedRunEvidence,
+      ),
     })),
   );
   const resolvedByPage = new Map(orientationResolution.map((entry) => [entry.page, entry]));
 
   const pages: PageAudit[] = flows.map(({ page, flow }) => {
-    const evidence = summarizeOrientationEvidence(flow.orientation, flow.metrics);
+    const evidence = summarizeOrientationEvidence(
+      flow.orientation,
+      flow.metrics,
+      flow.attachedRunEvidence,
+    );
     const resolved = resolvedByPage.get(page);
     return {
       page,
