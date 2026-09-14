@@ -7,6 +7,7 @@
   "scripts": {
     "verify:ruby": "tsx src/verify-ruby-samples.ts",
     "diagnose:ruby": "tsx src/diagnose-ruby.ts",
+    "diagnose:ruby-unresolved-position": "tsx src/diagnose-ruby-unresolved-position.ts",
     "inspect:ruby-refinement": "tsx src/ruby-refinement-inventory.ts",
     "inspect:ruby-near-miss": "tsx src/ruby-near-miss-evidence.ts",
     "inspect:ruby-glyph-selection": "tsx src/ruby-glyph-selection-evidence.ts",
