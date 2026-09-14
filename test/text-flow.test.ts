@@ -222,3 +222,28 @@ test("drops short smaller page-number-like margin noise", () => {
   assert.equal(result.marginNoiseItemCount, 1);
   assert.equal(result.text, "本文です");
 });
+
+test("glyph-dominant pages use coordinate sequence before minority multi-character run geometry", () => {
+  const glyphs = Array.from({ length: 12 }, (_, index) =>
+    item({
+      text: String.fromCharCode(0x41 + index),
+      displayX: 700,
+      displayY: 100 + index * 14,
+      displayTransform: [14, 0, 0, 14, 0, 0],
+    }));
+  const minorityRun = item({
+    text: "minority-run",
+    displayX: 400,
+    displayY: 300,
+    width: 120,
+    height: 14,
+    displayTransform: [14, 0, 0, 14, 0, 0],
+  });
+
+  const result = reconstructPageFlow(page([...glyphs, minorityRun]));
+
+  assert.ok(result.metrics.singleCharItemRatio >= 0.7);
+  assert.equal(result.metrics.horizontalRunRatio, 1);
+  assert.equal(result.metrics.sequenceVerticalRatio, 1);
+  assert.equal(result.orientation, "vertical");
+});
