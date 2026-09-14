@@ -23,37 +23,26 @@ export type DocumentOrientationOptions = {
 };
 
 /**
- * A known page with no compact evidence is treated as stable for compatibility
- * with focused callers. Production observations carry evidence. There, a known
- * label is stable only when the strongest retained evidence favors that label.
- * Ties and evidence favoring the opposite axis remain context-ambiguous.
+ * Document context may fill an unknown page or reconsider only a page whose
+ * known label came from the attached-run fallback. Run/sequence/baseline labels
+ * remain stable even when another retained evidence channel disagrees: the page
+ * classifier already chose its decisive source, and document resolution must
+ * not invent a second classifier by comparing unrelated channel maxima.
  *
- * This deliberately adds no new confidence threshold: document context may
- * repair only labels that their own retained evidence does not strictly support.
+ * A known page with no compact evidence is treated as stable for compatibility
+ * with focused callers.
  */
-function evidenceSupportsDetected(observation: PageOrientationObservation): boolean {
-  if (observation.orientation === "unknown") return false;
-  if (observation.evidence === undefined) return true;
-
-  if (observation.orientation === "vertical") {
-    return observation.evidence.vertical > observation.evidence.horizontal;
-  }
-  return observation.evidence.horizontal > observation.evidence.vertical;
-}
-
 function isContextAmbiguous(observation: PageOrientationObservation): boolean {
-  return !evidenceSupportsDetected(observation);
+  if (observation.orientation === "unknown") return true;
+  if (observation.evidence === undefined) return false;
+  return observation.evidence.decisionSource === "attached-run";
 }
 
 /**
- * Resolve short context-ambiguous runs from surrounding stable pages. The run
- * may contain page-level `unknown` labels and known labels whose compact
- * evidence is tied or favors the opposite axis. A run is filled only when the
- * nearest stable page on both sides exists and both sides agree.
- *
- * Strong known labels are never overridden, so genuine orientation transitions
- * remain protected. Ambiguous runs at document edges or between disagreeing
- * neighbors are likewise left unchanged.
+ * Resolve short context-ambiguous runs from surrounding stable pages. A run is
+ * filled only when the nearest stable page on both sides exists and both sides
+ * agree. Strong metric-backed labels are never overridden, so genuine writing-
+ * mode transitions and conflicting but decisive page evidence remain protected.
  */
 export function resolveDocumentOrientations(
   observations: PageOrientationObservation[],
@@ -102,7 +91,7 @@ export function resolveDocumentOrientations(
 
       // Record document-context provenance only when context actually changes
       // the page decision or fills an unknown. Merely confirming an already
-      // matching known label is not a resolution event.
+      // matching fallback label is not a resolution event.
       if (target.detected !== previous.orientation) {
         target.resolved = previous.orientation;
         target.source = "document-context";
