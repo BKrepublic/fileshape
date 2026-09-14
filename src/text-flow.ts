@@ -1,4 +1,9 @@
 import {
+  emptyAttachedRunEvidence,
+  measureAttachedRunEvidence,
+  type AttachedRunEvidence,
+} from "./attached-run-evidence.js";
+import {
   clusterTextItemsByAxis,
   clusterVerticalGlyphColumns,
   glyphSequenceRatios,
@@ -44,6 +49,8 @@ export type PageFlowResult = {
   marginNoiseItemCount: number;
   groupCount: number;
   metrics: OrientationMetrics;
+  /** Sparse endpoint-attachment evidence retained without promoting it to a page label. */
+  attachedRunEvidence: AttachedRunEvidence;
   groups: FlowGroup[];
   boundaries: FlowBoundary[];
   /** Logical text: physical line/column wrapping removed, paragraph boundaries normalized to one LF. */
@@ -83,45 +90,10 @@ function dominantFontSize(items: InspectTextItem[]): number {
   return bestSize;
 }
 
-/** A compact run has no reliable aspect-ratio vote. It may still continue a
- * long run when its origin is adjacent to that run's inline endpoint. Require
- * all remaining items to attach; isolated text and competing axes stay unknown.
- * Neither Unicode content nor glyph transform direction participates here. */
-function attachedRunOrientation(items: InspectTextItem[]): WritingOrientation {
-  const candidates = (["vertical", "horizontal"] as const).filter((orientation) => {
-    const inline = (item: InspectTextItem) => orientation === "vertical" ? item.displayY : item.displayX;
-    const cross = (item: InspectTextItem) => orientation === "vertical" ? item.displayX : item.displayY;
-    const extent = (item: InspectTextItem) => Math.abs(orientation === "vertical" ? item.height : item.width);
-    const breadth = (item: InspectTextItem) => Math.abs(orientation === "vertical" ? item.width : item.height);
-    const anchors = items.filter((item) => charCount(item.text) >= 2 &&
-      extent(item) >= item.fontSize * 3 && extent(item) > breadth(item) * 1.5);
-    if (anchors.length === 0) return false;
-    const anchorSet = new Set(anchors);
-    const pending = items.filter((item) => !anchorSet.has(item));
-    if (pending.length === 0) return false;
-    // A second elongated run is evidence of mixed layout, not an attachment.
-    if (pending.some((item) => item.fontSize <= 0 ||
-      Math.max(Math.abs(item.width), Math.abs(item.height)) > item.fontSize * 1.5)) return false;
-    const attached = [...anchors];
-    while (pending.length > 0) {
-      const index = pending.findIndex((item) => attached.some((parent) => {
-        const size = Math.max(parent.fontSize, item.fontSize);
-        const ratio = Math.min(parent.fontSize, item.fontSize) / size;
-        const gap = inline(item) - (inline(parent) + extent(parent));
-        return ratio >= 0.75 && Math.abs(cross(item) - cross(parent)) <= size * 0.5 &&
-          Math.abs(gap) <= size * 0.75 && inline(item) > inline(parent);
-      }));
-      if (index < 0) return false;
-      attached.push(...pending.splice(index, 1));
-    }
-    return true;
-  });
-  return candidates.length === 1 ? candidates[0]! : "unknown";
-}
-
 function detectOrientation(items: InspectTextItem[]): {
   orientation: WritingOrientation;
   metrics: PageFlowResult["metrics"];
+  attachedRunEvidence: AttachedRunEvidence;
 } {
   if (items.length === 0) {
     return {
@@ -135,6 +107,7 @@ function detectOrientation(items: InspectTextItem[]): {
         sequenceVerticalRatio: 0,
         sequenceHorizontalRatio: 0,
       },
+      attachedRunEvidence: emptyAttachedRunEvidence(),
     };
   }
 
@@ -166,12 +139,10 @@ function detectOrientation(items: InspectTextItem[]): {
     sequenceVerticalRatio: sequence.vertical,
     sequenceHorizontalRatio: sequence.horizontal,
   };
-
-  let orientation = decideMetricOrientation(rawMetrics).orientation;
-  if (orientation === "unknown") orientation = attachedRunOrientation(items);
+  const metricDecision = decideMetricOrientation(rawMetrics);
 
   return {
-    orientation,
+    orientation: metricDecision.orientation,
     metrics: {
       singleCharItemRatio: round(singleCharItemRatio, 4),
       verticalRunRatio: round(verticalRunRatio, 4),
@@ -181,6 +152,9 @@ function detectOrientation(items: InspectTextItem[]): {
       sequenceVerticalRatio: round(sequence.vertical, 4),
       sequenceHorizontalRatio: round(sequence.horizontal, 4),
     },
+    attachedRunEvidence: metricDecision.orientation === "unknown"
+      ? measureAttachedRunEvidence(items)
+      : emptyAttachedRunEvidence(),
   };
 }
 
@@ -359,7 +333,7 @@ export function reconstructPageFlow(page: InspectPage): PageFlowResult {
     .filter((entry) => !entry.annotationSized)
     .map((entry) => entry.item);
 
-  const { orientation, metrics } = detectOrientation(primaryItems);
+  const { orientation, metrics, attachedRunEvidence } = detectOrientation(primaryItems);
 
   let built: GroupBuildResult = { groups: [], boundaries: [] };
   if (orientation === "vertical" && verticalTextLayoutMode(primaryItems) === "glyph") {
@@ -378,6 +352,7 @@ export function reconstructPageFlow(page: InspectPage): PageFlowResult {
     marginNoiseItemCount: marginNoiseItems.length,
     groupCount: built.groups.length,
     metrics,
+    attachedRunEvidence,
     groups: built.groups,
     boundaries: built.boundaries,
     text: renderLogicalText(built.groups),
