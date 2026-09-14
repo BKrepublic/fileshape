@@ -28,9 +28,14 @@ export function associateRubyCandidates(
   if (!Number.isFinite(bodyFontSize) || bodyFontSize <= 0) return [];
   const visible = collectTextItemEvidence(page, bodyFontSize)
     .filter(({ item, visible }) => visible && item.fontSize > 0)
-    .map(({ item, itemIndex, annotationSized }) => ({ item, index: itemIndex, annotationSized }));
+    .map(({ item, itemIndex, annotationSized, bodySized }) => ({
+      item,
+      index: itemIndex,
+      annotationSized,
+      bodySized,
+    }));
   const annotations = visible.filter((entry) => entry.annotationSized);
-  const bases = visible.filter((entry) => !entry.annotationSized);
+  const bases = visible.filter((entry) => entry.bodySized);
   const start = (item: InspectTextItem) => item.displayGeometry
     ? dot(item.displayGeometry.start, item.displayGeometry.inline) : 0;
   const end = (item: InspectTextItem) => start(item) + (item.displayGeometry?.inlineExtent ?? 0);
