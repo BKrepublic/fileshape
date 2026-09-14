@@ -69,11 +69,12 @@ test("preserve-as-page-note resolves annotation text without mutating the docume
   assert.equal(note.reason, "no-base");
   assert.equal(note.text, "<注&記>");
   assert.deepEqual(note.sourceRanges, [{ page: 1, itemIndex: 1, charStart: 0, charEnd: 5 }]);
+  assert.equal(result.pages[0]!.hiddenProvenance.length, 0);
   assert.equal(document.pages[0]!.unresolvedRuby.length, 1);
   assert.equal(document.source.pages[0]!.textItems[1]!.text, "<注&記>");
 });
 
-test("preserved unresolved annotation is emitted as a page note, not guessed ruby", () => {
+test("preserved unresolved annotation is emitted as a page note only when explicitly requested", () => {
   const xhtml = serializeEpubXhtml(fixture(), {
     unresolvedRubyPolicy: "preserve-as-page-note",
   }).pages[0]!.xhtml;
@@ -83,9 +84,40 @@ test("preserved unresolved annotation is emitted as a page note, not guessed rub
   assert.match(xhtml, /data-fileshape-reason="no-base"/);
   assert.match(xhtml, /&lt;注&amp;記&gt;/);
   assert.doesNotMatch(xhtml, /<ruby>&lt;注/);
+  assert.doesNotMatch(xhtml, /fileshape-unresolved-provenance/);
 });
 
-test("EPUB package carries the preserve policy through to packaged XHTML", () => {
+test("hidden provenance preserves unresolved source evidence without reader-visible notes", () => {
+  const document = fixture();
+  const result = applyEpubContentPolicy(document, {
+    unresolvedRuby: "preserve-as-hidden-provenance",
+  });
+  const page = result.pages[0]!;
+  const evidence = page.hiddenProvenance[0]!;
+
+  assert.equal(page.notes.length, 0);
+  assert.equal(evidence.text, "<注&記>");
+  assert.equal(evidence.reason, "no-base");
+  assert.deepEqual(evidence.sourceRanges, [{ page: 1, itemIndex: 1, charStart: 0, charEnd: 5 }]);
+  assert.equal(document.pages[0]!.unresolvedRuby.length, 1);
+});
+
+test("hidden provenance is serialized as hidden source evidence, never a Notes section", () => {
+  const xhtml = serializeEpubXhtml(fixture(), {
+    unresolvedRubyPolicy: "preserve-as-hidden-provenance",
+  }).pages[0]!.xhtml;
+
+  assert.match(xhtml, /hidden="hidden" class="fileshape-unresolved-provenance-set"/);
+  assert.match(xhtml, /hidden="hidden" class="fileshape-unresolved-provenance"/);
+  assert.match(xhtml, /data-fileshape-reason="no-base"/);
+  assert.match(xhtml, /data-fileshape-source-ranges=/);
+  assert.match(xhtml, /&lt;注&amp;記&gt;/);
+  assert.doesNotMatch(xhtml, /fileshape-unresolved-notes/);
+  assert.doesNotMatch(xhtml, /fileshape-unresolved-annotation/);
+  assert.doesNotMatch(xhtml, /<h2>Notes<\/h2>/);
+});
+
+test("EPUB package carries the explicit page-note policy through to packaged XHTML", () => {
   const packageResult = serializeEpubPackage(fixture(), {
     title: "Policy Fixture",
     modified: "2026-09-11T12:00:00Z",
@@ -98,11 +130,27 @@ test("EPUB package carries the preserve policy through to packaged XHTML", () =>
   assert.match(xhtml, /&lt;注&amp;記&gt;/);
 });
 
-test("preserve policy fails closed when an unresolved candidate has no annotation source", () => {
-  const document = fixture();
-  document.pages[0]!.unresolvedRuby[0]!.annotationSourceRanges = [];
-  assert.throws(
-    () => applyEpubContentPolicy(document, { unresolvedRuby: "preserve-as-page-note" }),
-    /has no annotation source ranges/,
-  );
+test("EPUB package carries hidden provenance without exposing unresolved notes", () => {
+  const packageResult = serializeEpubPackage(fixture(), {
+    title: "Policy Fixture",
+    modified: "2026-09-11T12:00:00Z",
+    unresolvedRubyPolicy: "preserve-as-hidden-provenance",
+  });
+  const page = packageResult.files.find((file) => file.path === "OEBPS/text/page-0001.xhtml");
+  assert.ok(page);
+  const xhtml = new TextDecoder().decode(page.data);
+  assert.match(xhtml, /hidden="hidden" class="fileshape-unresolved-provenance"/);
+  assert.doesNotMatch(xhtml, /fileshape-unresolved-notes/);
+  assert.doesNotMatch(xhtml, /fileshape-unresolved-annotation/);
+});
+
+test("preserve policies fail closed when an unresolved candidate has no annotation source", () => {
+  for (const unresolvedRuby of ["preserve-as-page-note", "preserve-as-hidden-provenance"] as const) {
+    const document = fixture();
+    document.pages[0]!.unresolvedRuby[0]!.annotationSourceRanges = [];
+    assert.throws(
+      () => applyEpubContentPolicy(document, { unresolvedRuby }),
+      /has no annotation source ranges/,
+    );
+  }
 });
