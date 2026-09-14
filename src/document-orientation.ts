@@ -99,8 +99,14 @@ export function resolveDocumentOrientations(
     for (let fill = start; fill < endExclusive; fill += 1) {
       const target = resolved[fill];
       if (!target) continue;
-      target.resolved = previous.orientation;
-      target.source = "document-context";
+
+      // Record document-context provenance only when context actually changes
+      // the page decision or fills an unknown. Merely confirming an already
+      // matching known label is not a resolution event.
+      if (target.detected !== previous.orientation) {
+        target.resolved = previous.orientation;
+        target.source = "document-context";
+      }
     }
   }
 
