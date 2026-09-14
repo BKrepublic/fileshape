@@ -94,6 +94,43 @@ test("reconstructs vertical glyph columns from geometry when PDF source order is
   );
 });
 
+test("uses source order only for locally overlapping vertical glyph origins", () => {
+  const items = [
+    item({ text: "は", displayX: 700, displayY: 100 }),
+    item({ text: "「", displayX: 706, displayY: 114 }),
+    // The next glyph has a shifted display origin that visually precedes the
+    // punctuation even though source extraction says it follows it.
+    item({ text: "暁", displayX: 700, displayY: 109 }),
+    item({ text: "～", displayX: 700, displayY: 128 }),
+  ];
+
+  const layout = reconstructPhysicalLayout(page(items), "vertical", 14);
+
+  assert.equal(layout.units.length, 1);
+  assert.equal(layout.units[0]?.text, "は「暁～");
+  assert.deepEqual(
+    layout.units[0]?.sourceRanges?.map((range) => range.itemIndex),
+    [0, 1, 2, 3],
+  );
+});
+
+test("large vertical separations still use geometry instead of source order", () => {
+  const items = [
+    item({ text: "後", displayX: 700, displayY: 160 }),
+    item({ text: "先", displayX: 700, displayY: 100 }),
+    item({ text: "中", displayX: 700, displayY: 130 }),
+  ];
+
+  const layout = reconstructPhysicalLayout(page(items), "vertical", 14);
+
+  assert.equal(layout.units.length, 1);
+  assert.equal(layout.units[0]?.text, "先中後");
+  assert.deepEqual(
+    layout.units[0]?.sourceRanges?.map((range) => range.itemIndex),
+    [1, 2, 0],
+  );
+});
+
 test("excludes a smaller lower-margin page number before it can merge into a body column", () => {
   const items = [
     item({ text: "本", displayX: 410, displayY: 100 }),
