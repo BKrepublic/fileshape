@@ -11,6 +11,7 @@ import {
   singleCharItemRatio as measureSingleCharItemRatio,
   verticalTextLayoutMode,
 } from "./layout-clustering.js";
+import type { DocumentMarginProfile } from "./margin-recurrence.js";
 import type { InspectPage, InspectTextItem } from "./pdf-inspection-model.js";
 import {
   decideMetricOrientation,
@@ -318,10 +319,13 @@ function renderSourceSpacingText(groups: FlowGroup[], boundaries: FlowBoundary[]
   return text;
 }
 
-export function reconstructPageFlow(page: InspectPage): PageFlowResult {
+export function reconstructPageFlow(
+  page: InspectPage,
+  marginProfile?: DocumentMarginProfile,
+): PageFlowResult {
   const nonEmptyItems = page.textItems.filter((item) => item.text.trim().length > 0);
   const bodyFontSize = estimateBodyFontSize(nonEmptyItems);
-  const itemEvidence = collectTextItemEvidence(page, bodyFontSize);
+  const itemEvidence = collectTextItemEvidence(page, bodyFontSize, marginProfile);
 
   const marginNoiseItems = itemEvidence
     .filter((entry) => entry.visible && entry.marginNoise)
