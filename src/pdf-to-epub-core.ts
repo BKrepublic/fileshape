@@ -196,7 +196,7 @@ export async function convertPdfBytesToEpubWithResources(
     0,
   );
   const effectiveUnresolvedPolicy: UnresolvedRubyPolicy = effectiveOptions.unresolvedRubyPolicy
-    ?? "preserve-as-page-note";
+    ?? "preserve-as-hidden-provenance";
   const coverImageResourceId = effectiveOptions.coverOccurrence === undefined
     ? undefined
     : resolveCoverImageResourceId(document, effectiveOptions.coverOccurrence);
