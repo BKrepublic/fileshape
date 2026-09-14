@@ -38,7 +38,7 @@ Purpose: FileShape must generalize to unknown PDFs at large scale. The local nin
 | heading page-leading gate | recurring source-backed non-body style can be structural even when the block is not first on a physical page | **B**: style quantization remains empirical |
 | heading document-length gate | recurrence is independent of total physical page count; the old `>=20 pages` switch is gone | no known D blocker for document length |
 | heading page-cadence inference | source-page-number cadence no longer promotes/demotes heading candidates | no known D blocker for pagination cadence |
-| heading family confidence | `inferStructuralHeadingEvidence()` retains every recurring family’s page support, support share, selected state, strongest/runner-up support, support margin, dominance ratio and decision; `inferStructuralHeadings()` remains the compatibility wrapper using the unchanged `3x` rule | **B**: the `3x` dominance threshold itself remains empirical |
+| heading family confidence | `inferStructuralHeadingEvidence()` retains every recurring family’s page support, support share, selected state, strongest/runner-up support, support margin, dominance ratio and decision; the inclusive `3x` boundary, nearest integer support below it and unrelated body-page padding are directly tested | **B**: the `3x` dominance threshold itself remains empirical, but current fail-closed boundary behavior is explicit |
 | multiple headings on one source page | heading inference retains every recurring block candidate; XHTML renders block-granular heading anchors; NAV/NCX enumerate all anchors in one resource without splitting or losing the physical source-page marker | no known D blocker in same-page heading representation |
 | outline vs inferred headings | source outline navigation and rendered/inferred headings coexist; outline presence no longer suppresses inferred structure | no known D blocker in the coexistence rule |
 | logical XHTML grouping | no-heading documents are grouped by logical/serialization constraints rather than one XHTML per physical PDF page; exact soft/hard boundaries, continuation interaction, page redistribution, standalone blank/image-only pages and navigation anchors are directly tested | **B**: soft/hard estimated XHTML size budgets remain empirical serialization heuristics, but current strict boundary behavior is explicit |
@@ -55,7 +55,7 @@ Purpose: FileShape must generalize to unknown PDFs at large scale. The local nin
 | `ruby-association.ts` / `ruby-spans.ts` | ruby geometry | exact association still uses fixed geometric windows for annotation/body size, side distance, overlap, line grouping, continuity and ambiguity | **B** | keep exact association fail-closed; current perturbation behavior is directly tested, so any future calibration must preserve those provenance guarantees |
 | `attached-run-evidence.ts` | sparse endpoint attachment | fixed geometric windows remain | **B/C** | coverage locks scale/translation, jitter and threshold boundaries; calibrate only with independent evidence, never by promoting it to a local hard label |
 | orientation decision thresholds | page orientation metrics | `0.7`, `0.6`, `1.5x`-style gates are empirical | **B** | boundary and precedence behavior is explicit; any calibration change must remain provenance-preserving and fail closed on ties |
-| heading family dominance | choose recurring heading family | the `3x` support ratio remains empirical | **B** | use retained support/share/margin/ratio evidence for future calibration; do not tune against the nine local PDFs |
+| heading family dominance | choose recurring heading family | the `3x` support ratio remains empirical | **B** | boundary/metamorphic coverage is now locked; any future calibration must preserve retained support/share/margin/ratio evidence and remain independent of unrelated body-page count and cadence |
 
 ## Provenance notes
 
@@ -93,9 +93,9 @@ Local verification at checkpoint `c2b42a8747573e4619f71050339b257057b72dd8` pass
 
 ### Heading family confidence
 
-Page-leading eligibility, physical-document-length gates and page cadence are gone. `inferStructuralHeadingEvidence()` exposes the complete recurring-family competition while leaving historical behavior intact: a single recurring family is accepted directly; when multiple families recur, the strongest still needs at least `3x` the runner-up independent page support. Tests distinguish clear dominance from competing families using support/share/margin/ratio evidence rather than a hidden boolean only.
+Page-leading eligibility, physical-document-length gates and page cadence are gone. `inferStructuralHeadingEvidence()` exposes the complete recurring-family competition while leaving historical behavior intact: a single recurring family is accepted directly; when multiple families recur, the strongest still needs at least `3x` the runner-up independent page support. Tests lock the inclusive 6-to-2 boundary, fail closed at the nearest 5-to-2 support ratio below it, and retain support/share/margin/ratio and selected-family evidence through both the evidence API and compatibility wrapper.
 
-Local verification at checkpoint `4d3c8840f95bafbf2cd9d6bdcfdda4c3ef1ad076` passed typecheck, focused heading/navigation tests, 307/307 unit tests and semantic verification.
+Moving the same heading families through unrelated ordinary body-page insertion and adding trailing body-only pages does not change the family competition or selected headings. Local verification at checkpoint `f01268faa41d6da2d49b4f5218ad2d01ae34e7c7` passed typecheck, 11/11 focused heading/direct-consumer tests, 352/352 unit tests and 7/7 semantic checks. Production heading inference and the `3x` rule were unchanged, so the nine-PDF diagnostic set was not rerun.
 
 ### Ruby geometry
 
@@ -119,12 +119,12 @@ The initial ordinary-tolerance boundary fixture exposed only an IEEE-754 test-co
 
 ## Current verification checkpoint
 
-At branch checkpoint `c2b42a8747573e4619f71050339b257057b72dd8` the local gates reported:
+At branch checkpoint `f01268faa41d6da2d49b4f5218ad2d01ae34e7c7` the local gates reported:
 
-- Focused logical-flow / navigation / NCX / package tests: 29/29 PASS.
-- Unit suite: 349/349 PASS.
+- Focused heading-inference / direct-consumer tests: 11/11 PASS.
+- Unit suite: 352/352 PASS.
 - Semantic verification: 7/7 PASS.
-- The worktree was clean after the checkpoint commit; the branch was intentionally three local commits ahead of `origin/fix/generic-corpus-reflow` pending this audit update.
+- The worktree was clean after the checkpoint commit; the branch was intentionally five local commits ahead of `origin/fix/generic-corpus-reflow` pending this audit update.
 - The latest production-changing full verification remains the body-font document-context checkpoint: 9/9 PDFs and 5,141/5,141 pages PASS, detected unknown 5 -> resolved 0, known repaired 0, body-font prior substitutions 0, 6,272 local margin candidates, 5,947 recurring suppressions and 325 isolated candidates retained.
 - No GitHub Actions or hosted CI is part of this verification policy.
 
@@ -152,11 +152,12 @@ The nine PDFs remain diagnostics only; passing them is regression evidence, not 
 18. Layout clustering must preserve partitions under uniform scale/translation and make inclusive/strict threshold boundaries explicit.
 19. Spacing estimation preserves normalized decisions under uniform scale and retains sparse-sample provenance instead of pretending one observation is a distribution; current minimum-gap and paragraph-threshold boundary semantics are explicit.
 20. Serialization grouping remains independent of physical PDF pagination under equivalent logical content and estimated resource size; exact soft/hard budget boundaries, continuation, standalone-page and navigation-anchor behavior are explicit.
+21. Heading-family dominance keeps its exact inclusive `3x` support boundary, fails closed below it, and remains independent of unrelated body-page insertion and padding.
 
 ## Immediate engineering order
 
 1. Spacing evidence boundary/metamorphic coverage is complete at `ee270030ca1f668f9a5b1403eb8a7f4d77e307ab`; do not recalibrate its constants without independent generic evidence.
 2. Logical XHTML grouping / serialization-size boundary coverage is complete at `c2b42a8747573e4619f71050339b257057b72dd8`; do not recalibrate its budgets without independent reader/serializer evidence.
-3. Continue with the heading-family `3x` dominance threshold: lock the exact inclusive boundary, the nearest integer support below it, retained support/share/margin/ratio evidence, and invariance to unrelated body-page padding without changing the rule.
-4. Keep threshold tuning separate from evidence plumbing. Do not tune constants against the nine local PDFs.
-5. Keep ruby exact association fail-closed, unresolved provenance intact, metric-backed orientation immutable, and the existing acceptance rules unchanged.
+3. Heading-family dominance boundary/metamorphic coverage is complete at `f01268faa41d6da2d49b4f5218ad2d01ae34e7c7`; do not recalibrate the `3x` rule without independent generic evidence.
+4. Continue with the shared cross-page/same-page continuation edge gate: lock exact inclusive `0.78`, `0.5`, and `0.32` boundaries, immediate outside perturbations, text-independence, and agreement between semantic-block and XHTML grouping consumers without changing the rule.
+5. Keep threshold tuning separate from evidence plumbing. Do not tune constants against the nine local PDFs; keep ruby exact association fail-closed, unresolved provenance intact, metric-backed orientation immutable, and all existing acceptance rules unchanged.
