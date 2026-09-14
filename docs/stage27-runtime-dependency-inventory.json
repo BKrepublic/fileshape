@@ -28,6 +28,7 @@
         "pdfjs-dist"
       ],
       "reachableLocalModules": [
+        "src/attached-run-evidence.ts",
         "src/binary-runtime.ts",
         "src/content-policy.ts",
         "src/cover-policy.ts",
