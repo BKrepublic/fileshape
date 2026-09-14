@@ -63,6 +63,12 @@ test("shared text item evidence keeps margin and annotation size independent", (
   ]);
   assert.equal(evidence[1]?.bodyFontRatio, 0.749);
   assert.equal(evidence[3]?.bodyFontRatio, 0.75);
+
+  const edge = evidence[2]?.marginEvidence;
+  assert.equal(edge?.localCandidate, true);
+  assert.equal(edge?.edgeSide, "top");
+  assert.equal(edge?.fontRatio, 0.7);
+  assert.equal(edge?.charCount, 4);
 });
 
 test("invalid or absent body font size does not invent a font-size role", () => {
@@ -71,4 +77,6 @@ test("invalid or absent body font size does not invent a font-size role", () => 
   assert.equal(entry?.annotationSized, false);
   assert.equal(entry?.bodySized, false);
   assert.equal(entry?.bodyFontRatio, undefined);
+  assert.equal(entry?.marginEvidence.fontRatio, undefined);
+  assert.equal(entry?.marginEvidence.localCandidate, false);
 });
