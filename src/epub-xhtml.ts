@@ -27,7 +27,9 @@ export type EpubXhtmlPage = {
   href: string;
   mediaType: "application/xhtml+xml";
   xhtml: string;
-  /** Source-backed structural heading selected before EPUB serialization. */
+  /** All source-backed structural headings rendered inside this XHTML resource. */
+  headings: EpubInferredHeading[];
+  /** Leading heading that started this XHTML resource, retained for compatibility. */
   heading?: EpubInferredHeading;
 };
 
@@ -213,6 +215,25 @@ function validateStructuralHeadings(
     a.sourcePage - b.sourcePage || a.semanticBlockIndex - b.semanticBlockIndex);
 }
 
+function groupHeadingsByPage(headings: EpubInferredHeading[]): Map<number, EpubInferredHeading[]> {
+  const grouped = new Map<number, EpubInferredHeading[]>();
+  for (const heading of headings) {
+    const bucket = grouped.get(heading.sourcePage) ?? [];
+    bucket.push(heading);
+    grouped.set(heading.sourcePage, bucket);
+  }
+  return grouped;
+}
+
+function blockIsHeading(
+  page: DocumentPage,
+  block: DocumentTextBlock,
+  headingByPage: ReadonlyMap<number, EpubInferredHeading[]>,
+): boolean {
+  return (headingByPage.get(page.sourcePage) ?? [])
+    .some((heading) => heading.semanticBlockIndex === block.semanticBlockIndex);
+}
+
 const LOGICAL_XHTML_SOFT_ESTIMATED_CHARS = 256 * 1024;
 const LOGICAL_XHTML_HARD_ESTIMATED_CHARS = 1024 * 1024;
 const PAGE_MARKUP_ESTIMATE = 128;
@@ -240,16 +261,15 @@ function hasBoundaryImage(previous: DocumentPage, current: DocumentPage): boolea
 function hasGeometricPageContinuation(
   previous: DocumentPage,
   current: DocumentPage,
-  headingByPage: ReadonlyMap<number, EpubInferredHeading>,
+  headingByPage: ReadonlyMap<number, EpubInferredHeading[]>,
 ): boolean {
   if (previous.orientation !== current.orientation) return false;
   if (hasBoundaryImage(previous, current)) return false;
   const previousBlock = previous.blocks.at(-1);
   const currentBlock = current.blocks[0];
   if (!previousBlock || !currentBlock) return false;
-  if (headingByPage.has(current.sourcePage)) return false;
-  const previousHeading = headingByPage.get(previous.sourcePage);
-  if (previousHeading && previous.blocks.length === 1) return false;
+  if (blockIsHeading(current, currentBlock, headingByPage)) return false;
+  if (blockIsHeading(previous, previousBlock, headingByPage)) return false;
 
   const previousEdge = previousBlock.edgeGeometry;
   const currentEdge = currentBlock.edgeGeometry;
@@ -265,20 +285,17 @@ function logicalGroups(
   pages: DocumentPage[],
   headings: EpubInferredHeading[],
 ): Array<{ pages: DocumentPage[]; heading?: EpubInferredHeading }> {
-  const headingByPage = new Map<number, EpubInferredHeading>();
-  for (const heading of headings) {
-    if (headingByPage.has(heading.sourcePage)) {
-      throw new Error(`multiple structural headings on source page ${heading.sourcePage} are not yet supported`);
-    }
-    headingByPage.set(heading.sourcePage, heading);
-  }
-
+  const headingByPage = groupHeadingsByPage(headings);
   const groups: Array<{ pages: DocumentPage[]; heading?: EpubInferredHeading }> = [];
   let current: { pages: DocumentPage[]; heading?: EpubInferredHeading } | undefined;
   let currentEstimatedChars = 0;
 
   for (const page of pages) {
-    const heading = headingByPage.get(page.sourcePage);
+    const firstBlock = page.blocks[0];
+    const heading = firstBlock === undefined
+      ? undefined
+      : (headingByPage.get(page.sourcePage) ?? [])
+          .find((candidate) => candidate.semanticBlockIndex === firstBlock.semanticBlockIndex);
     const previous = current?.pages.at(-1);
     const startsStructuralBoundary = heading !== undefined;
     const startsStandaloneBoundary = current !== undefined &&
@@ -323,7 +340,7 @@ function continuesAcrossSourcePage(
   current: DocumentPage,
   previousNotes: PreservedUnresolvedAnnotation[],
   currentNotes: PreservedUnresolvedAnnotation[],
-  headingByPage: Map<number, EpubInferredHeading>,
+  headingByPage: ReadonlyMap<number, EpubInferredHeading[]>,
 ): boolean {
   if (previousNotes.length > 0 || currentNotes.length > 0) return false;
   return hasGeometricPageContinuation(previous, current, headingByPage);
@@ -334,7 +351,7 @@ function renderSourcePageItems(
   page: DocumentPage,
   notes: PreservedUnresolvedAnnotation[],
   rubyMode: EpubRubyMode,
-  heading: EpubInferredHeading | undefined,
+  headings: EpubInferredHeading[],
   continueFromPrevious: boolean,
   continueToNext: boolean,
 ): string[] {
@@ -355,6 +372,7 @@ function renderSourcePageItems(
         : left.displayBounds.top - right.displayBounds.top || left.displayBounds.left - right.displayBounds.left) ||
     left.operatorIndex - right.operatorIndex || left.occurrenceIndex - right.occurrenceIndex);
 
+  const headingByBlock = new Map(headings.map((heading) => [heading.semanticBlockIndex, heading]));
   const marker = `<span id="${pageTargetId(page.sourcePage)}" class="fileshape-source-page-marker" data-source-page="${page.sourcePage}"></span>`;
   const bodyItems: string[] = [continueFromPrevious ? marker : `    ${marker}`];
   for (let gap = 0; gap <= page.blocks.length; gap += 1) {
@@ -365,9 +383,7 @@ function renderSourcePageItems(
     }
     const block = page.blocks[gap];
     if (!block) continue;
-    const headingId = heading?.semanticBlockIndex === block.semanticBlockIndex
-      ? heading.targetId
-      : undefined;
+    const headingId = headingByBlock.get(block.semanticBlockIndex)?.targetId;
     const isFirst = gap === 0;
     const isLast = gap === page.blocks.length - 1;
     bodyItems.push(renderBlock(block, rubyMode, {
@@ -387,7 +403,7 @@ function serializeLogicalXhtml(
   notesByPage: Map<number, PreservedUnresolvedAnnotation[]>,
   hiddenProvenanceByPage: Map<number, PreservedUnresolvedAnnotation[]>,
   heading: EpubInferredHeading | undefined,
-  headingByPage: Map<number, EpubInferredHeading>,
+  headingByPage: ReadonlyMap<number, EpubInferredHeading[]>,
   options: EpubXhtmlOptions,
 ): string {
   const firstPage = pages[0];
@@ -429,7 +445,7 @@ function serializeLogicalXhtml(
       page,
       notesByPage.get(page.sourcePage) ?? [],
       rubyMode,
-      heading?.sourcePage === page.sourcePage ? heading : undefined,
+      headingByPage.get(page.sourcePage) ?? [],
       index > 0 && joins[index - 1] === true,
       index < pages.length - 1 && joins[index] === true,
     ));
@@ -468,13 +484,14 @@ export function serializeEpubXhtml(
     policy.pages.map((page) => [page.sourcePage, page.hiddenProvenance]),
   );
   const headings = validateStructuralHeadings(document, options.structuralHeadings ?? []);
-  const headingByPage = new Map(headings.map((heading) => [heading.sourcePage, heading]));
+  const headingByPage = groupHeadingsByPage(headings);
 
   return {
     documentId: document.id,
     pages: logicalGroups(document.pages, headings).map((group) => {
       const firstPage = group.pages[0];
       if (!firstPage) throw new Error("logical EPUB group is empty");
+      const groupHeadings = group.pages.flatMap((page) => headingByPage.get(page.sourcePage) ?? []);
       return {
         sourcePage: firstPage.sourcePage,
         sourcePages: group.pages.map((page) => page.sourcePage),
@@ -489,6 +506,7 @@ export function serializeEpubXhtml(
           headingByPage,
           options,
         ),
+        headings: groupHeadings,
         ...(group.heading === undefined ? {} : { heading: group.heading }),
       };
     }),
