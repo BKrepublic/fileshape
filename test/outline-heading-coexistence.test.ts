@@ -70,13 +70,13 @@ test("source outline owns navigation while inferred heading still owns rendered 
     }],
   });
 
-  assert.deepEqual(xhtml.pages.map((page) => page.sourcePages), [[1, 2], [3], [4, 5]]);
+  assert.deepEqual(xhtml.pages.map((page) => page.sourcePages), [[1, 2], [3, 4, 5]]);
   assert.match(xhtml.pages[1]!.xhtml, /<h1 id="heading-page-3-block-0"/);
 
   const navigation = serializeEpubNavigation(document, "Book", "ja", xhtml.pages);
   assert.equal(navigation.summary.mode, "outline");
   assert.equal(navigation.summary.outlineEntries, 2);
-  assert.match(navigation.xhtml, /Authoritative outline label/);
-  assert.match(navigation.xhtml, /Second outline section/);
+  assert.match(navigation.xhtml, /page-0001\.xhtml#source-page-1">Authoritative outline label<\/a>/);
+  assert.match(navigation.xhtml, /page-0003\.xhtml#source-page-4">Second outline section<\/a>/);
   assert.doesNotMatch(navigation.xhtml, />rendered heading<\/a>/);
 });
