@@ -66,16 +66,51 @@ function runSupportsContext(
 }
 
 /**
- * Resolve context-ambiguous runs from surrounding stable pages.
+ * A physical document edge has only one stable neighbour, so weak run/baseline
+ * tendencies are insufficient there. Permit one-sided context only when every
+ * ambiguous page has a complete, unique attached-run geometry channel matching
+ * the stable neighbour. This keeps attached geometry provisional while avoiding
+ * a page-local hard label.
+ */
+function runSupportsEdgeContext(
+  observations: PageOrientationObservation[],
+  orientation: Exclude<WritingOrientation, "unknown">,
+): boolean {
+  return observations.length > 0 && observations.every((observation) => {
+    const attached = observation.evidence?.attachedRun;
+    return attached !== undefined && attachedRunTendency(attached) === orientation;
+  });
+}
+
+function fillRun(
+  resolved: ResolvedPageOrientation[],
+  start: number,
+  endExclusive: number,
+  orientation: Exclude<WritingOrientation, "unknown">,
+): void {
+  for (let fill = start; fill < endExclusive; fill += 1) {
+    const target = resolved[fill];
+    if (!target) continue;
+    target.resolved = orientation;
+    target.source = "document-context";
+  }
+}
+
+/**
+ * Resolve context-ambiguous runs from stable document context.
  *
- * Physical run length is deliberately irrelevant. Resolution requires:
+ * Interior runs require:
  * - nearest stable pages on both sides;
  * - both stable pages agree on orientation;
  * - every ambiguous page carries a retained directional tendency matching them.
  *
- * Neutral/evidence-free pages stay unresolved, as do runs containing any
- * opposite tendency. This protects real writing-mode transitions without making
- * pagination itself part of the semantic decision.
+ * At the physical start/end of a document, one-sided resolution is narrower:
+ * every ambiguous page must carry complete unique attached-run geometry that
+ * matches the sole stable neighbour. Raw weak metric tendencies never justify
+ * one-sided inference.
+ *
+ * Physical run length is deliberately irrelevant. Neutral/evidence-free pages
+ * stay unresolved, as do runs containing any opposite tendency.
  */
 export function resolveDocumentOrientations(
   observations: PageOrientationObservation[],
@@ -107,21 +142,20 @@ export function resolveDocumentOrientations(
 
     const previous = start > 0 ? ordered[start - 1] : undefined;
     const next = endExclusive < ordered.length ? ordered[endExclusive] : undefined;
-
-    if (!previous || !next) continue;
-    if (previous.orientation === "unknown" || next.orientation === "unknown") continue;
-    if (previous.orientation !== next.orientation) continue;
-
-    const anchorOrientation = previous.orientation;
     const ambiguousRun = ordered.slice(start, endExclusive);
-    if (!runSupportsContext(ambiguousRun, anchorOrientation)) continue;
 
-    for (let fill = start; fill < endExclusive; fill += 1) {
-      const target = resolved[fill];
-      if (!target) continue;
-      target.resolved = anchorOrientation;
-      target.source = "document-context";
+    if (previous && next) {
+      if (previous.orientation === "unknown" || next.orientation === "unknown") continue;
+      if (previous.orientation !== next.orientation) continue;
+      if (!runSupportsContext(ambiguousRun, previous.orientation)) continue;
+      fillRun(resolved, start, endExclusive, previous.orientation);
+      continue;
     }
+
+    const edgeAnchor = previous ?? next;
+    if (!edgeAnchor || edgeAnchor.orientation === "unknown") continue;
+    if (!runSupportsEdgeContext(ambiguousRun, edgeAnchor.orientation)) continue;
+    fillRun(resolved, start, endExclusive, edgeAnchor.orientation);
   }
 
   return resolved;
