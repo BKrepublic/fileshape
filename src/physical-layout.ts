@@ -1,3 +1,8 @@
+import {
+  clusterTextItemsByAxis,
+  clusterVerticalGlyphColumns,
+  ordinaryCrossAxisTolerance,
+} from "./layout-clustering.js";
 import type { InspectPage, InspectTextItem } from "./pdf-inspection-model.js";
 import type { WritingOrientation } from "./text-flow.js";
 import { fullTextRef, type SourceTextRef } from "./source-text.js";
@@ -37,14 +42,6 @@ function charCount(text: string): number {
   return [...text.trim()].length;
 }
 
-function median(values: number[]): number {
-  if (values.length === 0) return 0;
-  const sorted = [...values].sort((a, b) => a - b);
-  const middle = Math.floor(sorted.length / 2);
-  if (sorted.length % 2 === 1) return sorted[middle] ?? 0;
-  return ((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2;
-}
-
 function round(value: number, digits = 2): number {
   const factor = 10 ** digits;
   return Math.round(value * factor) / factor;
@@ -57,45 +54,6 @@ function primaryItems(page: InspectPage, bodyFontSize: number): InspectTextItem[
       ...item,
       source: item.source ?? fullTextRef(page.page, itemIndex, item.text),
     }));
-}
-
-type MutableUnit = {
-  positions: number[];
-  items: InspectTextItem[];
-};
-
-function clusterByAxis(
-  items: InspectTextItem[],
-  axis: "x" | "y",
-  tolerance: number,
-): MutableUnit[] {
-  const coordinate = (item: InspectTextItem) => (axis === "x" ? item.displayX : item.displayY);
-  const ordered = [...items].sort((a, b) => coordinate(a) - coordinate(b));
-  const units: MutableUnit[] = [];
-
-  for (const item of ordered) {
-    const value = coordinate(item);
-    let best: MutableUnit | undefined;
-    let bestDistance = Number.POSITIVE_INFINITY;
-
-    for (const unit of units) {
-      const position = median(unit.positions);
-      const distance = Math.abs(value - position);
-      if (distance <= tolerance && distance < bestDistance) {
-        best = unit;
-        bestDistance = distance;
-      }
-    }
-
-    if (best) {
-      best.positions.push(value);
-      best.items.push(item);
-    } else {
-      units.push({ positions: [value], items: [item] });
-    }
-  }
-
-  return units;
 }
 
 function inlineBounds(
@@ -161,43 +119,6 @@ function makeUnit(
   };
 }
 
-function sourceItemIndex(item: InspectTextItem): number | undefined {
-  return item.source?.itemIndex;
-}
-
-function verticalGlyphExtent(item: InspectTextItem): number {
-  return Math.max(Math.abs(item.height), item.fontSize * 0.8, 1);
-}
-
-function orderVerticalGlyphItems(items: InspectTextItem[]): InspectTextItem[] {
-  const geometric = [...items].sort((a, b) =>
-    a.displayY - b.displayY || a.displayX - b.displayX ||
-    ((sourceItemIndex(a) ?? 0) - (sourceItemIndex(b) ?? 0)));
-  const ordered: InspectTextItem[] = [];
-
-  for (let start = 0; start < geometric.length;) {
-    let end = start + 1;
-    while (end < geometric.length) {
-      const previous = geometric[end - 1]!;
-      const current = geometric[end]!;
-      const gap = current.displayY - previous.displayY;
-      const localTie = gap < Math.min(verticalGlyphExtent(previous), verticalGlyphExtent(current)) * 0.75;
-      if (!localTie) break;
-      end += 1;
-    }
-
-    const group = geometric.slice(start, end);
-    const hasCompleteSourceOrder = group.every((item) => sourceItemIndex(item) !== undefined);
-    if (group.length > 1 && hasCompleteSourceOrder) {
-      group.sort((a, b) => sourceItemIndex(a)! - sourceItemIndex(b)!);
-    }
-    ordered.push(...group);
-    start = end;
-  }
-
-  return ordered;
-}
-
 function buildVerticalGlyphUnits(
   items: InspectTextItem[],
   bodyFontSize: number,
@@ -205,23 +126,12 @@ function buildVerticalGlyphUnits(
 ): PhysicalTextUnit[] {
   if (items.length === 0) return [];
 
-  // Single-glyph PDFs do not guarantee that PDF.js emits text items grouped by
-  // visual column. Some producers interleave glyph operators by row or drawing
-  // order. Reconstruct columns from display geometry first, then establish the
-  // vertical reading order within each column. Local overlapping glyph origins
-  // retain source order because punctuation/rotation can shift their baselines.
-  const tolerance = Math.max(8, bodyFontSize * 1.25);
-  return clusterByAxis(items, "x", tolerance)
-    .map((unit) => {
-      const orderedItems = orderVerticalGlyphItems(unit.items);
-      return {
-        position: median(unit.positions),
-        items: orderedItems,
-        text: orderedItems.map((item) => item.text.trim()).join(""),
-      };
-    })
+  return clusterVerticalGlyphColumns(items, bodyFontSize)
+    .map((column) => ({
+      ...column,
+      text: column.items.map((item) => item.text.trim()).join(""),
+    }))
     .filter((column) => column.text.length > 0)
-    .sort((a, b) => b.position - a.position)
     .map((column, index) =>
       makeUnit(index, column.position, column.items, column.text, "vertical", inlineSize),
     );
@@ -232,18 +142,17 @@ function buildVerticalRunUnits(
   bodyFontSize: number,
   inlineSize: number,
 ): PhysicalTextUnit[] {
-  const tolerance = Math.max(1.5, bodyFontSize * 0.42);
-  return clusterByAxis(items, "x", tolerance)
-    .map((unit) => {
-      const orderedItems = [...unit.items].sort((a, b) => a.displayY - b.displayY);
+  return clusterTextItemsByAxis(items, "x", ordinaryCrossAxisTolerance(bodyFontSize))
+    .map((cluster) => {
+      const orderedItems = [...cluster.items].sort((left, right) => left.displayY - right.displayY);
       return {
-        position: median(unit.positions),
+        position: cluster.position,
         items: orderedItems,
         text: orderedItems.map((item) => item.text).join(""),
       };
     })
     .filter((unit) => unit.text.trim().length > 0)
-    .sort((a, b) => b.position - a.position)
+    .sort((left, right) => right.position - left.position)
     .map((unit, index) =>
       makeUnit(index, unit.position, unit.items, unit.text, "vertical", inlineSize),
     );
@@ -254,18 +163,17 @@ function buildHorizontalUnits(
   bodyFontSize: number,
   inlineSize: number,
 ): PhysicalTextUnit[] {
-  const tolerance = Math.max(1.5, bodyFontSize * 0.42);
-  return clusterByAxis(items, "y", tolerance)
-    .map((unit) => {
-      const orderedItems = [...unit.items].sort((a, b) => a.displayX - b.displayX);
+  return clusterTextItemsByAxis(items, "y", ordinaryCrossAxisTolerance(bodyFontSize))
+    .map((cluster) => {
+      const orderedItems = [...cluster.items].sort((left, right) => left.displayX - right.displayX);
       return {
-        position: median(unit.positions),
+        position: cluster.position,
         items: orderedItems,
         text: orderedItems.map((item) => item.text).join(""),
       };
     })
     .filter((unit) => unit.text.trim().length > 0)
-    .sort((a, b) => a.position - b.position)
+    .sort((left, right) => left.position - right.position)
     .map((unit, index) =>
       makeUnit(index, unit.position, unit.items, unit.text, "horizontal", inlineSize),
     );
