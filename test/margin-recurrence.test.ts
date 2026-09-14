@@ -104,7 +104,13 @@ test("recurring edge geometry and opaque style promote a local candidate to marg
 });
 
 test("flow and physical layout consume the same document recurrence decision", () => {
-  const pages = [page(1, {}), page(2, {}), page(3, {}), page(4, { fontName: "OneOffNote" }), page(5)];
+  const pages = [
+    page(1, {}),
+    page(2, {}),
+    page(3, {}),
+    page(4, { fontName: "OneOffNote", text: "note" }),
+    page(5),
+  ];
   const profile = profileFor(pages);
 
   const repeatedFlow = reconstructPageFlow(pages[0]!, profile);
