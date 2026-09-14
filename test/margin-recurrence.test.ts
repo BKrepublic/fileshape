@@ -43,7 +43,7 @@ function page(
   ];
   if (footer) {
     textItems.push(item(
-      footer.text ?? `footer-${pageNumber}`,
+      footer.text ?? `p${pageNumber}`,
       footer.fontName ?? "Footer",
       11,
       footer.x ?? 280,
@@ -117,7 +117,7 @@ test("flow and physical layout consume the same document recurrence decision", (
   const retainedLayout = reconstructPhysicalLayout(pages[3]!, "horizontal", 14, profile);
   assert.equal(repeatedLayout.units.length, 1);
   assert.equal(retainedLayout.units.length, 2);
-  assert.match(retainedLayout.units.map((unit) => unit.text).join("|"), /footer-4/);
+  assert.match(retainedLayout.units.map((unit) => unit.text).join("|"), /note/);
 });
 
 test("alternating inline positions can form independent recurring margin clusters", () => {
