@@ -36,6 +36,7 @@
     "verify:epubcheck": "tsx --test test/epubcheck.integration.ts",
     "fixture:reader": "tsx src/reading-system-fixture.ts",
     "diagnose:orientation": "tsx src/diagnose-unresolved-orientation.ts",
+    "audit:genericity": "tsx src/audit-genericity.ts",
     "convert:epub": "tsx src/pdf-to-epub.ts",
     "typecheck": "tsc --noEmit",
     "typecheck:browser-tests": "tsc -p tsconfig.browser-tests.json --noEmit",
