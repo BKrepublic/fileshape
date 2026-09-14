@@ -1,10 +1,10 @@
 import type { InspectPage, InspectTextItem } from "./pdf-inspection-model.js";
-import { isShortMarginNoise } from "./margin-noise.js";
 import {
   decideMetricOrientation,
   type OrientationMetrics,
   type WritingOrientation,
 } from "./orientation-decision.js";
+import { collectTextItemEvidence } from "./text-item-evidence.js";
 
 export type { WritingOrientation } from "./orientation-decision.js";
 
@@ -489,17 +489,18 @@ function renderSourceSpacingText(groups: FlowGroup[], boundaries: FlowBoundary[]
 export function reconstructPageFlow(page: InspectPage): PageFlowResult {
   const nonEmptyItems = page.textItems.filter((item) => item.text.trim().length > 0);
   const bodyFontSize = dominantFontSize(nonEmptyItems);
+  const itemEvidence = collectTextItemEvidence(page, bodyFontSize);
 
-  const marginNoiseItems = nonEmptyItems.filter((item) => isShortMarginNoise(item, page, bodyFontSize));
-  const marginNoiseSet = new Set(marginNoiseItems);
-  const contentItems = nonEmptyItems.filter((item) => !marginNoiseSet.has(item));
-
-  const annotationThreshold = bodyFontSize * 0.75;
-  const annotationItems = contentItems.filter(
-    (item) => bodyFontSize > 0 && item.fontSize < annotationThreshold,
-  );
-  const annotationSet = new Set(annotationItems);
-  const primaryItems = contentItems.filter((item) => !annotationSet.has(item));
+  const marginNoiseItems = itemEvidence
+    .filter((entry) => entry.visible && entry.marginNoise)
+    .map((entry) => entry.item);
+  const contentEvidence = itemEvidence.filter((entry) => entry.visible && !entry.marginNoise);
+  const annotationItems = contentEvidence
+    .filter((entry) => entry.annotationSized)
+    .map((entry) => entry.item);
+  const primaryItems = contentEvidence
+    .filter((entry) => !entry.annotationSized)
+    .map((entry) => entry.item);
 
   const { orientation, metrics } = detectOrientation(primaryItems);
 
