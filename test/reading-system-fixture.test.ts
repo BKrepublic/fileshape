@@ -31,21 +31,25 @@ test("reading-system fixture covers mixed writing, ruby, notes, hierarchy and a 
     pageProgressionDirection: "rtl",
   });
 
-  const page1 = fileText(result, "OEBPS/text/page-0001.xhtml");
-  const page2 = fileText(result, "OEBPS/text/page-0002.xhtml");
-  const page3 = fileText(result, "OEBPS/text/page-0003.xhtml");
-  const page4 = fileText(result, "OEBPS/text/page-0004.xhtml");
+  const reflow = fileText(result, "OEBPS/text/page-0001.xhtml");
+  const blank = fileText(result, "OEBPS/text/page-0004.xhtml");
   const nav = fileText(result, "OEBPS/nav.xhtml");
   const opf = fileText(result, "OEBPS/package.opf");
 
-  assert.match(page1, /<ruby>漢<rt>かん<\/rt><\/ruby>/);
-  assert.match(page1, /<ruby>長<rt>ながいよみ<\/rt><\/ruby>/);
-  assert.match(page1, /𠮷é/);
-  assert.match(page1, /fileshape-unresolved-notes/);
-  assert.match(page1, /未解決注記&lt;&amp;&gt;/);
-  assert.match(page2, /fileshape-vertical/);
-  assert.match(page3, /混在文書\n\n空白行/);
-  assert.doesNotMatch(page4, /fileshape-block/);
+  assert.match(reflow, /<ruby>漢<rt>かん<\/rt><\/ruby>/);
+  assert.match(reflow, /<ruby>長<rt>ながいよみ<\/rt><\/ruby>/);
+  assert.match(reflow, /𠮷é/);
+  assert.match(reflow, /fileshape-unresolved-notes/);
+  assert.match(reflow, /未解決注記&lt;&amp;&gt;/);
+  assert.match(reflow, /fileshape-mixed-orientation/);
+  assert.match(reflow, /fileshape-vertical/);
+  assert.match(reflow, /混在文書\n\n空白行/);
+  assert.match(reflow, /id="source-page-1"/);
+  assert.match(reflow, /id="source-page-2"/);
+  assert.match(reflow, /id="source-page-3"/);
+  assert.match(blank, /id="source-page-4"/);
+  assert.match(blank, /fileshape-page-blank/);
+  assert.doesNotMatch(blank, /fileshape-block/);
   assert.match(nav, /Fixture/);
   assert.match(nav, /Vertical/);
   assert.match(nav, /Mixed/);
