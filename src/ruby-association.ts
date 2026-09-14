@@ -1,6 +1,7 @@
 import type { InspectPage, InspectTextItem } from "./pdf-inspection-model.js";
 import type { WritingOrientation } from "./text-flow.js";
 import { dot, subtract } from "./display-geometry.js";
+import { collectTextItemEvidence } from "./text-item-evidence.js";
 
 export type RubyCandidate = {
   annotationItemIndex: number;
@@ -25,10 +26,11 @@ export function associateRubyCandidates(
   bodyFontSize: number,
 ): RubyCandidate[] {
   if (!Number.isFinite(bodyFontSize) || bodyFontSize <= 0) return [];
-  const visible = page.textItems.map((item, index) => ({ item, index }))
-    .filter(({ item }) => item.text.trim().length > 0 && item.fontSize > 0);
-  const annotations = visible.filter(({ item }) => item.fontSize < bodyFontSize * 0.75);
-  const bases = visible.filter(({ item }) => item.fontSize >= bodyFontSize * 0.75);
+  const visible = collectTextItemEvidence(page, bodyFontSize)
+    .filter(({ item, visible }) => visible && item.fontSize > 0)
+    .map(({ item, itemIndex, annotationSized }) => ({ item, index: itemIndex, annotationSized }));
+  const annotations = visible.filter((entry) => entry.annotationSized);
+  const bases = visible.filter((entry) => !entry.annotationSized);
   const start = (item: InspectTextItem) => item.displayGeometry
     ? dot(item.displayGeometry.start, item.displayGeometry.inline) : 0;
   const end = (item: InspectTextItem) => start(item) + (item.displayGeometry?.inlineExtent ?? 0);
