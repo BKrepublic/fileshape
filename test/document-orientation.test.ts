@@ -137,7 +137,51 @@ test("does not infer across an orientation transition", () => {
   assert.equal(result[1]?.source, "unresolved");
 });
 
-test("does not guess an unknown run at a document edge", () => {
+test("resolves a document-end run when every page has matching attached-run evidence", () => {
+  const result = resolveDocumentOrientations([
+    { page: 1, orientation: "vertical", evidence: evidence("vertical", 0.9, 0.1) },
+    { page: 2, orientation: "unknown", evidence: attachedEvidence("vertical") },
+    { page: 3, orientation: "unknown", evidence: attachedEvidence("vertical") },
+  ]);
+
+  assert.deepEqual(
+    result.map((entry) => [entry.resolved, entry.source]),
+    [
+      ["vertical", "detected"],
+      ["vertical", "document-context"],
+      ["vertical", "document-context"],
+    ],
+  );
+});
+
+test("resolves a document-start run when every page has matching attached-run evidence", () => {
+  const result = resolveDocumentOrientations([
+    { page: 1, orientation: "unknown", evidence: attachedEvidence("horizontal") },
+    { page: 2, orientation: "unknown", evidence: attachedEvidence("horizontal") },
+    { page: 3, orientation: "horizontal", evidence: evidence("horizontal", 0.1, 0.9) },
+  ]);
+
+  assert.deepEqual(
+    result.map((entry) => [entry.resolved, entry.source]),
+    [
+      ["horizontal", "document-context"],
+      ["horizontal", "document-context"],
+      ["horizontal", "detected"],
+    ],
+  );
+});
+
+test("does not use raw weak tendency for one-sided document-edge inference", () => {
+  const result = resolveDocumentOrientations([
+    { page: 1, orientation: "vertical", evidence: evidence("vertical", 0.9, 0.1) },
+    { page: 2, orientation: "unknown", evidence: evidence("unknown", 0.55, 0.45, "none") },
+  ]);
+
+  assert.equal(result[1]?.resolved, "unknown");
+  assert.equal(result[1]?.source, "unresolved");
+});
+
+test("does not infer a document-edge run unless every page has matching attached evidence", () => {
   const result = resolveDocumentOrientations([
     { page: 1, orientation: "unknown", evidence: attachedEvidence("vertical") },
     { page: 2, orientation: "unknown", evidence: evidence("unknown", 0.52, 0.48, "none") },
@@ -146,6 +190,17 @@ test("does not guess an unknown run at a document edge", () => {
 
   assert.equal(result[0]?.resolved, "unknown");
   assert.equal(result[1]?.resolved, "unknown");
+});
+
+test("one opposite attached-run tendency blocks one-sided document-edge inference", () => {
+  const result = resolveDocumentOrientations([
+    { page: 1, orientation: "vertical", evidence: evidence("vertical", 0.9, 0.1) },
+    { page: 2, orientation: "unknown", evidence: attachedEvidence("vertical") },
+    { page: 3, orientation: "unknown", evidence: attachedEvidence("horizontal") },
+  ]);
+
+  assert.equal(result[1]?.resolved, "unknown");
+  assert.equal(result[2]?.resolved, "unknown");
 });
 
 test("does not infer an evidence-free ambiguous section even when anchors agree", () => {
