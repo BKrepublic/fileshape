@@ -22,6 +22,23 @@ function preview(value: string, limit = 120): string {
   return compact.length <= limit ? compact : `${compact.slice(0, limit)}…`;
 }
 
+function sourceSpanItemIndexes(
+  texts: string[],
+  expected: string,
+): number[] {
+  const chars: Array<{ char: string; itemIndex: number }> = [];
+  for (const [itemIndex, text] of texts.entries()) {
+    for (const char of [...text]) {
+      if (/^[\s\u3000]$/u.test(char)) continue;
+      chars.push({ char, itemIndex });
+    }
+  }
+  const source = chars.map((entry) => entry.char).join("");
+  const start = source.indexOf(expected);
+  if (start < 0) return [];
+  return [...new Set(chars.slice(start, start + [...expected].length).map((entry) => entry.itemIndex))];
+}
+
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   const input = argv.shift();
@@ -61,33 +78,23 @@ async function main(): Promise<void> {
     semantic: semanticText.includes(expected),
   };
 
-  const interestingChars = new Set([...expected]);
-  const candidateItems = page.textItems
-    .map((item, itemIndex) => ({ item, itemIndex, compact: compactText(item.text) }))
-    .filter(({ compact }) => compact.length > 0 && [...compact].some((char) => interestingChars.has(char)))
-    .slice(0, 12)
-    .map(({ item, itemIndex }) => ({
-      itemIndex,
-      text: item.text,
-      x: Math.round(item.displayX * 100) / 100,
-      y: Math.round(item.displayY * 100) / 100,
-      width: Math.round(item.width * 100) / 100,
-      height: Math.round(item.height * 100) / 100,
-      fontSize: Math.round(item.fontSize * 100) / 100,
-      yRatio: Math.round((item.displayY / Math.max(1, page.height)) * 10000) / 10000,
-    }));
-
-  const unitMatches = physical.units
-    .filter((unit) => [...expected].some((char) => compactText(unit.text).includes(char)))
-    .slice(0, 12)
+  const sourceItems = sourceSpanItemIndexes(page.textItems.map((item) => item.text), expected);
+  const sourceItemSet = new Set(sourceItems);
+  const tracedPhysicalUnits = physical.units
+    .filter((unit) => (unit.sourceRanges ?? []).some((range) => sourceItemSet.has(range.itemIndex)))
     .map((unit) => ({
       index: unit.index,
       position: unit.position,
-      text: preview(unit.text, 80),
-      itemCount: unit.itemCount,
-      inlineStartRatio: unit.inlineStartRatio,
-      inlineEndRatio: unit.inlineEndRatio,
-      inlineCoverageRatio: unit.inlineCoverageRatio,
+      text: preview(unit.text, 160),
+      sourceItems: [...new Set((unit.sourceRanges ?? []).map((range) => range.itemIndex))],
+    }));
+  const tracedSemanticBlocks = semantic.blocks
+    .filter((block) => (block.sourceRanges ?? []).some((range) => sourceItemSet.has(range.itemIndex)))
+    .map((block) => ({
+      index: block.index,
+      units: block.unitIndexes,
+      text: preview(block.text, 200),
+      sourceItems: [...new Set((block.sourceRanges ?? []).map((range) => range.itemIndex))],
     }));
 
   process.stdout.write([
@@ -99,8 +106,9 @@ async function main(): Promise<void> {
     `FLOW_METRICS=${JSON.stringify(flow.metrics)}`,
     `COUNTS=textItems:${page.textItems.length},flowPrimary:${flow.primaryItemCount},flowMarginNoise:${flow.marginNoiseItemCount},flowAnnotation:${flow.annotationItemCount},physicalUnits:${physical.units.length},semanticBlocks:${semantic.blocks.length}`,
     `PRESENCE=${JSON.stringify(stagePresence)}`,
-    `SOURCE_CANDIDATES=${JSON.stringify(candidateItems)}`,
-    `PHYSICAL_UNIT_CANDIDATES=${JSON.stringify(unitMatches)}`,
+    `SOURCE_SPAN_ITEMS=${JSON.stringify(sourceItems)}`,
+    `PHYSICAL_TRACE=${JSON.stringify(tracedPhysicalUnits)}`,
+    `SEMANTIC_TRACE=${JSON.stringify(tracedSemanticBlocks)}`,
   ].join("\n") + "\n");
 }
 
