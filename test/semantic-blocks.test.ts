@@ -44,7 +44,7 @@ function layout(units: PhysicalTextUnit[]): PhysicalPageLayout {
   };
 }
 
-test("joins a high-confidence physical wrap", () => {
+test("joins a high-confidence physical wrap while retaining sparse spacing provenance", () => {
   const result = buildSemanticBlocks(
     layout([
       unit(0, 700, "前半", 0.12, 0.88),
@@ -57,6 +57,9 @@ test("joins a high-confidence physical wrap", () => {
   assert.equal(result.text, "前半後半");
   assert.equal(result.decisions[0]?.reason, "physical-wrap");
   assert.equal(result.decisions[0]?.join, true);
+  assert.equal(result.decisions[0]?.normalGapSource, "font-fallback");
+  assert.equal(result.decisions[0]?.normalGapSampleCount, 1);
+  assert.equal(result.decisions[0]?.normalGap, 23.1);
 });
 
 test("keeps short adjacent units separate even at normal pitch", () => {
@@ -75,6 +78,8 @@ test("keeps short adjacent units separate even at normal pitch", () => {
     result.decisions.map((decision) => decision.reason),
     ["independent-unit", "independent-unit"],
   );
+  assert.ok(result.decisions.every((decision) => decision.normalGapSource === "distribution"));
+  assert.ok(result.decisions.every((decision) => decision.normalGapSampleCount === 2));
 });
 
 test("keeps a large-gap boundary even when the previous unit reaches the end", () => {
@@ -91,4 +96,6 @@ test("keeps a large-gap boundary even when the previous unit reaches the end", (
   assert.equal(result.blocks[0]?.text, "本文前半本文後半");
   assert.equal(result.blocks[1]?.text, "次段落");
   assert.equal(result.decisions[1]?.reason, "large-gap");
+  assert.equal(result.decisions[1]?.normalGapSource, "distribution");
+  assert.equal(result.decisions[1]?.normalGapSampleCount, 2);
 });
