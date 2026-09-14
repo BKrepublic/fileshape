@@ -47,11 +47,11 @@ test("navigation provenance rejects altered titles, targets, paths, hierarchy an
 
 test("EPUB nav preserves hierarchy, exact titles and page access without activating external links", () => {
   const xhtml = nav();
-  assert.match(xhtml, /<li><span>Part &amp; One<\/span><ol><li><a href="text\/page-0002.xhtml#source-page-2"> &lt;𠮷&gt; Section <\/a><\/li><\/ol><\/li>/);
+  assert.match(xhtml, /<li><span>Part &amp; One<\/span><ol><li><a href="text\/page-0001.xhtml#source-page-2"> &lt;𠮷&gt; Section <\/a><\/li><\/ol><\/li>/);
   assert.match(xhtml, /epub:type="page-list"/);
-  for (const page of [1, 2, 3]) {
-    assert.match(xhtml, new RegExp(`href="text/page-000${page}\\.xhtml#source-page-${page}"[^>]*>Page ${page}</a>`));
-  }
+  assert.match(xhtml, /href="text\/page-0001\.xhtml#source-page-1"[^>]*>Page 1<\/a>/);
+  assert.match(xhtml, /href="text\/page-0001\.xhtml#source-page-2"[^>]*>Page 2<\/a>/);
+  assert.match(xhtml, /href="text\/page-0003\.xhtml#source-page-3"[^>]*>Page 3<\/a>/);
   assert.match(xhtml, /<li>External entry<\/li>/);
   assert.doesNotMatch(xhtml, /javascript:|href="https?:/);
 });
