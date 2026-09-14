@@ -29,7 +29,7 @@ Purpose: FileShape must generalize to unknown PDFs at large scale. The local nin
 | line/column clustering | `layout-clustering.ts` owns ordinary and vertical-glyph clustering; flow and physical reconstruction consume the same geometry-first helpers; scale/translation invariance and threshold boundaries are directly tested | **B**: clustering constants remain empirical, but current boundary behavior is explicit |
 | vertical reconstruction mode | flow and physical layout share `verticalTextLayoutMode`; single-glyph representation no longer selects different algorithms in different stages | **B**: existing `0.7` single-char and `0.6` vertical-sequence thresholds remain calibration debt |
 | vertical glyph ordering | geometry is primary; source item order is used only for local overlap when complete source indices exist; the strict local-overlap boundary is directly tested | **B**: overlap/noise window remains empirical |
-| spacing/pitch estimation | `spacing-evidence.ts` is the source of truth for normal spacing and paragraph-gap threshold; evidence retains `source` and `sampleCount`; one gap does not masquerade as a distribution | **B/C**: `1.65`, `1.55`, `1.25` and minimum-gap gates remain empirical |
+| spacing/pitch estimation | `spacing-evidence.ts` is the source of truth for normal spacing and paragraph-gap threshold; evidence retains `source` and `sampleCount`; one gap does not masquerade as a distribution; scale/translation, sparse provenance, minimum-gap and paragraph-threshold boundaries are directly tested | **B/C**: `1.65`, `1.55`, `1.25` remain empirical, but current branch selection and inclusive/strict behavior are explicit |
 | semantic boundary evidence | `SemanticBoundaryDecision` retains normal-gap provenance, wrap/paragraph thresholds, previous coverage, edge-continuation result, near-normal-gap result, wrap candidate and large-gap result while keeping the existing join formula unchanged | **B**: continuation and spacing thresholds remain empirical, but intermediate evidence is no longer collapsed |
 | attached-run orientation | `attached-run-evidence.ts` retains anchor/pending/attachment evidence; it no longer hard-labels a page; focused tests lock scale/translation invariance, small jitter, cross-axis and inline-gap boundaries | **B/C**: geometric windows remain empirical, but their present perturbation behavior is explicit |
 | document orientation | metric-backed labels are stable; unknown runs consume compact channel evidence; attached-run evidence can be placed on a matching side of a real orientation transition; raw weak tendencies still require agreeing stable context; threshold precedence/boundaries are directly tested | **B**: metric thresholds remain empirical, but their inclusive/strict boundaries are explicit |
@@ -50,7 +50,7 @@ Purpose: FileShape must generalize to unknown PDFs at large scale. The local nin
 
 | File / function | Decision | Current issue | Class | Next direction |
 | --- | --- | --- | --- | --- |
-| `spacing-evidence.ts` | normal spacing and paragraph-gap thresholds | `1.65`, `1.55`, `1.25` and minimum-gap handling remain empirical | **B/C** | add scale/translation/perturbation and exact boundary tests before considering calibration; preserve `source` and `sampleCount` evidence |
+| `spacing-evidence.ts` | normal spacing and paragraph-gap thresholds | `1.65`, `1.55`, `1.25` remain empirical | **B/C** | boundary/metamorphic coverage is now locked; any future calibration needs independent generic evidence and must preserve `source`, `sampleCount`, scale normalization and current consumer comparison semantics |
 | logical XHTML grouping / serialization budgets | resource grouping | soft/hard estimated XHTML size budgets remain empirical serialization heuristics | **B** | expose/lock threshold behavior with synthetic size perturbations without tying grouping to physical PDF pagination |
 | `ruby-association.ts` / `ruby-spans.ts` | ruby geometry | exact association still uses fixed geometric windows for annotation/body size, side distance, overlap, line grouping, continuity and ambiguity | **B** | keep exact association fail-closed; current perturbation behavior is directly tested, so any future calibration must preserve those provenance guarantees |
 | `attached-run-evidence.ts` | sparse endpoint attachment | fixed geometric windows remain | **B/C** | coverage locks scale/translation, jitter and threshold boundaries; calibrate only with independent evidence, never by promoting it to a local hard label |
@@ -74,6 +74,14 @@ The nine-PDF checkpoint reported `bodyFontPrior=0`, so the document prior did no
 ### Semantic boundary evidence
 
 Same-page wrap/paragraph reconstruction remains geometry-only. `SemanticBoundaryDecision` retains the threshold values and intermediate booleans that produced the final `join/reason` decision. Local verification at checkpoint `499a4fa91664326f6abeedd4555665d48fdf1c9d` passed typecheck, focused tests, 307/307 unit tests and semantic verification with no formula change.
+
+### Spacing evidence thresholds
+
+Normal-spacing coverage now distinguishes all four retained provenance states (`distribution`, `font-fallback`, `single-observation`, `none`) and proves that one eligible gap cannot become a distribution. Tests lock the lower-quartile order statistic, rejection of invalid/non-positive samples, the strict `gap > minimumGap` boundary, scale-normalized sample eligibility, ordinary-spacing scale invariance, and translation-invariant flow consumption.
+
+Paragraph-gap coverage locks both multiplier branches and their exact tie, uniform-scale normalization, the semantic consumer's strict `gap > threshold` separation, and the flow consumer's inclusive `gap >= threshold` grouping boundary. Small perturbations on both sides of those boundaries use exactly representable baselines where possible so floating-point fixture construction is not mistaken for a production defect.
+
+Local verification at checkpoint `ee270030ca1f668f9a5b1403eb8a7f4d77e307ab` passed typecheck, 34/34 focused spacing/direct-consumer tests, 345/345 unit tests and 7/7 semantic checks. Production code and the `1.65`, `1.55`, `1.25` calibrations were unchanged, so the nine-PDF diagnostic set was not rerun.
 
 ### Heading family confidence
 
@@ -103,12 +111,12 @@ The initial ordinary-tolerance boundary fixture exposed only an IEEE-754 test-co
 
 ## Current verification checkpoint
 
-At branch checkpoint `03100035408c9c2a6bf48e16d4ab65e6dd6b92dd` the local gates reported:
+At branch checkpoint `ee270030ca1f668f9a5b1403eb8a7f4d77e307ab` the local gates reported:
 
-- Focused layout-clustering / flow / physical-layout / genericity-metamorphic tests: PASS.
-- Unit suite: 333/333 PASS.
-- Semantic verification: PASS.
-- Worktree/branch was clean and aligned with `origin/fix/generic-corpus-reflow`.
+- Focused spacing / semantic-block / text-flow tests: 34/34 PASS.
+- Unit suite: 345/345 PASS.
+- Semantic verification: 7/7 PASS.
+- The worktree was clean after the checkpoint commit; the branch was intentionally one local commit ahead of `origin/fix/generic-corpus-reflow` pending this audit update.
 - The latest production-changing full verification remains the body-font document-context checkpoint: 9/9 PDFs and 5,141/5,141 pages PASS, detected unknown 5 -> resolved 0, known repaired 0, body-font prior substitutions 0, 6,272 local margin candidates, 5,947 recurring suppressions and 325 isolated candidates retained.
 - No GitHub Actions or hosted CI is part of this verification policy.
 
@@ -134,13 +142,13 @@ The nine PDFs remain diagnostics only; passing them is regression evidence, not 
 16. Attached-run perturbations must remain stable within current windows and fail closed immediately outside them.
 17. Orientation threshold ties and precedence must remain explicit rather than depending on comparison-order accidents.
 18. Layout clustering must preserve partitions under uniform scale/translation and make inclusive/strict threshold boundaries explicit.
-19. Spacing estimation must preserve normalized decisions under uniform scale and retain sparse-sample provenance instead of pretending one observation is a distribution.
+19. Spacing estimation preserves normalized decisions under uniform scale and retains sparse-sample provenance instead of pretending one observation is a distribution; current minimum-gap and paragraph-threshold boundary semantics are explicit.
 20. Serialization grouping must remain independent of physical PDF pagination under equivalent logical content and estimated resource size.
 
 ## Immediate engineering order
 
-1. Continue with `spacing-evidence.ts`: add focused scale/perturbation/boundary tests for normal-spacing estimation and paragraph-gap thresholds without changing constants first.
-2. Run focused tests plus complete unit and semantic gates. Because this first spacing step should be test/evidence-only, do not rerun the nine-PDF quality set unless production output changes.
-3. Then inspect logical XHTML grouping / serialization-size budgets with the same evidence-first, pagination-independent approach.
+1. Spacing evidence boundary/metamorphic coverage is complete at `ee270030ca1f668f9a5b1403eb8a7f4d77e307ab`; do not recalibrate its constants without independent generic evidence.
+2. Continue with logical XHTML grouping / serialization-size budgets using the same evidence-first, pagination-independent approach.
+3. Lock exact soft/hard boundaries, small synthetic size perturbations, continuation interaction, equivalent logical content across source-page boundaries, standalone blank/image-only behavior, and NAV/NCX/source-page anchors before considering calibration.
 4. Keep threshold tuning separate from evidence plumbing. Do not tune constants against the nine local PDFs.
 5. Keep ruby exact association fail-closed, unresolved provenance intact, metric-backed orientation immutable, and the existing acceptance rules unchanged.
