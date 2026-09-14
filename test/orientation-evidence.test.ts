@@ -35,13 +35,14 @@ test("orientation evidence exposes disagreement without discarding the decisive 
   assert.deepEqual(evidence.channels.baseline, { vertical: 0, horizontal: 1 });
 });
 
-test("a run decision stays run-backed even when sequence produces an equal opposite maximum", () => {
-  const evidence = summarizeOrientationEvidence("horizontal", horizontalRunWithVerticalSequence);
+test("glyph-dominant sequence evidence outranks the minority multi-character run channel", () => {
+  const evidence = summarizeOrientationEvidence("vertical", horizontalRunWithVerticalSequence);
 
   assert.equal(evidence.vertical, 1);
   assert.equal(evidence.horizontal, 1);
   assert.equal(evidence.margin, 0);
-  assert.equal(evidence.decisionSource, "run");
+  assert.equal(evidence.decisionSource, "sequence");
+  assert.deepEqual(evidence.channels.run, { vertical: 0, horizontal: 1 });
   assert.deepEqual(evidence.channels.sequence, { vertical: 1, horizontal: 0 });
 });
 
