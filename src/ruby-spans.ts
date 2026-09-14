@@ -25,9 +25,14 @@ export function associateRubySpans(page: InspectPage, bodyFontSize: number): Rub
   if (!Number.isFinite(bodyFontSize) || bodyFontSize <= 0) return [];
   const visible = collectTextItemEvidence(page, bodyFontSize)
     .filter((entry) => entry.visible)
-    .map(({ item, itemIndex, annotationSized }) => ({ item, index: itemIndex, annotationSized }));
+    .map(({ item, itemIndex, annotationSized, bodySized }) => ({
+      item,
+      index: itemIndex,
+      annotationSized,
+      bodySized,
+    }));
   const small = visible.filter(({ item, annotationSized }) => item.fontSize > 0 && annotationSized);
-  const body = visible.filter(({ annotationSized }) => !annotationSized);
+  const body = visible.filter(({ bodySized }) => bodySized);
   const groups: Entry[][] = [];
   // Form connected components of adjacent annotation runs; input order is not evidence.
   const pending = new Set(small);
