@@ -52,6 +52,17 @@ test("repairs a known label when its own evidence is tied and stable neighbors a
   assert.equal(result[1]?.source, "document-context");
 });
 
+test("does not label a matching ambiguous page as document-context when nothing changes", () => {
+  const result = resolveDocumentOrientations([
+    { page: 1, orientation: "vertical", evidence: evidence("vertical", 0.9, 0.1) },
+    { page: 2, orientation: "vertical", evidence: evidence("vertical", 0.5, 0.5) },
+    { page: 3, orientation: "vertical", evidence: evidence("vertical", 0.8, 0.2) },
+  ]);
+
+  assert.equal(result[1]?.resolved, "vertical");
+  assert.equal(result[1]?.source, "detected");
+});
+
 test("repairs a mixed unknown and contested run only when stable neighbors agree", () => {
   const result = resolveDocumentOrientations([
     { page: 1, orientation: "vertical", evidence: evidence("vertical", 0.9, 0.1) },
