@@ -65,7 +65,7 @@ async function main(): Promise<void> {
   const candidateItems = page.textItems
     .map((item, itemIndex) => ({ item, itemIndex, compact: compactText(item.text) }))
     .filter(({ compact }) => compact.length > 0 && [...compact].some((char) => interestingChars.has(char)))
-    .slice(0, 24)
+    .slice(0, 12)
     .map(({ item, itemIndex }) => ({
       itemIndex,
       text: item.text,
