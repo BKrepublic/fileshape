@@ -1,4 +1,9 @@
 import type { PhysicalPageLayout, PhysicalTextUnit } from "./physical-layout.js";
+import {
+  estimateNormalSpacing,
+  paragraphGapThreshold,
+  type SpacingEstimateSource,
+} from "./spacing-evidence.js";
 import type { SourceTextRef } from "./source-text.js";
 
 export type SemanticBlockKind = "text";
@@ -16,6 +21,8 @@ export type SemanticBoundaryDecision = {
   toUnit: number;
   gap: number;
   normalGap: number;
+  normalGapSource: SpacingEstimateSource;
+  normalGapSampleCount: number;
   gapRatio: number;
   previousEndRatio: number;
   nextStartRatio: number;
@@ -32,20 +39,6 @@ export type SemanticPageBlocks = {
 function round(value: number, digits = 3): number {
   const factor = 10 ** digits;
   return Math.round(value * factor) / factor;
-}
-
-function lowerQuartile(values: number[]): number {
-  if (values.length === 0) return 0;
-  const sorted = [...values].sort((a, b) => a - b);
-  const index = Math.floor((sorted.length - 1) * 0.25);
-  return sorted[index] ?? 0;
-}
-
-function estimateNormalGap(layout: PhysicalPageLayout, bodyFontSize: number): number {
-  const positive = layout.gaps.map((gap) => gap.distance).filter((distance) => distance > 0);
-  if (positive.length >= 2) return lowerQuartile(positive);
-  if (positive.length === 1) return positive[0] ?? 0;
-  return bodyFontSize > 0 ? bodyFontSize * 1.65 : 0;
 }
 
 function gapBetween(layout: PhysicalPageLayout, fromUnit: number, toUnit: number): number {
@@ -103,7 +96,11 @@ export function buildSemanticBlocks(
     return { blocks: [], decisions: [], text: "" };
   }
 
-  const normalGap = estimateNormalGap(layout, bodyFontSize);
+  const spacing = estimateNormalSpacing(
+    layout.gaps.map((gap) => gap.distance),
+    bodyFontSize,
+  );
+  const normalGap = spacing.normal;
   const blocks: SemanticBlock[] = [];
   const decisions: SemanticBoundaryDecision[] = [];
 
@@ -127,7 +124,7 @@ export function buildSemanticBlocks(
     const gap = gapBetween(layout, previous.index, current.index);
     const gapRatio = normalGap > 0 ? gap / normalGap : 1;
     const wrap = looksLikePhysicalWrap(previous, current, gap, normalGap, bodyFontSize);
-    const largeGap = normalGap > 0 && gap > Math.max(normalGap * 1.55, normalGap + bodyFontSize * 1.25);
+    const largeGap = gap > paragraphGapThreshold(normalGap, bodyFontSize);
 
     const join = wrap && !largeGap;
     const reason: SemanticBoundaryDecision["reason"] = join
@@ -141,6 +138,8 @@ export function buildSemanticBlocks(
       toUnit: current.index,
       gap: round(gap, 2),
       normalGap: round(normalGap, 2),
+      normalGapSource: spacing.source,
+      normalGapSampleCount: spacing.sampleCount,
       gapRatio: round(gapRatio, 3),
       previousEndRatio: round(previous.inlineEndRatio, 4),
       nextStartRatio: round(current.inlineStartRatio, 4),
