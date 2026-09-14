@@ -55,11 +55,26 @@ test("joins a high-confidence physical wrap while retaining sparse spacing prove
 
   assert.equal(result.blocks.length, 1);
   assert.equal(result.text, "前半後半");
-  assert.equal(result.decisions[0]?.reason, "physical-wrap");
-  assert.equal(result.decisions[0]?.join, true);
-  assert.equal(result.decisions[0]?.normalGapSource, "font-fallback");
-  assert.equal(result.decisions[0]?.normalGapSampleCount, 1);
-  assert.equal(result.decisions[0]?.normalGap, 23.1);
+  assert.deepEqual(result.decisions[0], {
+    fromUnit: 0,
+    toUnit: 1,
+    gap: 24,
+    normalGap: 23.1,
+    normalGapSource: "font-fallback",
+    normalGapSampleCount: 1,
+    gapRatio: 1.039,
+    wrapGapThreshold: 31.19,
+    paragraphGapThreshold: 40.6,
+    previousEndRatio: 0.88,
+    previousCoverageRatio: 0.76,
+    nextStartRatio: 0.14,
+    nearNormalGap: true,
+    continuationEdgeGeometry: true,
+    wrapCandidate: true,
+    largeGap: false,
+    join: true,
+    reason: "physical-wrap",
+  });
 });
 
 test("keeps short adjacent units separate even at normal pitch", () => {
@@ -75,14 +90,39 @@ test("keeps short adjacent units separate even at normal pitch", () => {
   assert.equal(result.blocks.length, 3);
   assert.equal(result.text, "選択肢\n↓（ア）へ\n次の選択肢");
   assert.deepEqual(
-    result.decisions.map((decision) => decision.reason),
-    ["independent-unit", "independent-unit"],
+    result.decisions.map((decision) => ({
+      reason: decision.reason,
+      nearNormalGap: decision.nearNormalGap,
+      continuationEdgeGeometry: decision.continuationEdgeGeometry,
+      wrapCandidate: decision.wrapCandidate,
+      largeGap: decision.largeGap,
+      normalGapSource: decision.normalGapSource,
+      normalGapSampleCount: decision.normalGapSampleCount,
+    })),
+    [
+      {
+        reason: "independent-unit",
+        nearNormalGap: true,
+        continuationEdgeGeometry: false,
+        wrapCandidate: false,
+        largeGap: false,
+        normalGapSource: "distribution",
+        normalGapSampleCount: 2,
+      },
+      {
+        reason: "independent-unit",
+        nearNormalGap: true,
+        continuationEdgeGeometry: false,
+        wrapCandidate: false,
+        largeGap: false,
+        normalGapSource: "distribution",
+        normalGapSampleCount: 2,
+      },
+    ],
   );
-  assert.ok(result.decisions.every((decision) => decision.normalGapSource === "distribution"));
-  assert.ok(result.decisions.every((decision) => decision.normalGapSampleCount === 2));
 });
 
-test("keeps a large-gap boundary even when the previous unit reaches the end", () => {
+test("keeps a large-gap boundary while retaining both threshold channels", () => {
   const result = buildSemanticBlocks(
     layout([
       unit(0, 700, "本文前半", 0.1, 0.9),
@@ -95,7 +135,17 @@ test("keeps a large-gap boundary even when the previous unit reaches the end", (
   assert.equal(result.blocks.length, 2);
   assert.equal(result.blocks[0]?.text, "本文前半本文後半");
   assert.equal(result.blocks[1]?.text, "次段落");
-  assert.equal(result.decisions[1]?.reason, "large-gap");
-  assert.equal(result.decisions[1]?.normalGapSource, "distribution");
-  assert.equal(result.decisions[1]?.normalGapSampleCount, 2);
+
+  const decision = result.decisions[1];
+  assert.equal(decision?.reason, "large-gap");
+  assert.equal(decision?.normalGapSource, "distribution");
+  assert.equal(decision?.normalGapSampleCount, 2);
+  assert.equal(decision?.normalGap, 24);
+  assert.equal(decision?.wrapGapThreshold, 32.4);
+  assert.equal(decision?.paragraphGapThreshold, 41.5);
+  assert.equal(decision?.nearNormalGap, false);
+  assert.equal(decision?.continuationEdgeGeometry, false);
+  assert.equal(decision?.wrapCandidate, false);
+  assert.equal(decision?.largeGap, true);
+  assert.equal(decision?.join, false);
 });
