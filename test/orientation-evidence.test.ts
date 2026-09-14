@@ -38,6 +38,7 @@ test("orientation evidence exposes disagreement without discarding the decisive 
 test("glyph-dominant sequence evidence outranks the minority multi-character run channel", () => {
   const evidence = summarizeOrientationEvidence("vertical", horizontalRunWithVerticalSequence);
 
+  assert.equal(evidence.singleCharItemRatio, 0.98);
   assert.equal(evidence.vertical, 1);
   assert.equal(evidence.horizontal, 1);
   assert.equal(evidence.margin, 0);
