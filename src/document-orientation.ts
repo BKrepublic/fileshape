@@ -1,3 +1,4 @@
+import { attachedRunTendency } from "./attached-run-evidence.js";
 import type { OrientationEvidenceSummary } from "./orientation-evidence.js";
 import type { WritingOrientation } from "./text-flow.js";
 
@@ -17,20 +18,10 @@ export type ResolvedPageOrientation = {
   evidence?: OrientationEvidenceSummary;
 };
 
-/**
- * Document context may fill an unknown page or reconsider only a page whose
- * known label came from the attached-run fallback. Run/sequence/baseline labels
- * remain stable even when another retained evidence channel disagrees: the page
- * classifier already chose its decisive source, and document resolution must
- * not invent a second classifier by comparing unrelated channel maxima.
- *
- * A known page with no compact evidence is treated as stable for compatibility
- * with focused callers.
- */
+/** Metric-backed known labels are stable. Only unknown pages may be filled from
+ * document context; sparse attached-run geometry is evidence, not a page label. */
 function isContextAmbiguous(observation: PageOrientationObservation): boolean {
-  if (observation.orientation === "unknown") return true;
-  if (observation.evidence === undefined) return false;
-  return observation.evidence.decisionSource === "attached-run";
+  return observation.orientation === "unknown";
 }
 
 function channelTendency(channel: { vertical: number; horizontal: number }): WritingOrientation {
@@ -41,13 +32,19 @@ function channelTendency(channel: { vertical: number; horizontal: number }): Wri
 
 /**
  * Read a low-confidence directional tendency without turning it into a page
- * classification. Channel precedence mirrors the metric classifier: sequence
- * leads only for glyph-dominant pages, then run geometry, then baseline geometry.
- * No new numeric confidence threshold is introduced here.
+ * classification. A complete unique attached-run channel is consulted first
+ * because the metric classifier has already declined to classify the page.
+ * Remaining channel precedence mirrors the metric classifier, but without its
+ * confidence thresholds. No new numeric threshold is introduced here.
  */
 function ambiguousTendency(observation: PageOrientationObservation): WritingOrientation {
   const evidence = observation.evidence;
   if (!evidence) return "unknown";
+
+  if (evidence.attachedRun) {
+    const attached = attachedRunTendency(evidence.attachedRun);
+    if (attached !== "unknown") return attached;
+  }
 
   if ((evidence.singleCharItemRatio ?? 0) >= 0.7) {
     const sequence = channelTendency(evidence.channels.sequence);
@@ -112,7 +109,6 @@ export function resolveDocumentOrientations(
     const next = endExclusive < ordered.length ? ordered[endExclusive] : undefined;
 
     if (!previous || !next) continue;
-    if (isContextAmbiguous(previous) || isContextAmbiguous(next)) continue;
     if (previous.orientation === "unknown" || next.orientation === "unknown") continue;
     if (previous.orientation !== next.orientation) continue;
 
@@ -123,14 +119,8 @@ export function resolveDocumentOrientations(
     for (let fill = start; fill < endExclusive; fill += 1) {
       const target = resolved[fill];
       if (!target) continue;
-
-      // Record document-context provenance only when context actually changes
-      // the page decision or fills an unknown. Merely confirming an already
-      // matching fallback label is not a resolution event.
-      if (target.detected !== anchorOrientation) {
-        target.resolved = anchorOrientation;
-        target.source = "document-context";
-      }
+      target.resolved = anchorOrientation;
+      target.source = "document-context";
     }
   }
 
