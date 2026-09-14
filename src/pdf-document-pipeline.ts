@@ -55,7 +55,11 @@ export function buildDocumentFromInspection(
     flows.map(({ page, flow }) => ({
       page: page.page,
       orientation: flow.orientation,
-      evidence: summarizeOrientationEvidence(flow.orientation, flow.metrics),
+      evidence: summarizeOrientationEvidence(
+        flow.orientation,
+        flow.metrics,
+        flow.attachedRunEvidence,
+      ),
     })),
   );
   const resolvedByPage = new Map(orientations.map((entry) => [entry.page, entry]));
