@@ -12,6 +12,7 @@ import { reconstructPageFlow } from "./text-flow.js";
 const SAMPLE_DIRECTORY = "local-samples";
 const EXPECTED_PDF_COUNT = 9;
 const EXPECTED_TOTAL_PAGES = 5141;
+const MAX_CONTENT_XHTML_BYTES = 2 * 1024 * 1024;
 const RULE = "=".repeat(72);
 
 type Issue = { file: string; detail: string };
@@ -113,6 +114,8 @@ async function main(): Promise<void> {
       const malformedProvenanceEntries = provenanceEntries.filter((entry) =>
         !entry.data.includes(Buffer.from('hidden="hidden" class="fileshape-unresolved-provenance-set"')) ||
         !entry.data.includes(Buffer.from('hidden="hidden" class="fileshape-unresolved-provenance"')));
+      const oversizedTextEntries = textEntries.filter((entry) =>
+        entry.data.byteLength > MAX_CONTENT_XHTML_BYTES);
 
       // FileShape is a reflow converter. Physical PDF pages are source provenance,
       // not default EPUB spine boundaries. Corpus-specific expectations live here,
@@ -121,6 +124,13 @@ async function main(): Promise<void> {
         issues.push({
           file: name,
           detail: `physical-page pagination leaked into EPUB: ${textEntries.length} content XHTML resources for ${result.pageCount} PDF pages`,
+        });
+      }
+
+      if (oversizedTextEntries.length > 0) {
+        issues.push({
+          file: name,
+          detail: `${oversizedTextEntries.length} content XHTML resource(s) exceed ${MAX_CONTENT_XHTML_BYTES} bytes`,
         });
       }
 
@@ -162,7 +172,7 @@ async function main(): Promise<void> {
   if (issues.length === 0) {
     console.log("FILESHAPE GENERIC CORPUS QUALITY: PASS");
     console.log(`PDFs: ${names.length}/${EXPECTED_PDF_COUNT}; pages: ${totalPages}/${EXPECTED_TOTAL_PAGES}`);
-    console.log("No physical-page spine leakage, visible unresolved-note pollution, malformed hidden provenance, or known reading-order regression detected.");
+    console.log("No physical-page spine leakage, oversized XHTML, visible unresolved-note pollution, malformed hidden provenance, or known reading-order regression detected.");
     console.log(RULE);
     return;
   }
