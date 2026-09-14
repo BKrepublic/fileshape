@@ -27,6 +27,7 @@
     "reconstruct:page": "tsx src/pdf-reconstruct-page.ts",
     "check:flow": "tsx src/pdf-flow-check.ts",
     "compare:flow": "tsx src/pdf-flow-compare.ts",
+    "diagnose:reading-order": "tsx src/diagnose-reading-order-loss.ts",
     "verify:semantic": "tsx src/verify-semantic-samples.ts",
     "verify:stage2": "tsx src/verify-stage2-corpus-v2.ts",
     "verify:n8440-oracle": "tsx src/verify-n8440-oracle.ts",
