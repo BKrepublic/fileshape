@@ -9,8 +9,8 @@ export type { OrientationDecisionSource } from "./orientation-decision.js";
 export type OrientationEvidenceSummary = {
   provisional: WritingOrientation;
   decisionSource: OrientationDecisionSource;
-  /** Needed to preserve the page classifier's channel precedence downstream. */
-  singleCharItemRatio: number;
+  /** Needed to preserve classifier channel precedence; optional for older focused fixtures. */
+  singleCharItemRatio?: number;
   vertical: number;
   horizontal: number;
   margin: number;
