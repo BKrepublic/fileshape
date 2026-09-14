@@ -184,6 +184,35 @@ test("outline-backed XHTML keeps mixed writing orientations in scoped runs", () 
   assert.ok(body.indexOf("vertical body") < body.indexOf("horizontal insert"));
 });
 
+test("documents without structural boundaries do not serialize one XHTML per PDF page", () => {
+  const document = documentFixture(["one", "two", "three", "four"]);
+  const xhtml = serializeEpubXhtml(document);
+
+  assert.equal(xhtml.pages.length, 1);
+  assert.deepEqual(xhtml.pages[0]?.sourcePages, [1, 2, 3, 4]);
+});
+
+test("fallback serialization chunks by estimated XHTML size rather than physical page count", () => {
+  const document = documentFixture(Array.from({ length: 6 }, (_, index) =>
+    String(index).repeat(60_000)));
+  const xhtml = serializeEpubXhtml(document);
+
+  assert.equal(xhtml.pages.length, 2);
+  assert.deepEqual(xhtml.pages[0]?.sourcePages, [1, 2, 3, 4]);
+  assert.deepEqual(xhtml.pages[1]?.sourcePages, [5, 6]);
+});
+
+test("soft XHTML size budget does not split a source-backed continuing paragraph", () => {
+  const document = documentFixture(["a".repeat(150_000), "b".repeat(150_000)]);
+  setEdgeGeometry(document, 1, 0.1, 0.95, 0.8);
+  setEdgeGeometry(document, 2, 0.1, 0.6, 0.5);
+
+  const xhtml = serializeEpubXhtml(document);
+  assert.equal(xhtml.pages.length, 1);
+  assert.deepEqual(xhtml.pages[0]?.sourcePages, [1, 2]);
+  assert.match(xhtml.pages[0]?.xhtml ?? "", /class="fileshape-block-continuation"/);
+});
+
 test("cross-page paragraph continuation follows edge geometry even when text looks sentence-final", () => {
   const document = documentFixture(["終端。", "「次」"]);
   attachSingleOutlineBoundary(document);
