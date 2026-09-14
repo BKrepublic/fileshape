@@ -13,7 +13,7 @@ export type ResolvedPageOrientation = {
   detected: WritingOrientation;
   resolved: WritingOrientation;
   source: "detected" | "document-context" | "unresolved";
-  /** Preserved verbatim; the current resolver does not reinterpret it yet. */
+  /** Preserved verbatim so downstream diagnostics can inspect the source evidence. */
   evidence?: OrientationEvidenceSummary;
 };
 
@@ -23,13 +23,37 @@ export type DocumentOrientationOptions = {
 };
 
 /**
- * Resolve short runs of page-level `unknown` orientation from surrounding
- * text-bearing pages. An unknown run is filled only when the nearest known
- * page on both sides exists and both sides agree. This deliberately avoids
- * guessing at document edges or across orientation transitions.
+ * A known page with no compact evidence is treated as stable for compatibility
+ * with focused callers. Production observations carry evidence. There, a known
+ * label is stable only when the strongest retained evidence favors that label.
+ * Ties and evidence favoring the opposite axis remain context-ambiguous.
  *
- * Compact orientation evidence is carried through unchanged so a later
- * confidence-aware resolver can use it without retaining heavy page geometry.
+ * This deliberately adds no new confidence threshold: document context may
+ * repair only labels that their own retained evidence does not strictly support.
+ */
+function evidenceSupportsDetected(observation: PageOrientationObservation): boolean {
+  if (observation.orientation === "unknown") return false;
+  if (observation.evidence === undefined) return true;
+
+  if (observation.orientation === "vertical") {
+    return observation.evidence.vertical > observation.evidence.horizontal;
+  }
+  return observation.evidence.horizontal > observation.evidence.vertical;
+}
+
+function isContextAmbiguous(observation: PageOrientationObservation): boolean {
+  return !evidenceSupportsDetected(observation);
+}
+
+/**
+ * Resolve short context-ambiguous runs from surrounding stable pages. The run
+ * may contain page-level `unknown` labels and known labels whose compact
+ * evidence is tied or favors the opposite axis. A run is filled only when the
+ * nearest stable page on both sides exists and both sides agree.
+ *
+ * Strong known labels are never overridden, so genuine orientation transitions
+ * remain protected. Ambiguous runs at document edges or between disagreeing
+ * neighbors are likewise left unchanged.
  */
 export function resolveDocumentOrientations(
   observations: PageOrientationObservation[],
@@ -46,15 +70,17 @@ export function resolveDocumentOrientations(
   }));
 
   let index = 0;
-  while (index < resolved.length) {
-    const current = resolved[index];
-    if (!current || current.detected !== "unknown") {
+  while (index < ordered.length) {
+    const current = ordered[index];
+    if (!current || !isContextAmbiguous(current)) {
       index += 1;
       continue;
     }
 
     const start = index;
-    while (index < resolved.length && resolved[index]?.detected === "unknown") {
+    while (index < ordered.length) {
+      const observation = ordered[index];
+      if (!observation || !isContextAmbiguous(observation)) break;
       index += 1;
     }
     const endExclusive = index;
@@ -62,17 +88,18 @@ export function resolveDocumentOrientations(
 
     if (runLength > maxUnknownRun) continue;
 
-    const previous = start > 0 ? resolved[start - 1] : undefined;
-    const next = endExclusive < resolved.length ? resolved[endExclusive] : undefined;
+    const previous = start > 0 ? ordered[start - 1] : undefined;
+    const next = endExclusive < ordered.length ? ordered[endExclusive] : undefined;
 
     if (!previous || !next) continue;
-    if (previous.detected === "unknown" || next.detected === "unknown") continue;
-    if (previous.detected !== next.detected) continue;
+    if (isContextAmbiguous(previous) || isContextAmbiguous(next)) continue;
+    if (previous.orientation === "unknown" || next.orientation === "unknown") continue;
+    if (previous.orientation !== next.orientation) continue;
 
     for (let fill = start; fill < endExclusive; fill += 1) {
       const target = resolved[fill];
       if (!target) continue;
-      target.resolved = previous.detected;
+      target.resolved = previous.orientation;
       target.source = "document-context";
     }
   }
