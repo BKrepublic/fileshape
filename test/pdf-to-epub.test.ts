@@ -49,6 +49,23 @@ function ambiguousItem(text: string, x: number, y: number): InspectTextItem {
   };
 }
 
+function ambiguousHorizontalEvidenceItems(): InspectTextItem[] {
+  return Array.from({ length: 10 }, (_, index) => {
+    const source = item(String(index), 100, 700, 10, 10);
+    if (index < 5) return source;
+    if (index < 9) {
+      return {
+        ...source,
+        displayTransform: [0, 10, -10, 0, source.displayX, source.displayY],
+      };
+    }
+    return {
+      ...source,
+      displayTransform: [1, 1, 0, 1, source.displayX, source.displayY],
+    };
+  });
+}
+
 function inspection(pages: InspectPage[]): InspectResult {
   return { file: "fixture.pdf", byteLength: 1, pageCount: pages.length, pages };
 }
@@ -96,7 +113,7 @@ test("converts a real PDF into a complete EPUB archive", async () => {
 test("document context resolves a short unknown page between matching orientations", () => {
   const pages = [
     page(1, [item("long horizontal line", 100, 700, 180, 10)]),
-    page(2, [ambiguousItem("X", 100, 700)]),
+    page(2, ambiguousHorizontalEvidenceItems()),
     page(3, [item("another horizontal line", 100, 700, 200, 10)]),
   ];
   const result = buildDocumentFromInspection(inspection(pages), "doc:context");
