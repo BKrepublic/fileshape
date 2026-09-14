@@ -21,8 +21,8 @@ Purpose: FileShape must generalize to unknown PDFs at large scale. The local nin
 
 | Area | Current state | Remaining risk |
 | --- | --- | --- |
-| item role evidence | `text-item-evidence.ts` computes visible/body/annotation/margin observations once for flow, physical layout and ruby consumers | **B**: annotation ratio `0.75` and margin-noise constants remain empirical |
-| margin rule duplication | `margin-noise.ts` owns one scale-aware local edge-band rule; the old divergent 88%/90% consumers are gone | **B/C**: local rule still needs document recurrence before it can safely distinguish repeated furniture from legitimate marginal text |
+| item role evidence | `text-item-evidence.ts` computes visible/body/annotation/margin observations once for flow, physical layout and ruby consumers | **B**: annotation ratio `0.75` and margin constants remain empirical |
+| margin rule duplication | `margin-noise.ts` owns one scale-aware local edge-band measurement; the old divergent 88%/90% consumers are gone | **B/C**: local threshold calibration remains empirical |
 | line/column clustering | `layout-clustering.ts` owns ordinary and vertical-glyph clustering; flow and physical reconstruction consume the same geometry-first helpers | **B**: `0.42`, `1.25`, `8` and local overlap tolerances remain empirical |
 | vertical reconstruction mode | flow and physical layout share `verticalTextLayoutMode`; single-glyph representation no longer selects different algorithms in different stages | **B**: existing `0.7` single-char and `0.6` vertical-sequence thresholds remain calibration debt |
 | vertical glyph ordering | geometry is primary; source item order is used only for local overlap when complete source indices exist | **B**: overlap/noise windows remain empirical |
@@ -45,7 +45,7 @@ Purpose: FileShape must generalize to unknown PDFs at large scale. The local nin
 
 | File / function | Decision | Current issue | Class | Next direction |
 | --- | --- | --- | --- | --- |
-| `margin-noise.ts` + `text-item-evidence.ts` | marginal text removal | local geometric rule now exposes compact evidence (`edgeSide`, normalized edge distance/band, font ratio, shortness and `localCandidate`) while preserving current behavior; document recurrence has not yet been applied | **B/C, evidence stage pending local verification** | verify evidence refactor is behavior-preserving, then compute compact cross-page recurrence from layout/style position without interpreting text words; use recurrence as supporting evidence before changing deletion policy |
+| `margin-recurrence.ts` + pipeline handoff | marginal text removal | document recurrence is implemented on the branch: local candidates are clustered by edge side, normalized edge-band position, normalized inline position, opaque font name and body-relative font size; production flow/layout remove only recurring clusters while profile-free direct consumers retain legacy local behavior; local verification is pending | **B/C, implementation pending verification** | run focused recurrence tests plus full unit/semantic/9-PDF gates; if diagnostics expose isolated old page-number cases, inspect recurrence evidence rather than restoring unconditional local deletion |
 | `text-flow.ts::dominantFontSize` | body-font estimate | page-local char-weighted mode bucketed to 0.1pt | **B** | retain compact style evidence/document prior when mixed/cover pages make the page mode weak |
 | `semantic-blocks.ts` | wrap/paragraph decisions | edge and gap decisions are still binary empirical thresholds | **B** | preserve the current geometry-only contract while retaining richer boundary evidence for calibration |
 | `heading-inference.ts::dominantRecurringClusters` | choose heading family | strongest recurring style must have `>=3x` runner-up page support | **B** | retain support/margin as confidence instead of only a binary dominance result |
@@ -53,9 +53,11 @@ Purpose: FileShape must generalize to unknown PDFs at large scale. The local nin
 
 ## Provenance notes
 
-### Margin calibration
+### Margin calibration and recurrence
 
-The historical `48e0ec0` 88% footer repair was sample-shaped. That literal page-band divergence is no longer present: margin classification is centralized and scale-aware. The current branch additionally retains the local geometric decision as compact evidence instead of only a boolean. This does not yet change deletion behavior; it creates the evidence channel required to add document recurrence without simultaneously retuning the existing thresholds.
+The historical `48e0ec0` 88% footer repair was sample-shaped. That literal page-band divergence is gone: margin geometry is centralized and scale-aware. `MarginNoiseEvidence` retains edge side, normalized edge distance/band, body-relative font size and local candidacy. `margin-recurrence.ts` then clusters only local candidates using normalized geometry and opaque PDF font style; visible text is deliberately excluded, so changing page-number text does not break recurrence while words/digits never become semantic features.
+
+The current recurrence gate requires support on at least two text-bearing pages and at least 20% of text-bearing pages. Those are B-class empirical thresholds, not corpus facts. Long documents therefore do not delete a marginal item merely because the same geometry happened twice. Direct page-local APIs keep the historical local rule when no document profile is available; production document assembly supplies one shared profile to both flow and physical layout. Ruby association still does not gain a margin filter.
 
 ### Sparse attached-run calibration
 
@@ -67,7 +69,7 @@ The former language-specific punctuation/indentation inference has been removed.
 
 ### Heading inference
 
-Page-leading eligibility, physical-document-length recurrence thresholds and source-page cadence have all been removed. Current heading inference uses recurring opaque source styles and fails closed when style families compete. Multiple recurring heading blocks on one physical source page are now retained independently and carried as block-granular anchors through XHTML, NAV and NCX.
+Page-leading eligibility, physical-document-length recurrence thresholds and source-page cadence have all been removed. Current heading inference uses recurring opaque source styles and fails closed when style families compete. Multiple recurring heading blocks on one physical source page are retained independently and carried as block-granular anchors through XHTML, NAV and NCX.
 
 ### Ruby prepass flow duplication
 
@@ -75,16 +77,16 @@ The glyph-live inspection callback previously ran the complete page-flow reconst
 
 ## Current verification checkpoint
 
-At branch checkpoint `2f862c8a47b761d188e06690bb9347eb8b5a293a` the local gates reported:
+At branch checkpoint `befbab4b0d2ec1d785c54ce876259629059cfa72` the local gates reported:
 
-- Targeted heading/XHTML/NAV/NCX tests: 39/39 PASS.
-- Unit suite: 295/295 PASS.
+- Targeted margin-evidence/metamorphic/consumer tests: 43/43 PASS.
+- Unit suite: 296/296 PASS.
 - Semantic verification: PASS.
 - Generic PDF quality verification: 9/9 PDFs and 5,141/5,141 pages PASS.
 - The earlier orientation checkpoint recorded detected unknown 13 -> resolved unknown 0 with known repaired 0.
 - No GitHub Actions or hosted CI is part of this verification policy.
 
-The compact margin-evidence refactor after this checkpoint is intentionally behavior-preserving and still requires local verification before recurrence changes are introduced. The nine PDFs remain diagnostics only; passing them is regression evidence, not proof of generality.
+The document-recurrence implementation after this checkpoint intentionally changes production margin deletion and still requires local verification. The nine PDFs remain diagnostics only; passing them is regression evidence, not proof of generality.
 
 ## Metamorphic coverage to preserve/extend
 
@@ -96,14 +98,14 @@ The compact margin-evidence refactor after this checkpoint is intentionally beha
 6. Outline add/remove without body-semantic changes.
 7. Equivalent single-glyph vs multi-glyph TextItem emission.
 8. Small coordinate jitter/skew within extraction noise.
-9. Header/footer recurrence at varying normalized positions.
+9. Header/footer recurrence at varying normalized positions, including alternating left/right furniture.
 10. Mixed-orientation transitions that document context must not steamroll.
 11. Multiple logical section boundaries within one physical source page.
 
 ## Immediate engineering order
 
-1. Locally verify compact margin evidence is scale-invariant and preserves the existing `marginNoise` boolean for all current consumers.
-2. Run the cheap unit + semantic gates; because this stage intentionally changes no production decision, run the nine-PDF quality gate once as a regression confirmation, not as a tuning oracle.
-3. After that clean checkpoint, add document-level recurrence as a separate compact evidence pass. Do not change edge-band/font/shortness constants in the same commit.
-4. Keep recurrence content-agnostic: normalized position/edge side and opaque style evidence are allowed; chapter/header words, filenames and sample identities are not.
+1. Locally verify document margin recurrence: repeated furniture remains suppressed, isolated local candidates remain content, and flow/physical layout agree on the same profile.
+2. Run typecheck + focused recurrence/margin/flow/layout tests, then the complete unit and semantic gates.
+3. Because production deletion changed, run the 9-PDF quality gate and detailed genericity audit once. Do not tune constants solely to restore the old corpus shape.
+4. If clean, move recurrence to closed and proceed to body-font confidence or semantic-boundary evidence; keep threshold calibration separate.
 5. Keep ruby exact association fail-closed and unresolved provenance intact throughout.
