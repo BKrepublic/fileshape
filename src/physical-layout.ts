@@ -1,7 +1,7 @@
 import type { InspectPage, InspectTextItem } from "./pdf-inspection-model.js";
-import { isShortMarginNoise } from "./margin-noise.js";
 import type { WritingOrientation } from "./text-flow.js";
 import { fullTextRef, type SourceTextRef } from "./source-text.js";
+import { collectTextItemEvidence } from "./text-item-evidence.js";
 
 export type PhysicalTextUnit = {
   index: number;
@@ -51,12 +51,12 @@ function round(value: number, digits = 2): number {
 }
 
 function primaryItems(page: InspectPage, bodyFontSize: number): InspectTextItem[] {
-  return page.textItems.map((item, index) => ({ ...item, source: item.source ?? fullTextRef(page.page, index, item.text) })).filter((item) => {
-    if (item.text.trim().length === 0) return false;
-    if (isShortMarginNoise(item, page, bodyFontSize)) return false;
-    if (bodyFontSize > 0 && item.fontSize < bodyFontSize * 0.75) return false;
-    return true;
-  });
+  return collectTextItemEvidence(page, bodyFontSize)
+    .filter((entry) => entry.visible && !entry.marginNoise && !entry.annotationSized)
+    .map(({ item, itemIndex }) => ({
+      ...item,
+      source: item.source ?? fullTextRef(page.page, itemIndex, item.text),
+    }));
 }
 
 type MutableUnit = {
