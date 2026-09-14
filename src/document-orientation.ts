@@ -1,8 +1,11 @@
+import type { OrientationEvidenceSummary } from "./orientation-evidence.js";
 import type { WritingOrientation } from "./text-flow.js";
 
 export type PageOrientationObservation = {
   page: number;
   orientation: WritingOrientation;
+  /** Compact geometric evidence; optional for compatibility with focused tests/callers. */
+  evidence?: OrientationEvidenceSummary;
 };
 
 export type ResolvedPageOrientation = {
@@ -10,6 +13,8 @@ export type ResolvedPageOrientation = {
   detected: WritingOrientation;
   resolved: WritingOrientation;
   source: "detected" | "document-context" | "unresolved";
+  /** Preserved verbatim; the current resolver does not reinterpret it yet. */
+  evidence?: OrientationEvidenceSummary;
 };
 
 export type DocumentOrientationOptions = {
@@ -22,6 +27,9 @@ export type DocumentOrientationOptions = {
  * text-bearing pages. An unknown run is filled only when the nearest known
  * page on both sides exists and both sides agree. This deliberately avoids
  * guessing at document edges or across orientation transitions.
+ *
+ * Compact orientation evidence is carried through unchanged so a later
+ * confidence-aware resolver can use it without retaining heavy page geometry.
  */
 export function resolveDocumentOrientations(
   observations: PageOrientationObservation[],
@@ -34,6 +42,7 @@ export function resolveDocumentOrientations(
     detected: entry.orientation,
     resolved: entry.orientation,
     source: entry.orientation === "unknown" ? "unresolved" : "detected",
+    ...(entry.evidence === undefined ? {} : { evidence: entry.evidence }),
   }));
 
   let index = 0;
