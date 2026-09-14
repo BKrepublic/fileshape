@@ -9,6 +9,8 @@ export type { OrientationDecisionSource } from "./orientation-decision.js";
 export type OrientationEvidenceSummary = {
   provisional: WritingOrientation;
   decisionSource: OrientationDecisionSource;
+  /** Needed to preserve the page classifier's channel precedence downstream. */
+  singleCharItemRatio: number;
   vertical: number;
   horizontal: number;
   margin: number;
@@ -54,6 +56,7 @@ export function summarizeOrientationEvidence(
   return {
     provisional: orientation,
     decisionSource,
+    singleCharItemRatio: metrics.singleCharItemRatio,
     vertical: round(vertical),
     horizontal: round(horizontal),
     margin: round(Math.abs(vertical - horizontal)),
