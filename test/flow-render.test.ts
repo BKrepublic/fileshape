@@ -16,6 +16,7 @@ function sampleFlow(): PageFlowResult {
       dominanceMarginRatio: 0.6,
       bucketCount: 2,
     },
+    bodyFontSource: "page-local",
     primaryItemCount: 2,
     annotationItemCount: 0,
     marginNoiseItemCount: 0,
