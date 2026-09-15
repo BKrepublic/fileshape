@@ -28,12 +28,12 @@ function mountSiteInfo(): void {
           <p>PDF本文も生成したEPUBも、FileShapeのサーバーには送りません。変換はブラウザ内で行います。</p>
         </article>
         <article>
-          <h3>縦書きとルビを再構成</h3>
-          <p>PDFの配置情報をもとに、文字方向、読書順、段落、ルビ候補を組み直します。</p>
+          <h3>縦書き・ルビを読み取り</h3>
+          <p>PDFの配置情報をもとに、文字の向き、読む順番、段落、ルビ候補を組み直します。</p>
         </article>
         <article>
-          <h3>横書きも自動判定</h3>
-          <p>横書き用のEPUB出力も実装しています。現在は、実際の横書きPDFを使って検証範囲を広げています。</p>
+          <h3>横書きPDFも判定</h3>
+          <p>横書きPDFを判定し、横書きのEPUBとして出力する処理も入っています。現在は、実際の横書きPDFを使って検証範囲を広げています。</p>
         </article>
       </div>
 
@@ -48,7 +48,7 @@ function mountSiteInfo(): void {
 
       <section class="site-info-section" aria-labelledby="supported-pdf-title">
         <h3 id="supported-pdf-title">変換しやすいPDF</h3>
-        <p>文字を選択でき、行や列の並びが比較的素直なPDFほど変換しやすくなります。スキャン画像だけのPDFにはOCRを行わないため、本文をテキストとして取り出せません。図版が多い資料や特殊な組版は、元の見た目をそのまま再現できないことがあります。</p>
+        <p>文字を選択でき、行や列が比較的規則的に並んでいるPDFほど変換しやすくなります。スキャン画像だけのPDFにはOCRを行わないため、本文をテキストとして取り出せません。図版が多い資料や特殊な組版は、元の見た目をそのまま再現できないことがあります。</p>
         <p><a href="./guide/pdf-to-epub/">PDFからEPUBへ変換するときの注意点を詳しく見る</a></p>
       </section>
 
@@ -72,7 +72,7 @@ function mountSiteInfo(): void {
         </details>
         <details>
           <summary>横書きPDFも変換できますか？</summary>
-          <p>横書きの判定とEPUB出力は実装済みです。現在は縦書きPDFを中心に検証しており、横書きの実ファイル検証も進めています。</p>
+          <p>横書きの判定とEPUB出力には対応しています。ただし、現在の検証は縦書きPDFが中心です。横書きの実ファイル検証も進めています。</p>
         </details>
         <details>
           <summary>スキャンした本のPDFも変換できますか？</summary>
