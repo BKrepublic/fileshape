@@ -100,6 +100,10 @@ test("browser worker converts the public text fixture byte-identically and remai
   const sourceName = "stage29-public.pdf";
   const fixture = pdfBytes();
   const expected = await convertPdfBytesToEpub(new Uint8Array(fixture), sourceName, { modified: MODIFIED });
+  const expectedRenamed = await convertPdfBytesToEpub(new Uint8Array(fixture), sourceName, {
+    modified: MODIFIED,
+    title: "renamed-book",
+  });
   const diagnostics = trackBrowserDiagnostics(page);
 
   await page.goto("/");
@@ -109,6 +113,7 @@ test("browser worker converts the public text fixture byte-identically and remai
   await expect(page.locator(".conversion-settings")).toBeVisible();
   await expect(page.locator('[name="outputName"]')).toBeVisible();
   await expect(page.locator('[name="rubyMode"]')).toBeVisible();
+  await expect(page.locator('[name="title"]')).toHaveAttribute("type", "hidden");
   await expect(page.locator('[name="creator"]')).toHaveCount(0);
   await expect(page.locator('[name="language"]')).toHaveCount(0);
   await expect(page.locator('[name="modified"]')).toHaveCount(0);
@@ -125,7 +130,7 @@ test("browser worker converts the public text fixture byte-identically and remai
   await page.reload();
   await expectRuntimeSupported(page);
   const onlineBytes = await convertFixture(page, fixture, sourceName, "renamed-book");
-  expect(Buffer.compare(onlineBytes, Buffer.from(expected.bytes))).toBe(0);
+  expect(Buffer.compare(onlineBytes, Buffer.from(expectedRenamed.bytes))).toBe(0);
   assertPdfJsResourcesUseApplicationBase(diagnostics.requests, page.url());
 
   assertLocalRequests(diagnostics.requests, page.url(), [sourceName]);
