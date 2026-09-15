@@ -88,7 +88,7 @@ test("browser worker converts the public text fixture byte-identically and remai
 
   await page.goto("/");
   await expect(page.locator("#page-title")).toHaveText("PDFを、手元でEPUBへ。");
-  await expect(page.locator('[data-icon="lucide:file-up"]')).toHaveCount(2);
+  await expect(page.locator('[data-icon="lucide:file-up"]')).toHaveCount(3);
   await expect(page.locator(".workflow-strip")).toContainText("PDFを選ぶ");
   await page.locator("details.advanced-settings > summary").click();
   await page.locator("details.metadata-settings > summary").click();
