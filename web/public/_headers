@@ -3,7 +3,5 @@
   X-Content-Type-Options: nosniff
   Permissions-Policy: camera=(), microphone=(), geolocation=()
 
-# Content-Security-Policy is intentionally not set here yet.
-# FileShape currently carries a restrictive CSP in its HTML. Before AdSense is
-# enabled, move CSP enforcement to the response layer and use Google's supported
-# nonce-based strict CSP so ad-serving domains do not need a brittle allowlist.
+# CSP is intentionally set by functions/_middleware.js, not this static file.
+# Production HTML receives a per-request nonce-based policy.

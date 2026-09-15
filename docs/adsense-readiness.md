@@ -13,52 +13,38 @@
 - `sitemap.xml` を追加。
 - EPUB利用ガイド8本を追加。
 - Cloudflare Pages Functions用middlewareを追加。公開HTMLでは静的CSP metaを外し、リクエストごとのnonceを使ったstrict CSPをレスポンスヘッダーで設定する。
-- `ADSENSE_CLIENT_ID` が正しい `ca-pub-...` 形式で設定された場合のみ、トップページとガイドページへAdSenseタグを挿入する。
+- Productionの `ADSENSE_ACCOUNT` が正しい `ca-pub-...` 形式で設定された場合のみ、トップページとガイドページへAdSense確認metaとAdSense loaderを挿入する。旧 `ADSENSE_CLIENT_ID` も互換用に受け付ける。
 
-## AdSenseアカウント取得後に行う外部設定
+## 現在のGoogle側の状態
+
+- AdSenseのサイト登録単位は `isjust.fyi`。通常のサブドメインである `fileshape.isjust.fyi` はAdSenseの「サイト」として別登録しない。
+- `isjust.fyi` は所有確認済みで、AdSense審査中。
+- Google Privacy & messaging の欧州規制 / 米国州規制メッセージは `isjust.fyi` 側で設定済み。Googleのsite/subsite matchingでは、親サイトへ公開したメッセージは明示的に別設定しない限りサブサイトにも適用される。
+- Search Consoleは `https://fileshape.isjust.fyi/` のURL-prefix propertyで所有確認済み。`/sitemap.xml` 送信済み。
+
+参考: https://support.google.com/adsense/answer/12170421 / https://support.google.com/adsense/answer/14113511
+
+## FileShapeをAdSenseへ接続する外部設定
 
 ### 1. Publisher IDをCloudflareへ設定
 
-Cloudflare PagesのProduction環境変数に次を設定する。
+FileShapeのCloudflare Pagesプロジェクトで、Production環境変数に次を設定する。
 
-`ADSENSE_CLIENT_ID=ca-pub-xxxxxxxxxxxxxxxx`
+`ADSENSE_ACCOUNT=ca-pub-xxxxxxxxxxxxxxxx`
 
-値が未設定または形式不正の場合、広告タグは挿入されない。
+値はrootサイト `isjust.fyi` と同じAdSenseアカウントを使用する。Publisher IDは公開識別子なのでSecretでなくTextでよい。
 
-### 2. 欧州等の同意画面
+旧 `ADSENSE_CLIENT_ID` も互換用に読めるが、新規設定は `ADSENSE_ACCOUNT` に統一する。値が未設定または16桁の `ca-pub-...` 形式でない場合、広告タグは挿入されない。
 
-AdSenseの「プライバシーとメッセージ」からEuropean regulations messageを作成する。
+### 2. Production deploy後の確認
 
-方針:
+- `https://fileshape.isjust.fyi/` のページソースに `google-adsense-account` がある。
+- 同ページに `pagead2.googlesyndication.com/pagead/js/adsbygoogle.js` がある。
+- `/guide/` 配下にも同じloaderがある。
+- `/privacy/`、`/terms/`、`/contact/` などのポリシーページには広告loaderを入れない。
+- CSPでAdSense loaderが拒否されていない。
 
-- 対象: EEA、英国、スイスなどGoogleの対象地域。
-- 3択表示を使用する。
-  - 同意しない
-  - 設定する
-  - 同意する
-- 日本向け通常アクセスにはこの欧州向けメッセージを常時表示しない。
-- Google認定CMPを利用し、独自Cookie同意UIで代用しない。
-
-### 3. Search Console
-
-Google Search Consoleで `fileshape.isjust.fyi` を登録・所有確認する。
-
-登録後に以下を送信する。
-
-`https://fileshape.isjust.fyi/sitemap.xml`
-
-トップ、ガイド一覧、主要ガイドのインデックス状況を確認する。
-
-### 4. AdSense審査
-
-サイトが公開され、以下を確認してから審査へ進む。
-
-- `/robots.txt` が取得できる。
-- `/sitemap.xml` が取得できる。
-- プライバシー、広告方針、利用規約、運営情報、問い合わせが公開されている。
-- トップ下部の説明とガイドが公開されている。
-- 広告タグがCSPでブロックされていない。
-- ダウンロード操作と広告を誤認させる配置になっていない。
+Auto Adsは当面OFFのままとし、変換UI付近へ自動挿入させない。通常広告を出す場合は、審査通過後にガイド記事などへ手動広告ユニットを配置する。
 
 ## 1広告 = 1変換のリワード広告
 
@@ -87,8 +73,7 @@ Web向けリワード広告では、広告の長さをFileShape側で30秒・60�
 
 ### 人間が行うGoogle Ad Manager側の作業
 
-- 有効なAdSenseアカウントを用意する。
-- そのAdSenseアカウントを使ってGoogle Ad Managerへ申し込む。
+- AdSense審査通過後、そのAdSenseアカウントを使ってGoogle Ad Managerへ申し込む。
 - Web向けリワード広告用の広告ユニットを作成する。
 - 必要な広告申込情報・Google需要を設定する。
 - Web向けリワード広告に必要な保護設定を確認する。
@@ -112,7 +97,8 @@ npm run verify:runtime-deps
 env PLAYWRIGHT_CHROMIUM_EXECUTABLE=/usr/bin/google-chrome-stable npm run verify:browser
 npm run setup:epubcheck
 npm run verify:epubcheck
+node --check functions/_middleware.js
 git diff --check
 ```
 
-今回のPRでは変換エンジン本体を変更していないため、まずこの公開検証を必須とする。加えてブラウザでトップページ、ガイド一覧、追加した8記事、プライバシー、広告方針、EPUB保存ボタンの表示を目視確認する。
+今回の変更では変換エンジン本体を変更しない。公開前に上記のローカル検証を通し、Production deploy後はトップページとガイドのAdSense meta / loader、Privacy & messagingの対象継承を確認する。
