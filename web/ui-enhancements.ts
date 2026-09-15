@@ -45,6 +45,7 @@ function simplifyConversionSettings(): void {
         <small class="field-help">通常は「保持」のままでOKです。</small>
       </label>
     </div>
+    <input type="hidden" name="title" value="" />
   `;
   current.replaceWith(replacement);
 
@@ -52,7 +53,16 @@ function simplifyConversionSettings(): void {
   if (rubyMode) rubyMode.value = currentRubyMode;
 
   const outputName = replacement.querySelector<HTMLInputElement>('[name="outputName"]');
+  const title = replacement.querySelector<HTMLInputElement>('[name="title"]');
   const downloadLink = document.querySelector<HTMLAnchorElement>("#download-link");
+  if (outputName && title) {
+    const syncTitle = (): void => {
+      const requested = safeRequestedOutputName(outputName.value);
+      title.value = requested?.replace(/\.epub$/i, "") ?? "";
+    };
+    outputName.addEventListener("input", syncTitle);
+    syncTitle();
+  }
   if (outputName && downloadLink) {
     downloadLink.addEventListener("click", () => {
       const requested = safeRequestedOutputName(outputName.value);
