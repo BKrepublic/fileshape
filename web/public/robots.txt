@@ -1,26 +1,41 @@
 # FileShape crawler policy
-# Search/indexing is welcome. Model-training crawlers listed below are not.
+# Search/indexing is welcome. Model-training crawlers may read public content,
+# but should not crawl the executable conversion implementation and binary assets.
 
 User-agent: *
 Allow: /
 
-# OpenAI training crawler. ChatGPT search uses OAI-SearchBot separately.
-User-agent: GPTBot
-Disallow: /
-
+# Search crawlers remain explicitly allowed.
 User-agent: OAI-SearchBot
 Allow: /
 
-# Google-Extended controls use for Gemini model improvement/grounding separately from Google Search.
+# Training-oriented crawlers: public pages are readable, implementation assets are not.
+User-agent: GPTBot
+Allow: /
+Disallow: /assets/
+Disallow: /vendor/
+Disallow: /*.js$
+Disallow: /*.wasm$
+
 User-agent: Google-Extended
-Disallow: /
+Allow: /
+Disallow: /assets/
+Disallow: /vendor/
+Disallow: /*.js$
+Disallow: /*.wasm$
 
-# Common Crawl data is widely reused for model training.
 User-agent: CCBot
-Disallow: /
+Allow: /
+Disallow: /assets/
+Disallow: /vendor/
+Disallow: /*.js$
+Disallow: /*.wasm$
 
-# Anthropic model crawler. User-initiated retrieval is not blocked here.
 User-agent: ClaudeBot
-Disallow: /
+Allow: /
+Disallow: /assets/
+Disallow: /vendor/
+Disallow: /*.js$
+Disallow: /*.wasm$
 
 Sitemap: https://fileshape.isjust.fyi/sitemap.xml
