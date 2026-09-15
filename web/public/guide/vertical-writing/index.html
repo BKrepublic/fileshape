@@ -8,54 +8,48 @@
     <link rel="icon" type="image/png" sizes="192x192" href="../../icons/fileshape-192.png" />
     <link rel="stylesheet" href="../../policy.css" />
     <title>縦書きPDFをEPUBにするときのポイント | FileShape</title>
-    <meta name="description" content="縦書きPDFをEPUBへ変換するときの読書順、ルビ、約物、ページ番号、目次などの注意点を解説します。" />
+    <meta name="description" content="縦書きPDFをEPUBへ変換するときに重要な、読む順番、ルビ、約物、ページ番号、目次の扱いを説明します。" />
   </head>
   <body>
-    <header class="topbar">
-      <a class="brand-mark" href="../../" aria-label="FileShape トップへ">F</a>
-      <div class="brand-copy"><a href="../../">FileShape</a><span>PDF to EPUB</span></div>
-    </header>
+    <header class="topbar"><a class="brand-mark" href="../../" aria-label="FileShape トップへ">F</a><div class="brand-copy"><a href="../../">FileShape</a><span>PDF to EPUB</span></div></header>
     <main class="page">
       <p class="eyebrow">GUIDE / VERTICAL WRITING</p>
       <h1>縦書きPDFをEPUBにするときのポイント</h1>
-      <p class="lead">日本語の縦書きPDFでは、文字が正しく取れるだけでは十分ではありません。列の順序、ルビ、約物まで含めて読書順を再構成する必要があります。</p>
+      <p class="lead">縦書きは、文字を取り出せただけでは読めません。列の順番、ルビ、約物まで正しく組み直す必要があります。</p>
 
       <section class="policy-section">
-        <h2>縦書きは右の列から左へ読む</h2>
-        <p>一般的な縦書き本文では、1列の中を上から下へ読み、列は右から左へ進みます。しかしPDF内部の文字列が必ずしもその順番で保存されているとは限りません。見た目の座標とPDFから取得した文字の対応を使って、実際の読書順を組み立て直す必要があります。</p>
+        <h2>縦書き本文は、右の列から左へ進みます</h2>
+        <p>一般的な縦書きは、1列を上から下へ読み、次の列へ右から左に移ります。ところがPDF内部の文字列が、その順番で保存されているとは限りません。FileShapeは文字の位置と取得できた文字情報を照らし合わせ、読む順番を組み直します。</p>
       </section>
 
       <section class="policy-section">
-        <h2>ルビは本文とは別の小さな文字として現れる</h2>
-        <p>PDFではルビが「この文字の読み」として明示されず、本文の横に小さな文字として配置されているだけの場合があります。そのため、文字サイズ、位置、本文との重なり方などの幾何情報から、どの本文に対応するかを判断します。対応が曖昧な場合に無理に結び付けると、別の注記をルビとして誤認する原因になります。</p>
+        <h2>ルビは「読み」ではなく、小さな別文字として入っていることがあります</h2>
+        <p>PDFでは、ルビが本文との関係を持たず、横に小さく置かれた文字として保存されている場合があります。そこで文字サイズや位置、本文との重なり方を見て、どの文字のルビかを判断します。曖昧なものまで無理に結び付けると、注記などをルビと誤認するため、確かな根拠があるものを優先します。</p>
       </section>
 
       <section class="policy-section">
-        <h2>括弧や句読点には縦書き専用の字形がある</h2>
-        <p>PDFからは、縦書き用のUnicode字形として「︵」「︶」などが取得されることがあります。縦書き本文では自然でも、横書きのEPUB目次へそのまま出すと弧のような不自然な記号に見える場合があります。FileShapeでは元の本文情報を保持しつつ、目次として表示する段階では対応する通常の約物へ変換します。</p>
+        <h2>縦書き用の括弧や句読点は、そのまま目次へ出すと不自然なことがあります</h2>
+        <p>PDFから「︵」「︶」のような縦書き用字形が取得されることがあります。本文では自然でも、横書きで表示される目次にそのまま入れると不自然です。FileShapeは本文の情報を保ちつつ、目次では対応する通常の約物へ変換します。</p>
       </section>
 
       <section class="policy-section">
-        <h2>ページ番号や欄外文字を本文へ混ぜない</h2>
-        <p>固定レイアウトのPDFでは、ページ番号、柱、注記なども本文と同じ「ページ上の文字」です。特に縦書きでは本文列の近くにページ番号が置かれることがあり、単純に近い文字をつなぐだけでは本文へ混入します。本文より小さい文字や余白上の配置など、レイアウト上の証拠を使って区別する必要があります。</p>
+        <h2>ページ番号や欄外の文字を本文に混ぜないことも重要です</h2>
+        <p>PDFではページ番号、柱、注記も、本文と同じ「ページ上の文字」です。本文の近くにあるだけでつなぐと、ページ番号まで文章へ入り込みます。FileShapeは文字サイズや余白上の位置などを手がかりに、本文と欄外の文字を分けます。</p>
       </section>
 
       <section class="policy-section">
-        <h2>変換後に確認したい場所</h2>
+        <h2>変換後はここを確認してください</h2>
         <ul>
-          <li>列の順番が右から左になっているか</li>
-          <li>ルビが本文の正しい文字に付いているか</li>
-          <li>括弧・句読点・長音などが不自然な向きになっていないか</li>
+          <li>列が右から左の順に読めるか</li>
+          <li>ルビが正しい本文に付いているか</li>
+          <li>括弧、句読点、長音などの向きが不自然でないか</li>
           <li>ページ番号や欄外文字が本文へ混ざっていないか</li>
-          <li>目次の見出しが横書き表示でも読めるか</li>
+          <li>目次の見出しが横書きでも自然に読めるか</li>
         </ul>
       </section>
 
-      <p class="meta">最終更新: 2026年9月13日</p>
+      <p class="meta">最終更新: 2026年9月15日</p>
     </main>
-    <footer class="page-footer">
-      <nav aria-label="サイト情報"><a href="../">ガイド</a><a href="../../about/">運営情報</a><a href="../../terms/">利用規約</a><a href="../../privacy/">プライバシー</a><a href="../../affiliate/">広告・アフィリエイト</a><a href="../../disclaimer/">免責事項</a><a href="../../contact/">お問い合わせ</a></nav>
-      <p>© FileShape</p>
-    </footer>
+    <footer class="page-footer"><nav aria-label="サイト情報"><a href="../">ガイド</a><a href="../../about/">運営情報</a><a href="../../terms/">利用規約</a><a href="../../privacy/">プライバシー</a><a href="../../affiliate/">広告・アフィリエイト</a><a href="../../disclaimer/">免責事項</a><a href="../../contact/">お問い合わせ</a></nav><p>© FileShape</p></footer>
   </body>
 </html>
