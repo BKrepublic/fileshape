@@ -1,0 +1,26 @@
+# FileShape crawler policy
+# Search/indexing is welcome. Model-training crawlers listed below are not.
+
+User-agent: *
+Allow: /
+
+# OpenAI training crawler. ChatGPT search uses OAI-SearchBot separately.
+User-agent: GPTBot
+Disallow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+# Google-Extended controls use for Gemini model improvement/grounding separately from Google Search.
+User-agent: Google-Extended
+Disallow: /
+
+# Common Crawl data is widely reused for model training.
+User-agent: CCBot
+Disallow: /
+
+# Anthropic model crawler. User-initiated retrieval is not blocked here.
+User-agent: ClaudeBot
+Disallow: /
+
+Sitemap: https://fileshape.isjust.fyi/sitemap.xml
