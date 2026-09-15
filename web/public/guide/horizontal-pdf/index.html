@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; img-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'none'" /><meta name="theme-color" content="#4f5f91" /><meta name="description" content="横書きPDFをEPUBへ変換するときに注意したい、段組み、表、脚注、画像、文字方向の判定と確認方法を説明します。" /><link rel="icon" type="image/png" sizes="192x192" href="../../icons/fileshape-192.png" /><link rel="stylesheet" href="../../policy.css" /><title>横書きPDFをEPUBへ変換するときの注意点 | FileShape</title></head><body>
+<header class="topbar"><a class="brand-mark" href="../../" aria-label="FileShape トップへ">F</a><div class="brand-copy"><a href="../../">FileShape</a><span>PDF to EPUB</span></div></header>
+<main class="page"><p class="eyebrow">GUIDE</p><h1>横書きPDFをEPUBへ変換するときの注意点</h1><p class="lead">FileShapeは横書きの文字方向も判定してEPUBへ出力します。ただし、現在の実ファイル検証は縦書きPDFが中心です。</p>
+<section class="policy-section"><h2>横書きそのものは特別な例外ではない</h2><p>FileShapeはページの文字配置から縦書き・横書きを判定し、横書きと判断したページには横書き用の書字方向を付けてEPUBを生成します。そのため、本文中心の単純な横書きPDFは縦書きと同じ変換経路で扱えます。</p></section>
+<section class="policy-section"><h2>難しくなるのは段組みや資料型のレイアウト</h2><p>横書きPDFには、2段・3段組み、表、脚注、欄外注、図版、キャプションなどを含む資料が多くあります。PDFでは「どこに置かれているか」が見た目を作りますが、EPUBでは「どの順番で読むか」を決め直す必要があります。複雑な紙面ほど、この再構成が難しくなります。</p></section>
+<section class="policy-section"><h2>変換後に確認したい項目</h2><ol><li>左から右へ本文が自然な順番で続くか</li><li>複数段の文章が列ごとに正しく読まれているか</li><li>見出しと本文の順序が入れ替わっていないか</li><li>表や図版の前後関係が不自然でないか</li><li>ページをまたぐ文章が不必要に分断されていないか</li></ol></section>
+<section class="policy-section"><h2>現在の位置づけ</h2><p>横書き判定・横書きEPUB出力は実装されていますが、FileShapeはこれまで日本語の縦書き書籍を中心に検証してきました。そのため、現時点では「横書きも変換可能だが、複雑な横書き資料まで広く検証済みとは言わない」という位置づけです。</p><p><a href="../troubleshooting/">表示が崩れたときの確認ポイント</a></p></section>
+<p class="meta">最終更新: 2026年9月15日</p></main>
+<footer class="page-footer"><nav aria-label="サイト情報"><a href="../">ガイド</a><a href="../../about/">運営情報</a><a href="../../privacy/">プライバシー</a><a href="../../affiliate/">広告・アフィリエイト</a><a href="../../contact/">お問い合わせ</a></nav><p>© FileShape</p></footer></body></html>
