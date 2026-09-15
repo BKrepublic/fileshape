@@ -51,7 +51,7 @@ async function convertFixture(
   await expect(page.locator("#selected-file")).toContainText(sourceName);
   await expect(page.locator("#convert-button")).toBeEnabled();
   await page.locator("#convert-button").click();
-  await expect(page.locator("#conversion-status")).toContainText("EPUBへ変換しました", { timeout: 20_000 });
+  await expect(page.locator("#conversion-status")).toContainText("EPUBに変換しました", { timeout: 20_000 });
   await expect(page.locator("#download-link")).toBeVisible();
   const downloadPromise = page.waitForEvent("download");
   await page.locator("#download-link").click();
@@ -107,7 +107,7 @@ test("browser worker converts the public text fixture byte-identically and remai
   const diagnostics = trackBrowserDiagnostics(page);
 
   await page.goto("/");
-  await expect(page.locator("#page-title")).toHaveText("PDFを、手元でEPUBへ。");
+  await expect(page.locator("#page-title")).toHaveText("PDFを、ブラウザだけでEPUBに。");
   await expect(page.locator('.file-surface .surface-icon [data-icon="lucide:file-up"]')).toHaveCount(1);
   await expect(page.locator('.file-picker [data-icon="lucide:file-up"]')).toHaveCount(1);
   await expect(page.locator('.workflow-strip [data-icon="lucide:file-up"]')).toHaveCount(1);
@@ -143,7 +143,7 @@ test("browser worker converts the public text fixture byte-identically and remai
   // The same real conversion must still work with networking disabled.
   await context.setOffline(true);
   await page.reload();
-  await expect(page.locator("#page-title")).toHaveText("PDFを、手元でEPUBへ。");
+  await expect(page.locator("#page-title")).toHaveText("PDFを、ブラウザだけでEPUBに。");
   await expectRuntimeSupported(page);
   const offlineBytes = await convertFixture(page, fixture, sourceName);
   expect(Buffer.compare(offlineBytes, Buffer.from(expected.bytes))).toBe(0);
