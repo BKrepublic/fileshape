@@ -19,19 +19,35 @@ async function expectRuntimeSupported(page: import("@playwright/test").Page): Pr
   await expect(binaryStatus).toHaveText("確認済み");
 }
 
+function requestedDownloadName(sourceName: string, override?: string): string {
+  if (!override) return sourceName.replace(/\.[^.]+$/, "") + ".epub";
+  const safe = override.trim().replace(/[\\/\0]+/g, "-");
+  return /\.epub$/i.test(safe) ? safe : `${safe}.epub`;
+}
+
 async function convertFixture(
   page: import("@playwright/test").Page,
   fixture: Buffer,
   sourceName: string,
+  outputName?: string,
 ): Promise<Buffer> {
   await page.locator("#pdf-input").setInputFiles({
     name: sourceName,
     mimeType: "application/pdf",
     buffer: fixture,
   });
-  await page.locator("details.advanced-settings > summary").click();
-  await page.locator("details.metadata-settings > summary").click();
-  await page.locator('[name="modified"]').fill(MODIFIED);
+
+  // `modified` remains an engine/CLI option for reproducible output, but it is
+  // intentionally absent from the end-user UI. Inject it only for this exact-byte test.
+  await page.evaluate((modified) => {
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = "modified";
+    input.value = modified;
+    document.body.append(input);
+  }, MODIFIED);
+
+  if (outputName) await page.locator('[name="outputName"]').fill(outputName);
   await expect(page.locator("#selected-file")).toContainText(sourceName);
   await expect(page.locator("#convert-button")).toBeEnabled();
   await page.locator("#convert-button").click();
@@ -40,7 +56,7 @@ async function convertFixture(
   const downloadPromise = page.waitForEvent("download");
   await page.locator("#download-link").click();
   const download = await downloadPromise;
-  expect(download.suggestedFilename()).toBe(sourceName.replace(/\.[^.]+$/, "") + ".epub");
+  expect(download.suggestedFilename()).toBe(requestedDownloadName(sourceName, outputName));
   const downloadPath = await download.path();
   if (!downloadPath) throw new Error("browser EPUB download path is unavailable");
   return readFile(downloadPath);
@@ -84,20 +100,28 @@ test("browser worker converts the public text fixture byte-identically and remai
   const sourceName = "stage29-public.pdf";
   const fixture = pdfBytes();
   const expected = await convertPdfBytesToEpub(new Uint8Array(fixture), sourceName, { modified: MODIFIED });
+  const expectedRenamed = await convertPdfBytesToEpub(new Uint8Array(fixture), sourceName, {
+    modified: MODIFIED,
+    title: "renamed-book",
+  });
   const diagnostics = trackBrowserDiagnostics(page);
 
   await page.goto("/");
   await expect(page.locator("#page-title")).toHaveText("PDFを、手元でEPUBへ。");
-  await expect(page.locator('[data-icon="lucide:file-up"]')).toHaveCount(3);
+  await expect(page.locator('.file-surface .surface-icon [data-icon="lucide:file-up"]')).toHaveCount(1);
+  await expect(page.locator('.file-picker [data-icon="lucide:file-up"]')).toHaveCount(1);
+  await expect(page.locator('.workflow-strip [data-icon="lucide:file-up"]')).toHaveCount(1);
   await expect(page.locator(".workflow-strip")).toContainText("PDFを選ぶ");
-  await page.locator("details.advanced-settings > summary").click();
-  await page.locator("details.metadata-settings > summary").click();
-  await expect(page.locator('[name="language"]')).toHaveValue("ja");
-  await expect(page.locator('[name="language"]')).toHaveAttribute("readonly", "");
-  await expect(page.locator(".metadata-settings")).toContainText("変換ロジックの言語切替ではありません");
-  await page.locator("details.metadata-settings > summary").click();
-  await page.locator("details.advanced-settings > summary").click();
+  await expect(page.locator(".conversion-settings")).toBeVisible();
+  await expect(page.locator('[name="outputName"]')).toBeVisible();
+  await expect(page.locator('[name="rubyMode"]')).toBeVisible();
+  await expect(page.locator('[name="title"]')).toHaveAttribute("type", "hidden");
+  await expect(page.locator('[name="creator"]')).toHaveCount(0);
+  await expect(page.locator('[name="language"]')).toHaveCount(0);
+  await expect(page.locator('[name="modified"]')).toHaveCount(0);
   await expectRuntimeSupported(page);
+  await expect(page.locator("#runtime-title")).toContainText("動作環境");
+  await expect(page.locator("#runtime-message")).toBeHidden();
   await expect(page.locator("#pwa-status")).toHaveText(/利用可能|準備中/);
   await expect(page.locator("#convert-button")).toBeDisabled();
   await expect(page.locator("#pdf-input")).toHaveAttribute("accept", /pdf/);
@@ -107,8 +131,8 @@ test("browser worker converts the public text fixture byte-identically and remai
   // the conversion worker and its nested PDF.js worker are cached as real app resources.
   await page.reload();
   await expectRuntimeSupported(page);
-  const onlineBytes = await convertFixture(page, fixture, sourceName);
-  expect(Buffer.compare(onlineBytes, Buffer.from(expected.bytes))).toBe(0);
+  const onlineBytes = await convertFixture(page, fixture, sourceName, "renamed-book");
+  expect(Buffer.compare(onlineBytes, Buffer.from(expectedRenamed.bytes))).toBe(0);
   assertPdfJsResourcesUseApplicationBase(diagnostics.requests, page.url());
 
   assertLocalRequests(diagnostics.requests, page.url(), [sourceName]);
