@@ -7,77 +7,58 @@ function replaceButtonContent(selector: string, iconName: Parameters<typeof icon
   element.innerHTML = `${icon(iconName)}<span>${label}</span>`;
 }
 
-function setFieldLabel(label: HTMLLabelElement, title: string, help: string): void {
-  const field = label.querySelector<HTMLInputElement | HTMLSelectElement>("input, select");
-  if (!field) return;
-  const helpId = `${field.name || "field"}-help`;
-  const titleElement = document.createElement("span");
-  titleElement.className = "field-label";
-  titleElement.textContent = title;
-  const helpElement = document.createElement("small");
-  helpElement.id = helpId;
-  helpElement.className = "field-help";
-  helpElement.textContent = help;
-  field.setAttribute("aria-describedby", helpId);
-  label.replaceChildren(titleElement, field, helpElement);
+function safeRequestedOutputName(raw: string): string | undefined {
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return undefined;
+  const safe = trimmed.replace(/[\\/\0]+/g, "-");
+  return /\.epub$/i.test(safe) ? safe : `${safe}.epub`;
 }
 
-function enhanceAdvancedSettings(): void {
-  const settings = document.querySelector<HTMLDetailsElement>("details.advanced-settings");
-  const grid = settings?.querySelector<HTMLElement>(".advanced-grid");
-  const summary = settings?.querySelector<HTMLElement>(":scope > summary");
-  if (!settings || !grid || !summary || settings.dataset.enhanced === "true") return;
-  settings.dataset.enhanced = "true";
+function simplifyConversionSettings(): void {
+  const current = document.querySelector<HTMLElement>(".advanced-settings");
+  if (!current || current.dataset.enhanced === "true") return;
 
-  summary.innerHTML = `
-    <span class="summary-title">${icon("settings-2")}<span>詳細設定</span></span>
-    <span class="summary-caption">通常は変更不要</span>
-    ${icon("chevron-down", "summary-chevron")}
+  const currentRubyMode = current.querySelector<HTMLSelectElement>('[name="rubyMode"]')?.value === "off" ? "off" : "on";
+  const replacement = document.createElement("section");
+  replacement.className = "surface advanced-settings conversion-settings";
+  replacement.dataset.enhanced = "true";
+  replacement.setAttribute("aria-labelledby", "conversion-settings-title");
+  replacement.innerHTML = `
+    <div class="settings-heading">
+      <div class="settings-heading-copy">
+        <span class="settings-heading-title" id="conversion-settings-title">${icon("settings-2")}<span>変換設定</span></span>
+        <p>必要な場合だけ変更してください。</p>
+      </div>
+    </div>
+    <div class="settings-grid">
+      <label>
+        <span class="field-label">保存ファイル名</span>
+        <input type="text" name="outputName" maxlength="240" placeholder="未入力なら元のPDF名で保存" />
+        <small class="field-help">変換後のファイル名を変更したい場合だけ入力してください。.epub は省略できます。</small>
+      </label>
+      <label>
+        <span class="field-label">ルビ</span>
+        <select name="rubyMode">
+          <option value="on">保持</option>
+          <option value="off">表示しない</option>
+        </select>
+        <small class="field-help">通常は「保持」のままでOKです。</small>
+      </label>
+    </div>
   `;
+  current.replaceWith(replacement);
 
-  const languageInput = grid.querySelector<HTMLInputElement>('[name="language"]');
-  const modifiedInput = grid.querySelector<HTMLInputElement>('[name="modified"]');
-  const languageLabel = languageInput?.closest<HTMLLabelElement>("label");
-  const modifiedLabel = modifiedInput?.closest<HTMLLabelElement>("label");
+  const rubyMode = replacement.querySelector<HTMLSelectElement>('[name="rubyMode"]');
+  if (rubyMode) rubyMode.value = currentRubyMode;
 
-  if (languageInput && languageLabel) {
-    languageInput.readOnly = true;
-    languageInput.setAttribute("aria-readonly", "true");
-    setFieldLabel(
-      languageLabel,
-      "EPUB言語タグ",
-      "現在の変換・実ファイル検証は日本語向けです。ここはEPUBメタデータで、変換ロジックの言語切替ではありません。",
-    );
+  const outputName = replacement.querySelector<HTMLInputElement>('[name="outputName"]');
+  const downloadLink = document.querySelector<HTMLAnchorElement>("#download-link");
+  if (outputName && downloadLink) {
+    downloadLink.addEventListener("click", () => {
+      const requested = safeRequestedOutputName(outputName.value);
+      if (requested) downloadLink.download = requested;
+    });
   }
-
-  if (modifiedInput && modifiedLabel) {
-    setFieldLabel(
-      modifiedLabel,
-      "更新日時を上書き",
-      "通常は空欄でOKです。未指定なら変換した時刻を自動設定します。再現可能なEPUBが必要な場合だけUTC時刻を指定します。",
-    );
-  }
-
-  if (languageLabel || modifiedLabel) {
-    const metadata = document.createElement("details");
-    metadata.className = "metadata-settings";
-    metadata.innerHTML = `
-      <summary>
-        <span class="summary-title">${icon("file-text")}<span>EPUBメタデータ</span></span>
-        <span class="summary-caption">上級者向け</span>
-        ${icon("chevron-down", "summary-chevron")}
-      </summary>
-      <div class="metadata-grid"></div>
-    `;
-    const metadataGrid = metadata.querySelector<HTMLElement>(".metadata-grid");
-    if (languageLabel) metadataGrid?.append(languageLabel);
-    if (modifiedLabel) metadataGrid?.append(modifiedLabel);
-    const supporting = settings.querySelector(".supporting-text");
-    settings.insertBefore(metadata, supporting ?? null);
-  }
-
-  const supporting = settings.querySelector<HTMLElement>(".supporting-text");
-  if (supporting) supporting.textContent = "普段はタイトル、作成者、ルビだけ調整すれば十分です。";
 }
 
 function enhanceFilePicker(): void {
@@ -129,6 +110,32 @@ function enhanceFilePicker(): void {
   updateState();
 }
 
+function enhanceRuntimeStatus(): void {
+  const surface = document.querySelector<HTMLElement>(".runtime-surface");
+  const title = document.querySelector<HTMLElement>("#runtime-title");
+  const subtitle = surface?.querySelector<HTMLElement>(".section-heading p");
+  const badge = document.querySelector<HTMLElement>("#runtime-badge");
+  const message = document.querySelector<HTMLElement>("#runtime-message");
+  if (!surface || !title || !badge || !message || surface.dataset.enhanced === "true") return;
+  surface.dataset.enhanced = "true";
+
+  title.innerHTML = `${icon("circle-check")}<span>動作環境</span>`;
+  if (subtitle) subtitle.textContent = "変換に必要な機能を自動確認します。";
+
+  const sync = (): void => {
+    const supported = badge.dataset.state === "supported";
+    message.hidden = supported;
+    surface.classList.toggle("runtime-supported", supported);
+  };
+  sync();
+  new MutationObserver(sync).observe(badge, {
+    attributes: true,
+    attributeFilter: ["data-state"],
+    childList: true,
+    subtree: true,
+  });
+}
+
 function enhanceCoreUi(): void {
   const intro = document.querySelector<HTMLElement>(".intro");
   const eyebrow = intro?.querySelector<HTMLElement>(".eyebrow");
@@ -154,14 +161,12 @@ function enhanceCoreUi(): void {
   const surfaceIcon = document.querySelector<HTMLElement>(".file-surface .surface-icon");
   if (surfaceIcon) surfaceIcon.innerHTML = icon("file-up");
 
-  const runtimeTitle = document.querySelector<HTMLElement>("#runtime-title");
-  if (runtimeTitle && !runtimeTitle.querySelector("svg")) runtimeTitle.innerHTML = `${icon("circle-check")}<span>ブラウザの対応状況</span>`;
-
   replaceButtonContent("#convert-button", "sparkles", "EPUBに変換");
   replaceButtonContent("#reset-file", "rotate-ccw", "選択を解除");
   replaceButtonContent("#cancel-button", "x", "キャンセル");
   enhanceFilePicker();
-  enhanceAdvancedSettings();
+  simplifyConversionSettings();
+  enhanceRuntimeStatus();
 }
 
 function enhanceSiteInfo(attempt = 0): void {
