@@ -1,5 +1,0 @@
-External account actions remaining:
-- Configure ADSENSE_CLIENT_ID in the production environment after AdSense assigns the publisher ID.
-- Publish the Google-certified European regulations message with three choices for EEA/UK/Switzerland.
-- Register fileshape.isjust.fyi in Google Search Console and submit /sitemap.xml.
-- Run the required local-only build/type/browser verification before merging.
