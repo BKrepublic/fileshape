@@ -2,7 +2,11 @@ import "./site-info.css";
 
 function mountSiteInfo(): void {
   const page = document.querySelector<HTMLElement>(".page-shell");
-  if (!page || page.querySelector(".site-info")) return;
+  if (!page) {
+    window.addEventListener("load", mountSiteInfo, { once: true });
+    return;
+  }
+  if (page.querySelector(".site-info")) return;
 
   const downloadLink = document.querySelector<HTMLAnchorElement>("#download-link");
   if (downloadLink) {
