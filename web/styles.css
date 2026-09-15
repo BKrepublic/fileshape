@@ -25,7 +25,7 @@
 body { margin: 0; background: var(--md-background); color: var(--md-on-surface); }
 button, input, select { font: inherit; }
 .top-app-bar { min-height: 64px; display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: var(--md-surface); border-bottom: 1px solid color-mix(in srgb, var(--md-outline) 16%, transparent); }
-.brand-mark { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 12px; background: var(--md-primary); color: var(--md-on-primary); font-weight: 750; }
+.brand-mark { width: 36px; height: 36px; display: block; flex: 0 0 auto; border-radius: 10px; overflow: hidden; background: #ffffff url("/icons/fileshape-192.png") center / cover no-repeat; color: transparent; font-size: 0; }
 .brand-copy { display: flex; flex-direction: column; line-height: 1.15; }
 .brand-copy span { color: var(--md-on-surface-variant); font-size: 0.75rem; }
 .status-chip { margin-left: auto; min-height: 32px; display: inline-flex; align-items: center; gap: 7px; padding: 6px 10px; border: 1px solid var(--md-outline); border-radius: 999px; color: var(--md-on-surface-variant); font-size: 0.75rem; white-space: nowrap; }
