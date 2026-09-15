@@ -1,4 +1,4 @@
-const ADSENSE_CLIENT_PATTERN = /^ca-pub-\d+$/;
+const ADSENSE_CLIENT_PATTERN = /^ca-pub-\d{16}$/;
 
 function randomNonce() {
   const bytes = new Uint8Array(18);
@@ -26,6 +26,13 @@ function shouldLoadAds(pathname) {
   return pathname === "/" || pathname.startsWith("/guide/");
 }
 
+function configuredAdsenseClient(env) {
+  const primary = String(env.ADSENSE_ACCOUNT ?? "").trim();
+  const legacy = String(env.ADSENSE_CLIENT_ID ?? "").trim();
+  const configured = primary || legacy;
+  return ADSENSE_CLIENT_PATTERN.test(configured) ? configured : "";
+}
+
 export async function onRequest(context) {
   const response = await context.next();
   const contentType = response.headers.get("content-type") ?? "";
@@ -33,8 +40,7 @@ export async function onRequest(context) {
 
   const nonce = randomNonce();
   const url = new URL(context.request.url);
-  const configuredClient = String(context.env.ADSENSE_CLIENT_ID ?? "").trim();
-  const adsenseClient = ADSENSE_CLIENT_PATTERN.test(configuredClient) ? configuredClient : "";
+  const adsenseClient = configuredAdsenseClient(context.env);
 
   let rewriter = new HTMLRewriter()
     .on('meta[http-equiv="Content-Security-Policy"]', {
@@ -54,7 +60,7 @@ export async function onRequest(context) {
       element(element) {
         const src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${encodeURIComponent(adsenseClient)}`;
         element.append(
-          `<script nonce="${nonce}" async src="${src}" crossorigin="anonymous"></script>`,
+          `<meta name="google-adsense-account" content="${adsenseClient}"><script nonce="${nonce}" async src="${src}" crossorigin="anonymous"></script>`,
           { html: true },
         );
       },
