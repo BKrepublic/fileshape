@@ -89,7 +89,7 @@ function trackBrowserDiagnostics(page: import("@playwright/test").Page): {
   const httpErrors: string[] = [];
   const requests: string[] = [];
   page.on("console", (message) => { if (message.type() === "error") consoleErrors.push(message.text()); });
-  page.on("pageerror", (error) => pageErrors.push(error.message);
+  page.on("pageerror", (error) => pageErrors.push(error.message));
   page.on("response", (response) => { if (response.status() >= 400) httpErrors.push(`${response.status()} ${response.url()}`); });
   page.on("request", (request) => requests.push(request.url()));
   return { consoleErrors, pageErrors, httpErrors, requests };
