@@ -19,37 +19,37 @@ function mountSiteInfo(): void {
       <div class="site-info-heading">
         <p class="eyebrow">ABOUT FILESHAPE</p>
         <h2 id="about-fileshape-title">FileShapeについて</h2>
-        <p>FileShapeは、PDFの文字や配置を読み取り、読みやすいEPUBへ組み直すブラウザツールです。特に日本語の縦書きPDFを扱うことを重視しています。</p>
+        <p>FileShapeは、PDFの文字や配置を読み取り、EPUBとして読みやすい形に組み直すブラウザツールです。日本語の縦書きPDFを中心に開発・検証しています。</p>
       </div>
 
       <div class="site-info-grid">
         <article>
-          <h3>ファイルは端末内で処理</h3>
-          <p>選択したPDF本文や生成したEPUBは、変換のためにFileShapeのサーバーへ送信しません。変換処理は原則としてブラウザ内で行います。</p>
+          <h3>PDFは端末内で処理</h3>
+          <p>PDF本文も生成したEPUBも、FileShapeのサーバーには送りません。変換はブラウザ内で行います。</p>
         </article>
         <article>
-          <h3>縦書き・ルビを意識して再構成</h3>
-          <p>単純に文字を抜き出すのではなく、文字方向、読書順、段落、ルビ候補などをPDFの配置情報から組み立て直します。</p>
+          <h3>縦書きとルビを再構成</h3>
+          <p>PDFの配置情報をもとに、文字方向、読書順、段落、ルビ候補を組み直します。</p>
         </article>
         <article>
-          <h3>横書きも判定</h3>
-          <p>ページの文字方向を判定して横書き用のEPUB表現も出力します。横書きPDFについては現在、実ファイルでの検証範囲を広げています。</p>
+          <h3>横書きも自動判定</h3>
+          <p>横書き用のEPUB出力も実装しています。現在は、実際の横書きPDFを使って検証範囲を広げています。</p>
         </article>
       </div>
 
       <section class="site-info-section" aria-labelledby="how-to-use-title">
         <h3 id="how-to-use-title">使い方</h3>
         <ol>
-          <li>上の「PDFファイルを選ぶ」からファイルを選択します。</li>
-          <li>「EPUBに変換」を押し、変換が完了するまでこのページを開いたまま待ちます。</li>
-          <li>表示された「EPUBを保存」ボタンから端末へ保存します。</li>
+          <li>上の「PDFを選ぶ」からファイルを選びます。</li>
+          <li>「EPUBに変換」を押します。変換中は、このページを閉じずに待ちます。</li>
+          <li>「EPUBを保存」が表示されたら、端末に保存します。</li>
         </ol>
       </section>
 
       <section class="site-info-section" aria-labelledby="supported-pdf-title">
-        <h3 id="supported-pdf-title">変換に向いているPDF</h3>
-        <p>本文が画像ではなく文字として格納され、文章の行や列が比較的規則的なPDFに向いています。スキャン画像だけのPDFは文字認識を行わないため、本文をテキストのEPUBとして再構成できません。複雑な図版中心の資料や特殊な組版では、元の見た目をそのまま再現できない場合があります。</p>
-        <p><a href="./guide/pdf-to-epub/">PDFからEPUBへ変換するときの詳しい注意点</a></p>
+        <h3 id="supported-pdf-title">変換しやすいPDF</h3>
+        <p>文字を選択でき、行や列の並びが比較的素直なPDFほど変換しやすくなります。スキャン画像だけのPDFにはOCRを行わないため、本文をテキストとして取り出せません。図版が多い資料や特殊な組版は、元の見た目をそのまま再現できないことがあります。</p>
+        <p><a href="./guide/pdf-to-epub/">PDFからEPUBへ変換するときの注意点を詳しく見る</a></p>
       </section>
 
       <section class="site-info-section" aria-labelledby="after-convert-title">
@@ -68,19 +68,19 @@ function mountSiteInfo(): void {
         <h3 id="faq-title">よくある質問</h3>
         <details>
           <summary>PDFはサーバーへアップロードされますか？</summary>
-          <p>変換処理のためにPDF本文をFileShapeのサーバーへ送信する設計にはしていません。ブラウザ内で解析・変換します。</p>
+          <p>いいえ。変換のためにPDF本文をFileShapeのサーバーへ送ることはありません。ブラウザ内で解析・変換します。</p>
         </details>
         <details>
           <summary>横書きPDFも変換できますか？</summary>
-          <p>横書き判定と横書きEPUB出力の処理は実装されています。現在は縦書きPDFを中心に検証しており、横書きについても検証範囲を広げています。</p>
+          <p>横書きの判定とEPUB出力は実装済みです。現在は縦書きPDFを中心に検証しており、横書きの実ファイル検証も進めています。</p>
         </details>
         <details>
           <summary>スキャンした本のPDFも変換できますか？</summary>
-          <p>画像だけで構成されたPDFには現在対応していません。文字として格納されたPDFが対象です。</p>
+          <p>画像だけのPDFには対応していません。文字を選択できるPDFが対象です。</p>
         </details>
       </section>
 
-      <p class="site-info-more"><a href="./guide/">PDF・EPUBガイドをすべて見る</a></p>
+      <p class="site-info-more"><a href="./guide/">ガイドをすべて見る</a></p>
     </section>
   `);
 }
