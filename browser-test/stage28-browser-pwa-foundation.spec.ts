@@ -108,7 +108,9 @@ test("browser worker converts the public text fixture byte-identically and remai
 
   await page.goto("/");
   await expect(page.locator("#page-title")).toHaveText("PDFを、手元でEPUBへ。");
-  await expect(page.locator('[data-icon="lucide:file-up"]')).toHaveCount(2);
+  await expect(page.locator('.file-surface .surface-icon [data-icon="lucide:file-up"]')).toHaveCount(1);
+  await expect(page.locator('.file-picker [data-icon="lucide:file-up"]')).toHaveCount(1);
+  await expect(page.locator('.workflow-strip [data-icon="lucide:file-up"]')).toHaveCount(1);
   await expect(page.locator(".workflow-strip")).toContainText("PDFを選ぶ");
   await expect(page.locator(".conversion-settings")).toBeVisible();
   await expect(page.locator('[name="outputName"]')).toBeVisible();
