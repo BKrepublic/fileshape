@@ -15,19 +15,19 @@ app.innerHTML = `
   <header class="top-app-bar">
     <div class="brand-mark" aria-hidden="true">F</div>
     <div class="brand-copy"><strong>FileShape</strong><span>PDF to EPUB</span></div>
-    <span class="status-chip"><span class="status-dot"></span>ローカル処理</span>
+    <span class="status-chip"><span class="status-dot"></span>端末内で処理</span>
   </header>
   <main class="page-shell">
     <section class="intro" aria-labelledby="page-title">
       <p class="eyebrow">BROWSER / PWA</p>
-      <h1 id="page-title">PDFを、手元でEPUBへ。</h1>
-      <p>ファイルはこのブラウザのメモリだけで扱います。変換処理も端末内の専用workerで実行します。</p>
+      <h1 id="page-title">PDFを、ブラウザだけでEPUBに。</h1>
+      <p>PDFは外部へ送らず、変換も端末内で行います。</p>
     </section>
     <section class="surface file-surface" aria-labelledby="file-title">
-      <div class="section-heading"><div><h2 id="file-title">PDFを選択</h2><p>読み込むファイルを1つ選んでください。</p></div><span class="surface-icon" aria-hidden="true">↥</span></div>
-      <label class="file-picker" for="pdf-input"><span class="file-picker-title">PDFファイルを選ぶ</span><span class="file-picker-hint">端末から選択</span></label>
+      <div class="section-heading"><div><h2 id="file-title">PDFを選ぶ</h2><p>変換するPDFを1つ選んでください。</p></div><span class="surface-icon" aria-hidden="true">↥</span></div>
+      <label class="file-picker" for="pdf-input"><span class="file-picker-title">PDFを選ぶ</span><span class="file-picker-hint">端末から選択</span></label>
       <input id="pdf-input" class="visually-hidden-input" type="file" accept="application/pdf,.pdf" />
-      <p id="selected-file" class="selected-file" aria-live="polite">ファイルはまだ選択されていません。</p>
+      <p id="selected-file" class="selected-file" aria-live="polite">PDFが選択されていません。</p>
       <button id="reset-file" class="text-button" type="button" hidden>選択を解除</button>
     </section>
     <details class="surface advanced-settings">
@@ -42,7 +42,7 @@ app.innerHTML = `
       <p class="supporting-text">未指定項目はCLIと同じ既定値を使います。</p>
     </details>
     <section class="surface runtime-surface" aria-labelledby="runtime-title">
-      <div class="section-heading"><div><h2 id="runtime-title">ブラウザの対応状況</h2><p>この端末で変換を開始できるか確認します。</p></div><span id="runtime-badge" class="state-badge" data-state="checking">確認中</span></div>
+      <div class="section-heading"><div><h2 id="runtime-title">動作環境</h2><p>このブラウザで変換できるか確認します。</p></div><span id="runtime-badge" class="state-badge" data-state="checking">確認中</span></div>
       <p id="runtime-message" class="runtime-message" aria-live="polite">変換に必要な機能を確認しています。</p>
       <div hidden aria-hidden="true">
         <span id="pdfjs-status">確認中…</span>
@@ -56,10 +56,10 @@ app.innerHTML = `
       <div id="conversion-progress" class="conversion-progress" role="progressbar" aria-label="変換の進捗" hidden>
         <span class="conversion-progress-bar" aria-hidden="true"></span>
       </div>
-      <p id="conversion-continuity" class="conversion-continuity" hidden>変換が完了するまで、このページを閉じたり再読み込みしたりせず、そのままお待ちください。ページを離れると処理は中断され、最初からやり直しになります。</p>
+      <p id="conversion-continuity" class="conversion-continuity" hidden>変換が終わるまで、このページを閉じたり再読み込みしたりしないでください。ページを離れると処理が中断され、最初からやり直しになります。</p>
       <button id="cancel-button" class="text-button" type="button" hidden>キャンセル</button>
-      <p id="conversion-status" class="action-explanation" aria-live="polite">PDFを選択すると変換できます。</p>
-      <a id="download-link" class="text-button" hidden>変換したEPUBを保存</a>
+      <p id="conversion-status" class="action-explanation" aria-live="polite">PDFを選ぶと変換できます。</p>
+      <a id="download-link" class="text-button" hidden>EPUBを保存</a>
     </section>
   </main>
 `;
@@ -98,24 +98,24 @@ function runtimeReady(): boolean {
 
 function runtimeFailureGuidance(): string {
   if (!window.isSecureContext) {
-    return "安全な接続（HTTPS）で開かれていないため変換できません。HTTPSのURLで開き直してください。";
+    return "HTTPSで開かれていないため変換できません。HTTPSのURLから開き直してください。";
   }
   if (typeof Worker === "undefined") {
-    return "PDF解析に必要なWeb Workerに対応していないため変換できません。最新版のChrome、Edge、Firefox、Safariで開いてください。";
+    return "このブラウザでは、PDF解析に必要なバックグラウンド処理（Web Worker）を使えません。Chrome、Edge、Firefox、Safariの最新版で開いてください。";
   }
   if (pdfJsReady === false) {
-    return "PDF解析に必要な機能または関連ファイルを利用できません。まずページを再読み込みしてください。直らない場合は、広告ブロッカーやセキュリティ拡張を一時的に無効にして再試行してください。";
+    return "PDFの解析機能を読み込めませんでした。まずページを再読み込みしてください。直らない場合は、広告ブロッカーやセキュリティ拡張を一時的に無効にして、もう一度お試しください。";
   }
   if (typeof globalThis.crypto?.subtle === "undefined") {
-    return "EPUB生成に必要なWeb Cryptoに対応していないため変換できません。最新版のChrome、Edge、Firefox、Safariで開いてください。";
+    return "このブラウザでは、EPUB生成に必要な機能を使えません。Chrome、Edge、Firefox、Safariの最新版で開いてください。";
   }
   if (typeof WebAssembly === "undefined") {
-    return "EPUB生成に必要なWebAssemblyに対応していないため変換できません。最新版のChrome、Edge、Firefox、Safariで開いてください。";
+    return "このブラウザでは、EPUB生成に必要な機能を使えません。Chrome、Edge、Firefox、Safariの最新版で開いてください。";
   }
   if (binaryRuntimeReady === false) {
-    return "EPUB生成に必要な圧縮処理をこのブラウザで実行できません。ページを再読み込みするか、最新版のChrome、Edge、Firefox、Safariで開いてください。";
+    return "EPUB生成に必要な圧縮機能を使えません。ページを再読み込みするか、Chrome、Edge、Firefox、Safariの最新版で開いてください。";
   }
-  return "変換に必要なブラウザ機能を確認できませんでした。ページを再読み込みしてください。直らない場合は最新版のChrome、Edge、Firefox、Safariで開いてください。";
+  return "変換に必要なブラウザ機能を確認できませんでした。ページを再読み込みしてください。直らない場合は、Chrome、Edge、Firefox、Safariの最新版で開いてください。";
 }
 
 function updateConvertAvailability(): void {
@@ -176,15 +176,15 @@ function showFile(file: File | undefined): void {
   selected = file;
   if (!selectedFile || !resetButton) return;
   if (!file) {
-    selectedFile.textContent = "ファイルはまだ選択されていません。";
+    selectedFile.textContent = "PDFが選択されていません。";
     resetButton.hidden = true;
-    if (conversionStatus) conversionStatus.textContent = "PDFを選択すると変換できます。";
+    if (conversionStatus) conversionStatus.textContent = "PDFを選ぶと変換できます。";
     updateConvertAvailability();
     return;
   }
   selectedFile.textContent = `${file.name} — ${formatBytes(file.size)}`;
   resetButton.hidden = false;
-  if (conversionStatus) conversionStatus.textContent = runtimeReady() ? "変換できます。" : "ブラウザの対応状況を確認しています。";
+  if (conversionStatus) conversionStatus.textContent = runtimeReady() ? "変換の準備ができました。" : "動作環境を確認しています。";
   updateConvertAvailability();
 }
 
@@ -238,10 +238,10 @@ function renderRuntimeReadiness(): void {
   runtimeBadge.dataset.state = supported ? "supported" : "unsupported";
   runtimeBadge.textContent = supported ? "変換可能" : "利用不可";
   runtimeMessage.textContent = supported
-    ? "このブラウザで変換できます。"
+    ? "変換できます。"
     : runtimeFailureGuidance();
   if (selected && conversionStatus && activeWorker === undefined) {
-    conversionStatus.textContent = supported ? "変換できます。" : "このブラウザでは変換できません。上の案内を確認してください。";
+    conversionStatus.textContent = supported ? "変換の準備ができました。" : "このブラウザでは変換できません。上の案内を確認してください。";
   }
   updateConvertAvailability();
 }
@@ -329,7 +329,7 @@ function renderProgress(
     const completedBuildUnits = Math.min(totalPages * 2, Math.max(0, completedUnits - buildStartUnits));
 
     if (completedBuildUnits >= totalPages * 2) {
-      const status = "文書構造を仕上げ中。大きなPDFでは数分かかることがあります。";
+      const status = "文書構造を仕上げています。ページ数の多いPDFは数分かかることがあります。";
       showIndeterminateProgress("文書構造を仕上げ中");
       if (conversionStatus) conversionStatus.textContent = status;
       return;
@@ -352,7 +352,7 @@ function renderProgress(
   if (conversionStatus) {
     const longPhase = phase === "serializing-epub";
     conversionStatus.textContent = longPhase
-      ? `${label}。大きなPDFでは数分かかることがあります。`
+      ? "EPUBを生成しています。ページ数の多いPDFは数分かかることがあります。"
       : label;
   }
 }
@@ -397,7 +397,7 @@ convertButton?.addEventListener("click", async () => {
             downloadLink.download = event.outputName;
             downloadLink.hidden = false;
           }
-          if (conversionStatus) conversionStatus.textContent = `${event.pageCount}ページをEPUBへ変換しました（${formatBytes(event.byteLength)}）。`;
+          if (conversionStatus) conversionStatus.textContent = `${event.pageCount}ページをEPUBに変換しました（${formatBytes(event.byteLength)}）。`;
           cleanupWorker();
           return;
         }
@@ -411,13 +411,13 @@ convertButton?.addEventListener("click", async () => {
           cleanupWorker();
         }
       } catch (error) {
-        if (conversionStatus) conversionStatus.textContent = `worker応答を検証できませんでした: ${error instanceof Error ? error.message : String(error)}`;
+        if (conversionStatus) conversionStatus.textContent = `変換処理から正しい応答を受け取れませんでした: ${error instanceof Error ? error.message : String(error)}`;
         cleanupWorker();
       }
     });
     worker.addEventListener("error", (event) => {
       if (worker !== activeWorker) return;
-      if (conversionStatus) conversionStatus.textContent = `変換workerでエラーが発生しました: ${event.message}`;
+      if (conversionStatus) conversionStatus.textContent = `変換処理でエラーが発生しました: ${event.message}`;
       cleanupWorker();
     });
 
@@ -440,8 +440,8 @@ cancelButton?.addEventListener("click", () => {
   activeTracker.requestCancel();
   activeWorker.postMessage({ kind: "cancel", requestId: activeRequestId });
   cancelButton.hidden = true;
-  showIndeterminateProgress("キャンセル処理中");
-  if (conversionStatus) conversionStatus.textContent = "キャンセル処理中です。";
+  showIndeterminateProgress("キャンセル中");
+  if (conversionStatus) conversionStatus.textContent = "キャンセルしています。";
 });
 
 window.addEventListener("beforeunload", (event) => {
@@ -460,13 +460,13 @@ void registerOfflineShell();
 void probePdfJsRuntime().then(showPdfProbe, () => {
   showPdfProbe({
     state: "unsupported",
-    message: "PDF.js のブラウザ実行環境を確認できませんでした。",
+    message: "PDF解析機能を確認できませんでした。",
     realWorkerPort: false,
   });
 });
 void probeBinaryRuntime().then(showBinaryProbe, () => {
   showBinaryProbe({
     state: "unsupported",
-    message: "ブラウザ向けbinary runtimeを確認できませんでした。",
+    message: "EPUB生成に必要な圧縮機能を確認できませんでした。",
   });
 });

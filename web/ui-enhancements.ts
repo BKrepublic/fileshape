@@ -27,22 +27,22 @@ function simplifyConversionSettings(): void {
     <div class="settings-heading">
       <div class="settings-heading-copy">
         <span class="settings-heading-title" id="conversion-settings-title">${icon("settings-2")}<span>変換設定</span></span>
-        <p>必要な場合だけ変更してください。</p>
+        <p>必要なときだけ変更してください。</p>
       </div>
     </div>
     <div class="settings-grid">
       <label>
         <span class="field-label">保存ファイル名</span>
-        <input type="text" name="outputName" maxlength="240" placeholder="未入力なら元のPDF名で保存" />
-        <small class="field-help">変換後のファイル名を変更したい場合だけ入力してください。.epub は省略できます。</small>
+        <input type="text" name="outputName" maxlength="240" placeholder="未入力なら元のPDF名を使用" />
+        <small class="field-help">保存名を変えたいときだけ入力してください。「.epub」は付けなくても構いません。</small>
       </label>
       <label>
         <span class="field-label">ルビ</span>
         <select name="rubyMode">
-          <option value="on">保持</option>
+          <option value="on">保持する</option>
           <option value="off">表示しない</option>
         </select>
-        <small class="field-help">通常は「保持」のままでOKです。</small>
+        <small class="field-help">通常は「保持する」のままで問題ありません。</small>
       </label>
     </div>
     <input type="hidden" name="title" value="" />
@@ -80,8 +80,8 @@ function enhanceFilePicker(): void {
   picker.innerHTML = `
     <span class="file-picker-icon">${icon("file-up")}</span>
     <span class="file-picker-copy">
-      <strong>PDFファイルを選ぶ</strong>
-      <span>クリックして選択、またはここへドロップ</span>
+      <strong>PDFを選ぶ</strong>
+      <span>クリックして選ぶか、ここにドロップ</span>
     </span>
     <span class="file-picker-action">選択</span>
   `;
@@ -130,7 +130,7 @@ function enhanceRuntimeStatus(): void {
   surface.dataset.enhanced = "true";
 
   title.innerHTML = `${icon("circle-check")}<span>動作環境</span>`;
-  if (subtitle) subtitle.textContent = "変換に必要な機能を自動確認します。";
+  if (subtitle) subtitle.textContent = "このブラウザで変換できるか確認します。";
 
   const sync = (): void => {
     const supported = badge.dataset.state === "supported";
@@ -151,7 +151,7 @@ function enhanceCoreUi(): void {
   const eyebrow = intro?.querySelector<HTMLElement>(".eyebrow");
   if (eyebrow) eyebrow.textContent = "LOCAL PDF → EPUB";
   const introText = intro?.querySelector<HTMLElement>("p:last-child");
-  if (introText) introText.textContent = "PDFをアップロードせず、このブラウザ内で解析してEPUBへ変換します。";
+  if (introText) introText.textContent = "PDFは外部へ送らず、このブラウザ内でEPUBに変換します。";
 
   if (intro && !document.querySelector(".workflow-strip")) {
     intro.insertAdjacentHTML("afterend", `
