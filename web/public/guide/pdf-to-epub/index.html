@@ -8,53 +8,47 @@
     <link rel="icon" type="image/png" sizes="192x192" href="../../icons/fileshape-192.png" />
     <link rel="stylesheet" href="../../policy.css" />
     <title>PDFをEPUBへ変換する前に知っておきたいこと | FileShape</title>
-    <meta name="description" content="PDFとEPUBの違い、PDFからEPUBへ変換するときに再構成される情報、向いているPDFと注意点を解説します。" />
+    <meta name="description" content="PDFとEPUBの違い、変換時に組み直す情報、変換しやすいPDFと注意点を説明します。" />
   </head>
   <body>
-    <header class="topbar">
-      <a class="brand-mark" href="../../" aria-label="FileShape トップへ">F</a>
-      <div class="brand-copy"><a href="../../">FileShape</a><span>PDF to EPUB</span></div>
-    </header>
+    <header class="topbar"><a class="brand-mark" href="../../" aria-label="FileShape トップへ">F</a><div class="brand-copy"><a href="../../">FileShape</a><span>PDF to EPUB</span></div></header>
     <main class="page">
       <p class="eyebrow">GUIDE / PDF TO EPUB</p>
       <h1>PDFをEPUBへ変換する前に知っておきたいこと</h1>
-      <p class="lead">PDFとEPUBは、見た目が似ていても文書の持ち方が違います。単純な「拡張子の変換」ではありません。</p>
+      <p class="lead">PDFとEPUBは、見た目を保存する方法が違います。変換は、拡張子を書き換えるだけでは終わりません。</p>
 
       <section class="policy-section">
-        <h2>PDFは「ページ」、EPUBは「流れる本文」</h2>
-        <p>PDFは、文字や画像をページ上の座標へ配置して見た目を固定する形式です。一方、一般的なEPUBは画面サイズや文字サイズに応じて本文が組み直されます。そのためPDFからEPUBへ変換するには、文字の位置から読書順や段落、見出し、画像の位置関係などを再構成する必要があります。</p>
+        <h2>PDFはページを固定し、EPUBは本文を組み直します</h2>
+        <p>PDFは文字や画像をページ上の座標へ置き、見た目を固定します。一般的なEPUBは、画面サイズや文字サイズに合わせて本文を流し直します。そのため変換時には、PDF上の位置から読む順番、段落、見出し、画像との関係を組み直す必要があります。</p>
       </section>
 
       <section class="policy-section">
-        <h2>FileShapeが再構成するもの</h2>
-        <p>FileShapeはPDFから取得した文字列と配置情報を使い、ページ内の読書順、段落、縦書き・横書きの向き、ルビ候補、見出し構造などを組み立て直してEPUBへ出力します。PDFに十分な構造情報がない場合は、内容を勝手に推測するよりも、取得できた根拠の範囲で変換することを優先しています。</p>
+        <h2>FileShapeは配置情報から文書の構造を組み直します</h2>
+        <p>文字列と配置情報を使い、読む順番、段落、縦書き・横書き、ルビ候補、見出し構造をEPUB向けに再構成します。根拠が足りない部分は、内容を推測して埋めるより、PDFから確認できた情報を優先します。</p>
       </section>
 
       <section class="policy-section">
-        <h2>変換に向いているPDF</h2>
+        <h2>文字として保存された、規則的なPDFほど変換しやすくなります</h2>
         <ul>
-          <li>本文が画像ではなく文字として格納されているPDF</li>
-          <li>文章の列や行が規則的に配置されているPDF</li>
+          <li>本文が画像ではなく文字として入っている</li>
+          <li>行や列の配置が比較的規則的</li>
           <li>一般的な縦書き・横書きの書籍や文書</li>
         </ul>
-        <p>スキャン画像だけのPDFは、文字認識を行わない限り本文をEPUBのテキストとして再構成できません。複雑な図版中心の資料や、ページごとに特殊なレイアウトを使うPDFも再現性が下がる場合があります。</p>
+        <p>スキャン画像だけのPDFは、OCRを行わないFileShapeでは本文をテキストとして取り出せません。図版が中心の資料や、ページごとに特殊な組版を使うPDFも、元の見た目をそのまま再現するのは難しくなります。</p>
       </section>
 
       <section class="policy-section">
-        <h2>ファイル容量だけでは重さは決まらない</h2>
-        <p>PDFの処理負荷はファイル容量だけでは判断できません。ページ数、文字数、画像数、フォント、内部の描画命令などによって必要なメモリと処理時間が変わります。特に数千ページ規模のPDFでは、容量が小さくてもブラウザや端末のメモリ制限の影響を受けることがあります。</p>
+        <h2>重さはファイル容量だけでは決まりません</h2>
+        <p>処理時間や必要なメモリは、ページ数、文字数、画像数、フォント、描画命令などにも左右されます。数千ページあるPDFでは、ファイル容量が小さくてもブラウザや端末のメモリ上限に達することがあります。</p>
       </section>
 
       <section class="policy-section">
-        <h2>変換後はEPUBリーダーで確認する</h2>
-        <p>EPUBはリーダーごとに縦書き、ルビ、目次、CSSの扱いが少しずつ異なります。変換が完了したら、実際に読む予定のアプリや端末で目次、改ページ、文字方向、ルビなどを確認するのが確実です。詳しくは<a href="../epub-reader/">変換したEPUBを読む方法</a>をご覧ください。</p>
+        <h2>変換後は、実際に読むアプリで確認してください</h2>
+        <p>EPUBはリーダーによって縦書き、ルビ、目次、CSSの解釈に差があります。変換後は、使う予定のアプリや端末で目次、改ページ、文字方向、ルビを確認するのが確実です。詳しくは<a href="../epub-reader/">変換したEPUBを読む方法</a>をご覧ください。</p>
       </section>
 
-      <p class="meta">最終更新: 2026年9月13日</p>
+      <p class="meta">最終更新: 2026年9月15日</p>
     </main>
-    <footer class="page-footer">
-      <nav aria-label="サイト情報"><a href="../">ガイド</a><a href="../../about/">運営情報</a><a href="../../terms/">利用規約</a><a href="../../privacy/">プライバシー</a><a href="../../affiliate/">広告・アフィリエイト</a><a href="../../disclaimer/">免責事項</a><a href="../../contact/">お問い合わせ</a></nav>
-      <p>© FileShape</p>
-    </footer>
+    <footer class="page-footer"><nav aria-label="サイト情報"><a href="../">ガイド</a><a href="../../about/">運営情報</a><a href="../../terms/">利用規約</a><a href="../../privacy/">プライバシー</a><a href="../../affiliate/">広告・アフィリエイト</a><a href="../../disclaimer/">免責事項</a><a href="../../contact/">お問い合わせ</a></nav><p>© FileShape</p></footer>
   </body>
 </html>
