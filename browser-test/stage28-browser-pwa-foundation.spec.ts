@@ -30,6 +30,7 @@ async function convertFixture(
     buffer: fixture,
   });
   await page.locator("details.advanced-settings > summary").click();
+  await page.locator("details.metadata-settings > summary").click();
   await page.locator('[name="modified"]').fill(MODIFIED);
   await expect(page.locator("#selected-file")).toContainText(sourceName);
   await expect(page.locator("#convert-button")).toBeEnabled();
@@ -87,6 +88,15 @@ test("browser worker converts the public text fixture byte-identically and remai
 
   await page.goto("/");
   await expect(page.locator("#page-title")).toHaveText("PDFを、手元でEPUBへ。");
+  await expect(page.locator('[data-icon="lucide:file-up"]')).toHaveCount(3);
+  await expect(page.locator(".workflow-strip")).toContainText("PDFを選ぶ");
+  await page.locator("details.advanced-settings > summary").click();
+  await page.locator("details.metadata-settings > summary").click();
+  await expect(page.locator('[name="language"]')).toHaveValue("ja");
+  await expect(page.locator('[name="language"]')).toHaveAttribute("readonly", "");
+  await expect(page.locator(".metadata-settings")).toContainText("変換ロジックの言語切替ではありません");
+  await page.locator("details.metadata-settings > summary").click();
+  await page.locator("details.advanced-settings > summary").click();
   await expectRuntimeSupported(page);
   await expect(page.locator("#pwa-status")).toHaveText(/利用可能|準備中/);
   await expect(page.locator("#convert-button")).toBeDisabled();
