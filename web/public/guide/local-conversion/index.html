@@ -8,54 +8,47 @@
     <link rel="icon" type="image/png" sizes="192x192" href="../../icons/fileshape-192.png" />
     <link rel="stylesheet" href="../../policy.css" />
     <title>ブラウザ内ローカル変換とは | FileShape</title>
-    <meta name="description" content="FileShapeがPDFをサーバーへ送らず、ブラウザ内でPDF解析とEPUB生成を行うローカル変換の仕組み、利点、制約を解説します。" />
+    <meta name="description" content="FileShapeがPDF本文をサーバーへ送らず、ブラウザ内で解析してEPUBを作る仕組みと、その利点・制約を説明します。" />
   </head>
   <body>
-    <header class="topbar">
-      <a class="brand-mark" href="../../" aria-label="FileShape トップへ">F</a>
-      <div class="brand-copy"><a href="../../">FileShape</a><span>PDF to EPUB</span></div>
-    </header>
+    <header class="topbar"><a class="brand-mark" href="../../" aria-label="FileShape トップへ">F</a><div class="brand-copy"><a href="../../">FileShape</a><span>PDF to EPUB</span></div></header>
     <main class="page">
       <p class="eyebrow">GUIDE / LOCAL PROCESSING</p>
       <h1>ブラウザ内ローカル変換とは</h1>
-      <p class="lead">FileShapeは、選択したPDFを変換のためにサーバーへ送るのではなく、利用者のブラウザ内で解析してEPUBを生成します。</p>
+      <p class="lead">FileShapeは、PDF本文を変換サーバーへ送らず、利用している端末のブラウザ内でEPUBを作ります。</p>
 
       <section class="policy-section">
-        <h2>ファイル選択後も変換処理は端末内</h2>
-        <p>PDFを選択すると、ブラウザがファイルを読み込み、専用のWeb Worker内でPDF解析とEPUB生成を行います。FileShapeの変換処理は、PDF本文を変換目的でFileShapeのサーバーへアップロードする構成ではありません。</p>
+        <h2>PDFを選んだ後も、変換処理は端末内です</h2>
+        <p>ブラウザがPDFを読み込み、別の処理領域でPDF解析とEPUB生成を行います。この仕組みをWeb Workerと呼びます。変換のためにPDF本文をFileShapeのサーバーへアップロードする構成にはしていません。</p>
       </section>
 
       <section class="policy-section">
-        <h2>ローカル処理にする理由</h2>
+        <h2>サーバーへPDF本文を預けなくて済みます</h2>
         <ul>
-          <li>PDF本文を変換サーバーへ預けずに済む</li>
+          <li>変換用サーバーへPDF本文を送らずに済む</li>
           <li>変換用ファイルのサーバー保存期間を気にしなくてよい</li>
           <li>サーバー側で文書内容を解析する必要がない</li>
-          <li>変換処理の計算資源を利用者の端末側で完結できる</li>
         </ul>
-        <p>一方で、すべてを端末内で処理するため、処理速度と利用可能メモリは利用している端末やブラウザの影響を受けます。</p>
+        <p>その代わり、変換に使える処理能力とメモリは利用中の端末やブラウザに左右されます。</p>
       </section>
 
       <section class="policy-section">
-        <h2>ファイル容量よりページ数や内部構造が効くことがある</h2>
-        <p>13MBのPDFが必ず軽く、100MBのPDFが必ず重いとは限りません。数千ページの文書、文字や描画命令が非常に多い文書、画像を多数含む文書では、解析中に大きなメモリが必要になることがあります。スマートフォンではOSやブラウザが1つのページへ割り当てられるメモリに上限を設けるため、デスクトップより先に限界へ達する場合があります。</p>
+        <h2>大きさより、中身が重いPDFもあります</h2>
+        <p>13MBなら軽く、100MBなら重いとは限りません。ページ数、文字数、画像、フォント、描画命令が多いPDFは、ファイル容量が小さくても大きなメモリを使うことがあります。特に数千ページのPDFでは、スマートフォンのほうが先に限界へ達しやすくなります。</p>
       </section>
 
       <section class="policy-section">
-        <h2>ブラウザごとに限界が違う</h2>
-        <p>同じ端末でもChrome系とFirefox系ではJavaScriptエンジン、PDF処理、ガベージコレクション、Workerのメモリ管理が異なります。そのため、同じPDFでも処理速度や停止し始めるページ数が一致するとは限りません。長時間の停止やタブの再読み込みが発生する場合は、ブラウザがメモリ圧迫を受けている可能性があります。</p>
+        <h2>同じ端末でも、ブラウザによって限界が違います</h2>
+        <p>Chrome系とFirefox系では、JavaScriptの実行環境やメモリ管理などが異なります。同じPDFでも処理時間や安定して扱えるページ数が同じとは限りません。長時間止まったように見えたり、タブが再読み込みされたりする場合は、メモリ不足の可能性があります。</p>
       </section>
 
       <section class="policy-section">
-        <h2>通信が完全にゼロという意味ではない</h2>
-        <p>「ローカル変換」はPDF本文の変換処理についての説明です。サイトのHTML、JavaScript、フォント等の配信、将来導入するアクセス解析や広告などは通常のWeb通信を行う場合があります。どの情報を扱うかは<a href="../../privacy/">プライバシーポリシー</a>と<a href="../../affiliate/">広告・アフィリエイトポリシー</a>に記載します。</p>
+        <h2>「ローカル変換」は、通信が一切ないという意味ではありません</h2>
+        <p>端末内で処理するのはPDF本文の変換です。サイト自体を表示するためのHTMLやJavaScriptの配信、広告などでは通常のWeb通信が発生します。詳しくは<a href="../../privacy/">プライバシーポリシー</a>と<a href="../../affiliate/">広告・アフィリエイトポリシー</a>をご確認ください。</p>
       </section>
 
-      <p class="meta">最終更新: 2026年9月13日</p>
+      <p class="meta">最終更新: 2026年9月15日</p>
     </main>
-    <footer class="page-footer">
-      <nav aria-label="サイト情報"><a href="../">ガイド</a><a href="../../about/">運営情報</a><a href="../../terms/">利用規約</a><a href="../../privacy/">プライバシー</a><a href="../../affiliate/">広告・アフィリエイト</a><a href="../../disclaimer/">免責事項</a><a href="../../contact/">お問い合わせ</a></nav>
-      <p>© FileShape</p>
-    </footer>
+    <footer class="page-footer"><nav aria-label="サイト情報"><a href="../">ガイド</a><a href="../../about/">運営情報</a><a href="../../terms/">利用規約</a><a href="../../privacy/">プライバシー</a><a href="../../affiliate/">広告・アフィリエイト</a><a href="../../disclaimer/">免責事項</a><a href="../../contact/">お問い合わせ</a></nav><p>© FileShape</p></footer>
   </body>
 </html>
